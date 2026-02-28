@@ -78,6 +78,27 @@
       ]
     },
     {
+      "name": "withdrawProfits",
+      "accounts": [
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "resolveCoinflip",
       "accounts": [
         {
@@ -180,7 +201,10 @@
     {
       "code": 6002,
       "name": "SeedMismatch",
-      "msg": "The revealed server seed does not match the commitment hash. The House tried to cheat!"
+      "msg": "Server seed hash does not match the commitment. The House tried to cheat!"
     }
-  ]
+  ],
+  "metadata": {
+    "address": "DivrQ6eS3ekgJPudaTTLky1Ca3eNDv9Pb3qkNva5ytXr"
+  }
 }
