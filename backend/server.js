@@ -1,10 +1,12 @@
 require('dotenv').config();
-const anchor = require('@coral-xyz/anchor');
-const idl = require('./idl.json');
 const express = require('express');
 const cors = require('cors');
 const { Connection, Keypair, Transaction } = require('@solana/web3.js');
 const crypto = require('crypto');
+const anchor = require('@coral-xyz/anchor');
+
+// Ensure you have copied idl.json into your backend folder!
+const idl = require('./idl.json'); 
 
 // 🛡️ Catch the Silent Assassins
 process.on('uncaughtException', (err) => console.error('FATAL CRASH (Exception):', err));
@@ -27,104 +29,118 @@ const houseKeypair = Keypair.fromSecretKey(houseSecretKey);
 
 console.log("🛡️ House Authority Pubkey:", houseKeypair.publicKey.toBase58());
 
+const activeWhackdGames = new Map(); 
+
 // ==========================================
 // COINFLIP ENDPOINT
 // ==========================================
 app.post('/api/play-coinflip', async (req, res) => {
-    console.log("🚨 INCOMING COINFLIP WAGER RECEIVED FROM FRONTEND!");
     try {
         const { transactionBuffer } = req.body;
         const tx = Transaction.from(Buffer.from(transactionBuffer, 'base64'));
-        
         tx.partialSign(houseKeypair);
-        
         const signature = await connection.sendRawTransaction(tx.serialize());
-        console.log("✅ Executed Coinflip Wager! Signature:", signature);
-        
         res.json({ success: true, signature });
     } catch (error) {
-        console.error("❌ Backend Error:", error);
+        console.error("❌ Coinflip Error:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
 // ==========================================
-// WHACKD! ENDPOINTS
+// WHACKD! (MINES) ENDPOINTS
 // ==========================================
 
-// In-memory store for active Mines games. (Use Redis in production)
-const activeWhackdGames = new Map(); 
-
-// 1. Generate the Provably Fair Hash for the Frontend
+// 1. Generate the Provably Fair Hash
 app.post('/api/whackd/init', (req, res) => {
-    const { playerPubkey, clientSeed, mineCount, betAmount } = req.body;
+    try {
+        const { playerPubkey, gamePubkey, clientSeed, mineCount, betAmount } = req.body;
 
-    const unhashedServerSeed = crypto.randomBytes(32).toString('hex');
-    const hash = crypto.createHash('sha256').update(unhashedServerSeed).digest('hex');
+        if (!playerPubkey || !gamePubkey) {
+            return res.status(400).json({ success: false, error: "Missing player or game pubkey" });
+        }
 
-    activeWhackdGames.set(playerPubkey, {
-        gamePubkey: gamePubkey,
-        serverSeed: unhashedServerSeed,
-        clientSeed: clientSeed,
-        mineCount: mineCount,
-        betAmount: betAmount,
-        revealedMask: 0,
-        status: "waiting_for_tx"
-    });
+        const unhashedServerSeed = crypto.randomBytes(32).toString('hex');
+        const hash = crypto.createHash('sha256').update(unhashedServerSeed).digest('hex');
 
-    console.log(`💣 Whackd! Game initialized for ${playerPubkey.substring(0,6)}...`);
-    res.json({ success: true, serverSeedHash: hash });
+        activeWhackdGames.set(playerPubkey, {
+            gamePubkey: gamePubkey, 
+            serverSeed: unhashedServerSeed,
+            clientSeed: clientSeed,
+            mineCount: mineCount,
+            betAmount: betAmount,
+            revealedMask: 0,
+            status: "waiting_for_tx"
+        });
+
+        console.log(`💣 Whackd! Game initialized for ${playerPubkey.substring(0,6)}...`);
+        res.json({ success: true, serverSeedHash: hash });
+    } catch (error) {
+        console.error("❌ Init Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
-// 2. Evaluate a Tile Click (Zero Gas, Instant)
+// 2. Evaluate a Tile Click
 app.post('/api/whackd/click', (req, res) => {
-    const { playerPubkey, tileIndex } = req.body;
-    const game = activeWhackdGames.get(playerPubkey);
+    try {
+        const { playerPubkey, tileIndex } = req.body;
+        const game = activeWhackdGames.get(playerPubkey);
 
-    if (!game) return res.status(400).json({ error: "No active game found." });
+        if (!game) return res.status(400).json({ success: false, error: "No active game found." });
 
-    // Fisher-Yates shuffle to locate the bombs securely
-    const combinedData = game.serverSeed + game.clientSeed;
-    const hashBuffer = crypto.createHash('sha256').update(combinedData).digest();
-    
-    let board = Array.from({length: 25}, (_, i) => i);
-    for (let i = 24; i > 0; i--) {
-        const randByte = hashBuffer[i % 32];
-        const j = randByte % (i + 1);
-        [board[i], board[j]] = [board[j], board[i]];
-    }
+        const combinedData = game.serverSeed + game.clientSeed;
+        const hashBuffer = crypto.createHash('sha256').update(combinedData).digest();
+        
+        let board = Array.from({length: 25}, (_, i) => i);
+        for (let i = 24; i > 0; i--) {
+            const randByte = hashBuffer[i % 32];
+            const j = randByte % (i + 1);
+            [board[i], board[j]] = [board[j], board[i]];
+        }
 
-    let bombMask = 0;
-    for (let i = 0; i < game.mineCount; i++) {
-        bombMask |= (1 << board[i]);
-    }
+        let bombMask = 0;
+        for (let i = 0; i < game.mineCount; i++) {
+            bombMask |= (1 << board[i]);
+        }
 
-    game.revealedMask |= (1 << tileIndex);
-    const hitBomb = (bombMask & (1 << tileIndex)) !== 0;
+        game.revealedMask |= (1 << tileIndex);
+        const hitBomb = (bombMask & (1 << tileIndex)) !== 0;
 
-    if (hitBomb) {
-        game.status = "busted";
-        resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, false);
-        return res.json({ success: true, status: "busted", bombMask: bombMask, serverSeed: game.serverSeed });
-    } else {
-        return res.json({ success: true, status: "safe", revealedMask: game.revealedMask });
+        if (hitBomb) {
+            game.status = "busted";
+            resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, false);
+            return res.json({ success: true, status: "busted", bombMask: bombMask, serverSeed: game.serverSeed });
+        } else {
+            return res.json({ success: true, status: "safe", revealedMask: game.revealedMask });
+        }
+    } catch (error) {
+        console.error("❌ Click Error:", error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// 3. Cash Out (Trigger On-Chain Payout)
+// 3. Cash Out
 app.post('/api/whackd/cashout', (req, res) => {
-    const { playerPubkey } = req.body;
-    const game = activeWhackdGames.get(playerPubkey);
+    try {
+        const { playerPubkey } = req.body;
+        const game = activeWhackdGames.get(playerPubkey);
 
-    if (!game || game.status === "busted") return res.status(400).json({ error: "Invalid cashout." });
+        if (!game || game.status === "busted") {
+            return res.status(400).json({ success: false, error: "Invalid cashout." });
+        }
 
-    game.status = "cashed_out";
-    resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, true);
-    
-    res.json({ success: true, serverSeed: game.serverSeed });
+        game.status = "cashed_out";
+        resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, true);
+        
+        res.json({ success: true, serverSeed: game.serverSeed });
+    } catch (error) {
+        console.error("❌ Cashout Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
-// The internal function where the Backend signs the transaction (To be completed)
+// The House signs the transaction on Devnet
 async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, revealedMask, isCashout) {
     try {
         console.log(`[HOUSE] Resolving Whackd for ${playerPubkeyStr} on-chain...`);
@@ -135,18 +151,15 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
         const playerPubkey = new anchor.web3.PublicKey(playerPubkeyStr);
         const gamePubkey = new anchor.web3.PublicKey(game.gamePubkey);
 
-        // A. Setup Anchor Provider for the House
         const wallet = new anchor.Wallet(houseKeypair);
         const provider = new anchor.AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
         const program = new anchor.Program(idl, provider);
 
-        // B. Find the global Treasury Vault PDA
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("vault")], 
             program.programId
         );
 
-        // C. Execute the Smart Contract Instruction
         const txSignature = await program.methods
             .resolveWhackd(unhashedServerSeed, revealedMask, isCashout)
             .accounts({
@@ -156,11 +169,9 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
                 vault: vaultPDA,
                 systemProgram: anchor.web3.SystemProgram.programId,
             })
-            .rpc(); // .rpc() automatically builds, signs with houseKeypair, and broadcasts!
+            .rpc(); 
 
         console.log(`✅ [HOUSE] Whackd Resolved successfully! TX: ${txSignature}`);
-        
-        // Clean up the memory to prevent memory leaks
         activeWhackdGames.delete(playerPubkeyStr); 
 
     } catch (err) {
@@ -171,11 +182,8 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
 // ==========================================
 // SERVER INITIALIZATION
 // ==========================================
-
-// 🛡️ THE HEARTBEAT: Force the Node Event Loop to stay alive forever
 setInterval(() => {}, 1000 * 60 * 60);
 
-// Moved to Port 3005 to bypass any ghost processes
 const PORT = process.env.PORT || 3005;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🟢 McPepe House Backend ARMORED and running on port ${PORT}. Waiting for wagers...`);
