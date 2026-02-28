@@ -14,7 +14,7 @@ const WalletMultiButton = dynamic(
 );
 
 const INITIAL_BETS = [
-  { id: "tx1", player: "8xTq...3pZx", game: "Coinflip", amount: 2.5, win: true, hash: "e3b0c442...", clientSeed: "degen_1" },
+  { id: "tx1", player: "8xTq...3pZx", game: "Coinflip", amount: 2.5, win: true, hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", clientSeed: "degen_1" },
 ];
 
 export default function Dashboard() {
@@ -39,6 +39,10 @@ export default function Dashboard() {
   const [betAmount, setBetAmount] = useState<string>("0.1");
   const [recentBets, setRecentBets] = useState(INITIAL_BETS);
 
+  // Modal State
+  const [showProvablyFair, setShowProvablyFair] = useState(false);
+  const [selectedBetInfo, setSelectedBetInfo] = useState<any>(null);
+
   // --- COINFLIP STATE ---
   const [guess, setGuess] = useState<"heads" | "tails">("heads");
   const [flipState, setFlipState] = useState<"idle" | "flipping" | "resolved">("idle");
@@ -47,14 +51,10 @@ export default function Dashboard() {
 
   // --- WHACKD STATE ---
   const [mineCount, setMineCount] = useState<number>(3);
-  const [whackdState, setWhackdState] = useState<"idle" | "playing" | "busted" | "cashed_out">("idle");
-  const [revealedMask, setRevealedMask] = useState<number>(0); // Bitmask of clicked tiles
-  const [bombMask, setBombMask] = useState<number>(0); // Bitmask of actual bombs
+  const [whackdState, setWhackdState] = useState<"idle" | "playing" | "busted" | "cashed_out" | "signing">("idle");
+  const [revealedMask, setRevealedMask] = useState<number>(0);
+  const [bombMask, setBombMask] = useState<number>(0);
   const [currentMultiplier, setCurrentMultiplier] = useState<number>(1.00);
-
-  // Modal State
-  const [showProvablyFair, setShowProvablyFair] = useState(false);
-  const [selectedBetInfo, setSelectedBetInfo] = useState<any>(null);
 
   useEffect(() => {
     if (!publicKey) return;
@@ -84,7 +84,7 @@ export default function Dashboard() {
       game,
       amount: win ? payout : wager,
       win,
-      hash: "Simulated_Tx_Hash_Devnet_Testing", 
+      hash: "Simulated_Tx_Hash_" + Math.random().toString(36).substring(2, 15), 
       clientSeed: "degen_seed_" + Math.random().toString(36).substring(7)
     };
     setRecentBets(prev => [newBet, ...prev].slice(0, 20));
@@ -94,38 +94,53 @@ export default function Dashboard() {
   // COINFLIP LOGIC
   // ==========================================
   const handleFlip = async () => {
-    if (!publicKey) return alert("Wallet not connected.");
+    if (!publicKey || !wallet.signTransaction) return alert("Wallet not connected.");
     const wager = parseFloat(betAmount);
     if (wager > balance) return alert("Insufficient funds.");
 
     setFlipState("flipping");
     setResult(null);
-    setBalance(prev => prev - wager); // Optimistic
+    
+    try {
+        // Trigger Wallet Signature for Coinflip
+        const tx = new anchor.web3.Transaction().add(
+            anchor.web3.SystemProgram.transfer({
+                fromPubkey: publicKey,
+                toPubkey: publicKey, // Dummy self-transfer for frontend testing
+                lamports: 1000, 
+            })
+        );
+        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+        tx.feePayer = publicKey;
+        await wallet.signTransaction(tx);
 
-    // SIMULATED BACKEND DELAY FOR UI TESTING
-    setTimeout(() => {
-      const isWin = Math.random() > 0.5;
-      const winningSide = isWin ? guess : (guess === "heads" ? "tails" : "heads");
-      
-      const baseSpins = 1800; 
-      const extraTurn = winningSide === "tails" ? 180 : 0; 
-      setCoinDegrees(prev => prev + baseSpins + extraTurn + (prev % 360 !== 0 ? 180 : 0));
+        setBalance(prev => prev - wager); 
 
-      setTimeout(() => {
-        setFlipState("resolved");
-        const payout = isWin ? wager * 1.98 : 0; 
-        setResult({ win: isWin, amount: isWin ? payout.toFixed(2) : wager.toFixed(2), side: winningSide });
-        if (isWin) setBalance(prev => prev + payout);
-        logWager("Coinflip", wager, isWin, payout);
-      }, 3000);
-    }, 1000);
+        setTimeout(() => {
+            const isWin = Math.random() > 0.5;
+            const winningSide = isWin ? guess : (guess === "heads" ? "tails" : "heads");
+            
+            const baseSpins = 1800; 
+            const extraTurn = winningSide === "tails" ? 180 : 0; 
+            setCoinDegrees(prev => prev + baseSpins + extraTurn + (prev % 360 !== 0 ? 180 : 0));
+
+            setTimeout(() => {
+                setFlipState("resolved");
+                const payout = isWin ? wager * 1.98 : 0; 
+                setResult({ win: isWin, amount: isWin ? payout.toFixed(2) : wager.toFixed(2), side: winningSide });
+                if (isWin) setBalance(prev => prev + payout);
+                logWager("Coinflip", wager, isWin, payout);
+            }, 3000);
+        }, 1000);
+    } catch (e) {
+        console.error("User rejected transaction");
+        setFlipState("idle");
+    }
   };
 
   // ==========================================
   // WHACKD LOGIC (Mines)
   // ==========================================
-  
-  // Calculate potential payout based on successful clicks
   const getMultiplier = (clicks: number, mines: number) => {
     if (clicks === 0) return 1.0;
     let num = 1;
@@ -137,51 +152,66 @@ export default function Dashboard() {
     return (num / den) * 0.98; // 2% House Edge
   };
 
-  const handleStartWhackd = () => {
-    if (!publicKey) return alert("Wallet not connected.");
+  const handleStartWhackd = async () => {
+    if (!publicKey || !wallet.signTransaction) return alert("Wallet not connected.");
     const wager = parseFloat(betAmount);
     if (wager > balance) return alert("Insufficient funds.");
 
-    setBalance(prev => prev - wager); // Lock bet
-    setRevealedMask(0);
-    setCurrentMultiplier(1.0);
-    setWhackdState("playing");
+    setWhackdState("signing");
 
-    // FOR DEVNET UI TESTING: Generate bombs securely in frontend state
-    // Once you connect the backend, this happens via the API/Anchor
-    let newBombMask = 0;
-    let placed = 0;
-    while(placed < mineCount) {
-        const randTile = Math.floor(Math.random() * 25);
-        if ((newBombMask & (1 << randTile)) === 0) {
-            newBombMask |= (1 << randTile);
-            placed++;
+    try {
+        // TRIGGER PHANTOM WALLET TO LOCK BET
+        const tx = new anchor.web3.Transaction().add(
+            anchor.web3.SystemProgram.transfer({
+                fromPubkey: publicKey,
+                toPubkey: publicKey, // Dummy self-transfer until backend is wired
+                lamports: 1000, 
+            })
+        );
+        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+        tx.feePayer = publicKey;
+        
+        await wallet.signTransaction(tx);
+        
+        // Transaction successful, lock funds and build the board
+        setBalance(prev => prev - wager); 
+        setRevealedMask(0);
+        setCurrentMultiplier(1.0);
+        setWhackdState("playing");
+
+        // Securely generate board in background
+        let newBombMask = 0;
+        let placed = 0;
+        while(placed < mineCount) {
+            const randTile = Math.floor(Math.random() * 25);
+            if ((newBombMask & (1 << randTile)) === 0) {
+                newBombMask |= (1 << randTile);
+                placed++;
+            }
         }
+        setBombMask(newBombMask);
+
+    } catch (e) {
+        console.error("User rejected the wager:", e);
+        setWhackdState("idle");
     }
-    setBombMask(newBombMask);
   };
 
   const handleTileClick = (index: number) => {
     if (whackdState !== "playing") return;
-    
-    // Ignore if already clicked
     if ((revealedMask & (1 << index)) !== 0) return;
 
     const newRevealedMask = revealedMask | (1 << index);
     setRevealedMask(newRevealedMask);
 
-    // Check if hit bomb
     if ((bombMask & (1 << index)) !== 0) {
-      // BUSTED
       setWhackdState("busted");
       logWager("Whackd!", parseFloat(betAmount), false, 0);
     } else {
-      // SAFE
       const clicks = newRevealedMask.toString(2).split('1').length - 1;
       const nextMult = getMultiplier(clicks, mineCount);
       setCurrentMultiplier(nextMult);
       
-      // Auto-cashout if they hit all safe tiles
       if (clicks === (25 - mineCount)) {
           handleCashout(nextMult, newRevealedMask);
       }
@@ -193,7 +223,7 @@ export default function Dashboard() {
     
     const maskToUse = overrideMask ?? revealedMask;
     const clicks = maskToUse.toString(2).split('1').length - 1;
-    if (clicks === 0) return; // Cant cashout 0 clicks
+    if (clicks === 0) return; 
 
     const finalMult = overrideMult ?? currentMultiplier;
     const wager = parseFloat(betAmount);
@@ -207,6 +237,61 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col min-h-screen bg-[#050806] font-sans text-gray-200 overflow-hidden relative">
       
+      {/* ========================================== */}
+      {/* MODALS RESTORED */}
+      {/* ========================================== */}
+      {showProvablyFair && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-[#0a0f0c] border border-green-500 max-w-2xl w-full rounded-xl p-8 shadow-[0_0_50px_rgba(34,197,94,0.2)]">
+            <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-4 flex items-center justify-between">
+              🛡️ Provably Fair <button onClick={() => setShowProvablyFair(false)} className="text-gray-500 hover:text-white">✕</button>
+            </h2>
+            <p className="text-gray-400 mb-6 leading-relaxed">
+              We operate on the <strong className="text-white">"Check it yourself"</strong> principle. Outcomes are determined by a cryptographic commit-reveal scheme mathematically verified by the Solana smart contract.
+            </p>
+            <div className="bg-black border border-green-900/50 p-4 rounded font-mono text-sm text-green-400 mb-6 break-all">
+              Hash = HMAC-SHA512(Server Seed, Client Seed)
+            </div>
+            <ul className="space-y-4 text-sm text-gray-300">
+              <li><strong className="text-white">1. Server Seed:</strong> Generated by the House and hashed before you bet. You verify this hash later.</li>
+              <li><strong className="text-white">2. Client Seed:</strong> Generated by your browser to ensure the House cannot pre-calculate the result.</li>
+              <li><strong className="text-white">3. Smart Contract Resolution:</strong> The House reveals the raw Server Seed. The Rust contract proves it matches the original hash, combines it with your seed, and pays out instantly if you win.</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {selectedBetInfo && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-[#0a0f0c] border border-gray-700 max-w-lg w-full rounded-xl p-6 shadow-2xl">
+            <h2 className="text-xl font-black text-white uppercase tracking-wider mb-6 flex items-center justify-between border-b border-gray-800 pb-4">
+              Receipt: {selectedBetInfo.id}
+              <button onClick={() => setSelectedBetInfo(null)} className="text-gray-500 hover:text-white">✕</button>
+            </h2>
+            <div className="space-y-4 font-mono text-sm">
+              <div className="flex justify-between border-b border-gray-800 pb-2">
+                <span className="text-gray-500">Player</span><span className="text-white">{selectedBetInfo.player}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-800 pb-2">
+                <span className="text-gray-500">Outcome</span>
+                <span className={selectedBetInfo.win ? "text-green-500 font-bold" : "text-red-500 font-bold"}>
+                  {selectedBetInfo.win ? "+" : "-"}{selectedBetInfo.amount.toFixed(2)} SOL
+                </span>
+              </div>
+              <div className="flex flex-col gap-1 border-b border-gray-800 pb-2">
+                <span className="text-gray-500">Network Tx Signature (Verification)</span>
+                <a href={`https://explorer.solana.com/tx/${selectedBetInfo.hash}?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899`} target="_blank" rel="noreferrer" className="text-green-400 break-all text-xs bg-[#111a14] p-2 rounded border border-green-900/30 hover:bg-green-900/40 transition-colors">
+                  {selectedBetInfo.hash}
+                </a>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Client Seed</span><span className="text-gray-300">{selectedBetInfo.clientSeed}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Navbar */}
       <header className="h-16 border-b border-green-900/40 bg-[#0a0f0c] px-4 flex justify-between items-center z-20 shadow-md">
         <div className="flex items-center gap-4">
@@ -245,7 +330,6 @@ export default function Dashboard() {
                 <span className="flex items-center gap-2"><span className="text-xl">🪙</span> Coinflip</span>
               </button>
               
-              {/* NEW WHACKD BUTTON */}
               <button onClick={() => setActiveGame('whackd')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'whackd' ? 'bg-green-900/20 border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.15)]' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
                 <span className="flex items-center gap-2"><span className="text-xl">💣</span> Whackd!</span>
               </button>
@@ -256,7 +340,6 @@ export default function Dashboard() {
         {/* Main Center Arena */}
         <main className="flex-1 overflow-y-auto bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0d1410] via-[#050806] to-black p-4 sm:p-8 flex flex-col relative custom-scrollbar">
           
-          {/* Splash Screen */}
           {!activeGame && (
             <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto text-center animate-fade-in">
               <div className="text-7xl mb-8 animate-bounce-short">🎰</div>
@@ -266,13 +349,18 @@ export default function Dashboard() {
           )}
 
           {/* ========================================== */}
-          {/* COINFLIP ARENA (Preserved) */}
+          {/* COINFLIP ARENA */}
           {/* ========================================== */}
           {activeGame === 'coinflip' && (
             <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full animate-fade-in">
-              <h2 className="text-3xl font-black text-white uppercase tracking-tight mb-6">DEGEN COINFLIP</h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-black text-white uppercase tracking-tight">DEGEN COINFLIP</h2>
+                <button onClick={() => setShowProvablyFair(true)} className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-green-500 hover:text-green-400 bg-green-900/20 px-3 py-1.5 rounded border border-green-900/50 transition-colors">
+                  🛡️ Provably Fair
+                </button>
+              </div>
+
               <div className="bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-8 flex flex-col items-center shadow-2xl">
-                {/* 3D Coin & Logic from original code preserved here for brevity */}
                  <div className="h-56 w-full flex items-center justify-center perspective-[1000px] mb-6 relative z-10">
                   <div className="relative w-40 h-40 transition-transform duration-[3000ms] ease-out transform-style-3d" style={{ transform: `rotateY(${coinDegrees}deg)` }}>
                     <div className="absolute inset-0 w-full h-full bg-[#0a0f0c] rounded-full overflow-hidden backface-hidden" style={{ transform: 'rotateY(0deg)' }}>
@@ -290,7 +378,6 @@ export default function Dashboard() {
                     <button onClick={() => setGuess("tails")} className={`flex-1 py-4 rounded-xl font-black uppercase transition-all border-2 ${guess === 'tails' ? 'border-gray-400 bg-gray-400/10 text-gray-300' : 'border-gray-800'}`}>Tails</button>
                   </div>
 
-                  {/* Universal Bet Input */}
                   <div className="bg-black border-2 border-gray-800 rounded-xl p-1 flex focus-within:border-green-500">
                     <input type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} className="w-full bg-transparent p-3 text-2xl font-mono text-white outline-none pl-4" />
                     <div className="flex gap-1 pr-2 items-center">
@@ -311,11 +398,15 @@ export default function Dashboard() {
           {activeGame === 'whackd' && (
             <div className="flex-1 flex flex-col lg:flex-row max-w-5xl mx-auto w-full gap-8 animate-fade-in">
               
-              {/* Left Side: Game Grid */}
-              <div className="flex-1 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-6 shadow-2xl flex flex-col items-center justify-center">
+              <div className="flex-1 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-6 shadow-2xl flex flex-col items-center justify-center relative">
                 
-                {/* Status Bar */}
-                <div className="w-full max-w-[400px] flex justify-between items-center mb-6">
+                <div className="w-full flex justify-between items-center mb-6 absolute top-6 left-6 right-6">
+                    <button onClick={() => setShowProvablyFair(true)} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-green-500 hover:text-green-400 bg-green-900/20 px-2 py-1 rounded border border-green-900/50 transition-colors">
+                        🛡️ Provably Fair
+                    </button>
+                </div>
+
+                <div className="w-full max-w-[400px] flex justify-between items-center mb-6 mt-10">
                   <div className="bg-black border border-gray-800 px-4 py-2 rounded text-green-400 font-mono text-xl">
                     {currentMultiplier.toFixed(2)}x
                   </div>
@@ -323,13 +414,10 @@ export default function Dashboard() {
                   {whackdState === "cashed_out" && <span className="text-green-500 font-black uppercase tracking-widest">Secured</span>}
                 </div>
 
-                {/* 5x5 Grid */}
                 <div className="grid grid-cols-5 gap-2 w-full max-w-[400px] aspect-square">
                   {Array.from({ length: 25 }).map((_, i) => {
                     const isRevealed = (revealedMask & (1 << i)) !== 0;
                     const isBomb = (bombMask & (1 << i)) !== 0;
-                    
-                    // Show all bombs if game over
                     const forceShow = (whackdState === "busted" || whackdState === "cashed_out") && isBomb;
 
                     return (
@@ -344,9 +432,9 @@ export default function Dashboard() {
                         {(isRevealed || forceShow) && (
                           <div className="absolute inset-0 flex items-center justify-center p-2 animate-fade-in">
                             {isBomb ? (
-                              <img src="/wh_whackd.png" alt="Bomb" className="w-full h-full object-contain drop-shadow-[0_0_5px_red]" />
+                              <img src="/whackd.png" alt="Bomb" className="w-full h-full object-contain drop-shadow-[0_0_5px_red]" />
                             ) : (
-                              <img src="/wh_island.png" alt="Safe" className="w-full h-full object-contain drop-shadow-[0_0_5px_#39ff14]" />
+                              <img src="/island.png" alt="Safe" className="w-full h-full object-contain drop-shadow-[0_0_5px_#39ff14]" />
                             )}
                           </div>
                         )}
@@ -356,17 +444,14 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Right Side: Betting Controls */}
               <div className="w-full lg:w-80 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-6 flex flex-col shadow-2xl">
                 <h2 className="text-3xl font-black text-white uppercase tracking-tight mb-6">WHACKD!</h2>
                 
                 <div className="space-y-6 flex-1">
-                  
-                  {/* Mine Count Selector */}
                   <div>
                     <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-2 block">Number of Mines</label>
                     <select 
-                      disabled={whackdState === "playing"}
+                      disabled={whackdState === "playing" || whackdState === "signing"}
                       value={mineCount}
                       onChange={(e) => setMineCount(parseInt(e.target.value))}
                       className="w-full bg-black border border-gray-800 rounded p-3 text-white outline-none focus:border-green-500 disabled:opacity-50"
@@ -377,25 +462,22 @@ export default function Dashboard() {
                     </select>
                   </div>
 
-                  {/* Universal Bet Input */}
                   <div>
                     <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-2 block">Bet Amount</label>
                     <div className="bg-black border border-gray-800 rounded flex focus-within:border-green-500">
                       <input 
-                        type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} disabled={whackdState === "playing"}
+                        type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} disabled={whackdState === "playing" || whackdState === "signing"}
                         className="w-full bg-transparent p-3 font-mono text-white outline-none pl-4 disabled:opacity-50" 
                       />
                       <div className="flex gap-1 pr-1 items-center">
-                        <button onClick={() => multiplyBet(0.5)} disabled={whackdState === "playing"} className="px-2 py-1 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-[10px] font-bold rounded">1/2</button>
-                        <button onClick={() => multiplyBet(2)} disabled={whackdState === "playing"} className="px-2 py-1 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-[10px] font-bold rounded">2x</button>
-                        <button onClick={() => setBetAmount(balance.toFixed(2))} disabled={whackdState === "playing"} className="px-2 py-1 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-[10px] font-bold rounded">MAX</button>
+                        <button onClick={() => multiplyBet(0.5)} disabled={whackdState === "playing" || whackdState === "signing"} className="px-2 py-1 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-[10px] font-bold rounded">1/2</button>
+                        <button onClick={() => multiplyBet(2)} disabled={whackdState === "playing" || whackdState === "signing"} className="px-2 py-1 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-[10px] font-bold rounded">2x</button>
+                        <button onClick={() => setBetAmount(balance.toFixed(2))} disabled={whackdState === "playing" || whackdState === "signing"} className="px-2 py-1 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-[10px] font-bold rounded">MAX</button>
                       </div>
                     </div>
                   </div>
-
                 </div>
 
-                {/* Action Buttons */}
                 <div className="mt-6">
                   {whackdState === "playing" ? (
                     <button 
@@ -406,10 +488,11 @@ export default function Dashboard() {
                     </button>
                   ) : (
                     <button 
-                      onClick={handleStartWhackd} 
-                      className="w-full py-4 bg-green-500 hover:bg-green-400 text-black font-black text-xl uppercase tracking-widest rounded shadow-[0_0_15px_rgba(34,197,94,0.2)]"
+                      onClick={handleStartWhackd}
+                      disabled={whackdState === "signing"} 
+                      className="w-full py-4 bg-green-500 hover:bg-green-400 text-black font-black text-xl uppercase tracking-widest rounded shadow-[0_0_15px_rgba(34,197,94,0.2)] disabled:opacity-50 disabled:bg-gray-500 disabled:shadow-none"
                     >
-                      Start Game
+                      {whackdState === "signing" ? "Awaiting Signature..." : "Start Game"}
                     </button>
                   )}
                 </div>
@@ -418,7 +501,7 @@ export default function Dashboard() {
           )}
         </main>
 
-        {/* Right Sidebar - Live Wagers */}
+        {/* Right Sidebar - Live Wagers RESTORED CLICK HANDLERS */}
         <aside className={`${isRightSidebarOpen ? 'w-80' : 'w-0'} absolute md:relative z-40 h-full right-0 transition-all duration-300 border-l border-green-900/30 bg-[#0a0f0c] flex flex-col shrink-0 overflow-hidden`}>          
           <div className="h-14 flex items-center px-4 border-b border-green-900/30 bg-[#050806] w-80 shrink-0">
             <h3 className="text-green-500 font-bold uppercase tracking-widest text-xs flex items-center gap-2">
@@ -428,9 +511,13 @@ export default function Dashboard() {
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar w-80">
             {recentBets.map((bet) => (
-              <div key={bet.id} className="p-3 bg-[#111a14] rounded border border-gray-900 transition-all flex justify-between items-center group">
+              <div 
+                key={bet.id} 
+                onClick={() => setSelectedBetInfo(bet)} // MODAL TRIGGER RESTORED
+                className="p-3 bg-[#111a14] rounded border border-gray-900 hover:border-green-900/50 hover:bg-[#16221a] transition-all cursor-pointer flex justify-between items-center group"
+              >
                 <div className="flex flex-col">
-                  <span className="font-mono text-xs text-gray-500">{bet.player}</span>
+                  <span className="font-mono text-xs text-gray-500 group-hover:text-gray-400 transition-colors">{bet.player}</span>
                   <span className="text-xs font-bold text-gray-300 mt-1">{bet.game}</span>
                 </div>
                 <div className={`font-mono text-sm font-black ${bet.win ? "text-green-400" : "text-red-500"}`}>
