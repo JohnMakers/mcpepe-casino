@@ -25,10 +25,17 @@ export default function Dashboard() {
   const [balance, setBalance] = useState<number>(0);
   
   // Layout State
-  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
-  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false);
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [activeGame, setActiveGame] = useState<string | null>(null);
-  
+
+  // Auto-open sidebars only if the user is on a desktop monitor
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+      setIsLeftSidebarOpen(true);
+      setIsRightSidebarOpen(true);
+    }
+  }, []);
   // Game & Bet State
   const [betAmount, setBetAmount] = useState<string>("0.1");
   const [guess, setGuess] = useState<"heads" | "tails">("heads");
@@ -307,8 +314,7 @@ export default function Dashboard() {
 
       <div className="flex flex-1 h-[calc(100vh-4rem)] relative">
         {/* Collapsible Left Sidebar (Arcade Games) */}
-        <aside className={`${isLeftSidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 ease-in-out border-r border-green-900/30 bg-[#0a0f0c] overflow-hidden flex flex-col shrink-0 z-10`}>
-          <div className="p-4 w-64">
+        <aside className={`${isLeftSidebarOpen ? 'w-64' : 'w-0'} absolute md:relative z-40 h-full left-0 transition-all duration-300 ease-in-out border-r border-green-900/30 bg-[#0a0f0c] overflow-hidden flex flex-col shrink-0`}>          <div className="p-4 w-64">
             <h2 className="text-xs text-gray-500 font-black uppercase tracking-widest mb-4">Arcade Selection</h2>
             <div className="space-y-3">
               <button 
@@ -458,8 +464,7 @@ export default function Dashboard() {
         </main>
 
         {/* Fixed Right Sidebar - Live Wagers */}
-        <aside className={`${isRightSidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 ease-in-out border-l border-green-900/30 bg-[#0a0f0c] flex flex-col shrink-0 z-10 overflow-hidden`}>
-          <div className="h-14 flex items-center px-4 border-b border-green-900/30 bg-[#050806] w-80 shrink-0">
+        <aside className={`${isRightSidebarOpen ? 'w-80' : 'w-0'} absolute md:relative z-40 h-full right-0 transition-all duration-300 ease-in-out border-l border-green-900/30 bg-[#0a0f0c] flex flex-col shrink-0 overflow-hidden`}>          <div className="h-14 flex items-center px-4 border-b border-green-900/30 bg-[#050806] w-80 shrink-0">
             <h3 className="text-green-500 font-bold uppercase tracking-widest text-xs flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
               Live Global Wagers
