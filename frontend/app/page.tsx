@@ -147,7 +147,7 @@ export default function Dashboard() {
       console.log("Transmitting payload to House Backend...");
       const serializedTx = signedTx.serialize({ requireAllSignatures: false });
       
-      const backendResponse = await fetch("http://localhost:3005/api/play-coinflip", {
+      const backendResponse = await fetch("https://mcpepe-backend.onrender.com/api/play-coinflip", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
