@@ -390,5 +390,8 @@
       "name": "InvalidResolutionState",
       "msg": "Resolution state must be either a cashout or a bust."
     }
-  ]
+  ],
+  "metadata": {
+    "address": "9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57"
+  }
 }

@@ -19,7 +19,7 @@ const INITIAL_BETS = [
 
 const BACKEND_URL = "http://localhost:3005";
 // Update this if your deployed Program ID changed after the feature-driven refactor!
-const PROGRAM_ID = new anchor.web3.PublicKey("DivrQ6eS3ekgJPudaTTLky1Ca3eNDv9Pb3qkNva5ytXr");
+const PROGRAM_ID = new anchor.web3.PublicKey("9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57");
 const HOUSE_PUBKEY = new anchor.web3.PublicKey("Gf9QEwbxosqQY9bLBrgjKommtX8qPdNqFrKazmHfaZBv");
 
 export default function Dashboard() {

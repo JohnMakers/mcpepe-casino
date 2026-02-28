@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-mcpepe_casino = "DivrQ6eS3ekgJPudaTTLky1Ca3eNDv9Pb3qkNva5ytXr"
+mcpepe_casino = "9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57"
 
 [registry]
 url = "https://api.apr.dev"

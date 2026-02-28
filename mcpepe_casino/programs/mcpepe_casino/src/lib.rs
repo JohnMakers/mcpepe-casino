@@ -8,7 +8,7 @@ use coinflip::*;
 use whackd::*;  // <-- ADD THIS
 
 // Ensure your deployed ID is correct
-declare_id!("DivrQ6eS3ekgJPudaTTLky1Ca3eNDv9Pb3qkNva5ytXr");
+declare_id!("9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57");
 
 #[program]
 pub mod mcpepe_casino {
