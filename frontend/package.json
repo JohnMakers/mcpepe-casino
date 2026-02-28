@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "sync-idl": "cp ../mcpepe_coinflip/target/idl/mcpepe_coinflip.json ./idl.json"
+    "sync-idl": "cp ../mcpepe_casino/target/idl/mcpepe_casino.json ./idl.json"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.28.0",

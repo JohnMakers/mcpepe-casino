@@ -1,12 +1,12 @@
 [package]
-name = "mcpepe_coinflip"
+name = "mcpepe_casino"
 version = "0.1.0"
 description = "Created with Anchor"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "mcpepe_coinflip"
+name = "mcpepe_casino"
 
 [features]
 default = []

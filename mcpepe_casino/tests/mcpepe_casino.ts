@@ -1,15 +1,15 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { McpepeCoinflip } from "../target/types/mcpepe_coinflip";
+import { McpepeCasino } from "../target/types/mcpepe_casino";
 import { expect } from "chai";
 import * as crypto from "crypto"; // Native Node.js library for hashing
 
-describe("mcpepe_coinflip", () => {
+describe("mcpepe_casino", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  const program = anchor.workspace.McpepeCoinflip as Program<McpepeCoinflip>;
-
+  const program = anchor.workspace.McpepeCasino as Program<McpepeCasino>;
+...
   const gameStateKeypair = anchor.web3.Keypair.generate();
   const playerKeypair = anchor.web3.Keypair.generate();
 
