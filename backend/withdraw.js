@@ -5,7 +5,7 @@ const fs = require('fs');
 
 async function withdrawProfits() {
     // 1. Setup Connection (Change to Devnet when you migrate)
-    const connection = new Connection("http://127.0.0.1:8899", "confirmed");
+    const connection = new Connection("https://api.devnet.solana.com", "confirmed");
 
     // 2. Load the House Authority (Casino Manager)
     const secretArray = process.env.HOUSE_PRIVATE_KEY.split(',').map(Number);

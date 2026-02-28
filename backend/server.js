@@ -46,7 +46,7 @@ app.post('/api/play-coinflip', async (req, res) => {
 setInterval(() => {}, 1000 * 60 * 60);
 
 // Moved to Port 3005 to bypass any ghost processes
-const PORT = 3005;
+const PORT = process.env.PORT || 3005;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🟢 McPepe House Backend ARMORED and running on port ${PORT}. Waiting for wagers...`);
 }).on('error', (err) => {
