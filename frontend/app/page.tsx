@@ -18,6 +18,7 @@ const INITIAL_BETS = [
 ];
 
 const BACKEND_URL = "http://localhost:3005";
+// Update this if your deployed Program ID changed after the feature-driven refactor!
 const PROGRAM_ID = new anchor.web3.PublicKey("DivrQ6eS3ekgJPudaTTLky1Ca3eNDv9Pb3qkNva5ytXr");
 const HOUSE_PUBKEY = new anchor.web3.PublicKey("Gf9QEwbxosqQY9bLBrgjKommtX8qPdNqFrKazmHfaZBv");
 
@@ -27,7 +28,6 @@ export default function Dashboard() {
   const { publicKey } = wallet;
   const [balance, setBalance] = useState<number>(0);
   
-  // Layout State
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [activeGame, setActiveGame] = useState<string | null>(null);
@@ -39,11 +39,9 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Shared Betting State
   const [betAmount, setBetAmount] = useState<string>("0.1");
   const [recentBets, setRecentBets] = useState(INITIAL_BETS);
 
-  // Modal State
   const [showProvablyFair, setShowProvablyFair] = useState(false);
   const [selectedBetInfo, setSelectedBetInfo] = useState<any>(null);
 
@@ -74,9 +72,6 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [publicKey, connection]);
 
-  // ==========================================
-  // SHARED HELPERS
-  // ==========================================
   const multiplyBet = (factor: number) => {
     const current = parseFloat(betAmount) || 0;
     setBetAmount((current * factor).toFixed(2));
@@ -96,24 +91,118 @@ export default function Dashboard() {
   };
 
   // ==========================================
-  // COINFLIP LOGIC (Unchanged for brevity)
+  // COINFLIP LOGIC (Fully Restored & Robust)
   // ==========================================
   const handleFlip = async () => {
-    // Keep your existing robust coinflip logic here...
-    alert("Coinflip is robust, switching focus to Whackd!");
+    if (!publicKey || !wallet.signTransaction) return alert("Wallet not connected properly.");
+    const wager = parseFloat(betAmount);
+    if (wager > balance) return alert("Insufficient funds.");
+
+    setFlipState("flipping");
+    setResult(null);
+    setBalance(prev => prev - wager); 
+
+    try {
+      const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
+      const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
+
+      const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("vault")], program.programId);
+      const gameStateKeypair = anchor.web3.Keypair.generate();
+      
+      const unhashedServerSeed = "mcafee_server_seed_" + Date.now().toString();
+      const clientSeed = "degen_client_seed_" + Math.random().toString(36).substring(7);
+      const guessNum = guess === "heads" ? 0 : 1;
+      const wagerLamports = new anchor.BN(wager * LAMPORTS_PER_SOL);
+
+      const encoder = new TextEncoder();
+      const serverSeedData = encoder.encode(unhashedServerSeed);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', serverSeedData as any);
+      const serverSeedHash = Array.from(new Uint8Array(hashBuffer));
+
+      const combinedData = encoder.encode(unhashedServerSeed + clientSeed);
+      const outcomeBuffer = await crypto.subtle.digest('SHA-256', combinedData as any);
+      const outcomeHash = new Uint8Array(outcomeBuffer);
+      const winningResult = outcomeHash[0] % 2; 
+      const isWin = winningResult === guessNum;
+      const winningSide = winningResult === 0 ? "heads" : "tails";
+
+      const initIx = await program.methods.initializeGame(serverSeedHash).accounts({
+          gameState: gameStateKeypair.publicKey,
+          authority: HOUSE_PUBKEY, 
+          systemProgram: anchor.web3.SystemProgram.programId,
+      }).instruction();
+
+      const playIx = await program.methods.playCoinflip(clientSeed, guessNum, wagerLamports).accounts({
+          gameState: gameStateKeypair.publicKey,
+          player: publicKey, 
+          vault: vaultPDA,
+          authority: HOUSE_PUBKEY, 
+          systemProgram: anchor.web3.SystemProgram.programId,
+      }).instruction();
+
+      const resolveIx = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
+          gameState: gameStateKeypair.publicKey,
+          player: publicKey,
+          vault: vaultPDA,
+          authority: HOUSE_PUBKEY, 
+          systemProgram: anchor.web3.SystemProgram.programId,
+      }).instruction();
+
+      const tx = new anchor.web3.Transaction().add(initIx, playIx, resolveIx);
+      const latestBlockhash = await connection.getLatestBlockhash();
+      tx.recentBlockhash = latestBlockhash.blockhash;
+      tx.feePayer = publicKey;
+
+      const signedTx = await wallet.signTransaction(tx);
+      signedTx.partialSign(gameStateKeypair);
+
+      const serializedTx = signedTx.serialize({ requireAllSignatures: false });
+      
+      const backendResponse = await fetch(`${BACKEND_URL}/api/play-coinflip`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+              transactionBuffer: serializedTx.toString("base64"),
+              clientSeed: clientSeed
+          })
+      });
+
+      const backendData = await backendResponse.json();
+      if (!backendData.success) throw new Error(backendData.error);
+      
+      await connection.confirmTransaction({ 
+        signature: backendData.signature, 
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
+      }, "processed");
+
+      const baseSpins = 1800; 
+      const extraTurn = winningSide === "tails" ? 180 : 0; 
+      setCoinDegrees(prev => prev + baseSpins + extraTurn + (prev % 360 !== 0 ? 180 : 0));
+
+      setTimeout(() => {
+        setFlipState("resolved");
+        const payout = isWin ? wager * 1.98 : 0; 
+        setResult({ win: isWin, amount: isWin ? payout.toFixed(2) : wager.toFixed(2), side: winningSide });
+        if (isWin) setBalance(prev => prev + payout);
+        logWager("Coinflip", wager, isWin, payout, backendData.signature, clientSeed);
+      }, 3000);
+
+    } catch (error) {
+      console.error("Transaction Failed:", error);
+      alert("Transaction failed or rejected. Check the console.");
+      setBalance(prev => prev + wager); 
+      setFlipState("idle");
+    }
   };
 
   // ==========================================
-  // WHACKD LOGIC (Mines) - 100% ROBUST & ON-CHAIN
+  // WHACKD LOGIC (Mines) 
   // ==========================================
   const getMultiplier = (clicks: number, mines: number) => {
     if (clicks === 0) return 1.0;
-    let num = 1;
-    let den = 1;
-    for (let i = 0; i < clicks; i++) {
-        num *= (25 - i);
-        den *= (25 - mines - i);
-    }
+    let num = 1; let den = 1;
+    for (let i = 0; i < clicks; i++) { num *= (25 - i); den *= (25 - mines - i); }
     return (num / den) * 0.98; 
   };
 
@@ -126,16 +215,12 @@ export default function Dashboard() {
 
     try {
         const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
-        const program = new anchor.Program(
-          idl as anchor.Idl, 
-          PROGRAM_ID, 
-          provider
-        );
+        // NOTE: Uses strict 3 arguments (IDL, ProgramID, Provider) for Anchor 0.28.0
+        const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
         
         const whackdGameKeypair = anchor.web3.Keypair.generate();
         const clientSeed = "degen_" + Math.random().toString(36).substring(7);
 
-        // 1. Shake Hands with the House Backend
         const initRes = await fetch(`${BACKEND_URL}/api/whackd/init`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -150,13 +235,11 @@ export default function Dashboard() {
         const initData = await initRes.json();
         if (!initData.success) throw new Error("Failed to get commitment from House");
 
-        // Convert hex hash to byte array for Rust
         const serverSeedHashArray = [];
         for (let i = 0; i < initData.serverSeedHash.length; i += 2) {
             serverSeedHashArray.push(parseInt(initData.serverSeedHash.substr(i, 2), 16));
         }
 
-        // 2. Build the exact Anchor Instruction
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("vault")], program.programId);
         const wagerLamports = new anchor.BN(wager * LAMPORTS_PER_SOL);
 
@@ -174,12 +257,9 @@ export default function Dashboard() {
         tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
         tx.feePayer = publicKey;
 
-        // 3. User signs to lock the wager, Game signs its own creation
         const signedTx = await wallet.signTransaction(tx);
         signedTx.partialSign(whackdGameKeypair);
 
-        // 4. Broadcast to Devnet
-        console.log("Broadcasting robust transaction...");
         const signature = await connection.sendRawTransaction(signedTx.serialize());
         await connection.confirmTransaction(signature, "processed");
 
@@ -201,7 +281,6 @@ export default function Dashboard() {
     if ((revealedMask & (1 << index)) !== 0) return;
 
     try {
-        // Ask the Dealer off-chain to verify the click (Zero Gas)
         const res = await fetch(`${BACKEND_URL}/api/whackd/click`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -222,19 +301,15 @@ export default function Dashboard() {
             const nextMult = getMultiplier(clicks, mineCount);
             setCurrentMultiplier(nextMult);
             
-            // Auto-cashout if all safe tiles cleared
             if (clicks === (25 - mineCount)) {
                 handleCashout(nextMult, data.revealedMask);
             }
         }
-    } catch (e) {
-        console.error("Failed to process click:", e);
-    }
+    } catch (e) { console.error("Failed to process click:", e); }
   };
 
   const handleCashout = async (overrideMult?: number, overrideMask?: number) => {
     if (whackdState !== "playing") return;
-    
     try {
         const res = await fetch(`${BACKEND_URL}/api/whackd/cashout`, {
             method: "POST",
@@ -251,17 +326,12 @@ export default function Dashboard() {
         setBalance(prev => prev + payout);
         setWhackdState("cashed_out");
         logWager("Whackd!", wager, true, payout, gameSignature, data.serverSeed);
-    } catch (e) {
-        console.error("Failed to cashout:", e);
-    }
+    } catch (e) { console.error("Failed to cashout:", e); }
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-[#050806] font-sans text-gray-200 overflow-hidden relative">
       
-      {/* ========================================== */}
-      {/* MODALS */}
-      {/* ========================================== */}
       {showProvablyFair && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-[#0a0f0c] border border-green-500 max-w-2xl w-full rounded-xl p-8 shadow-[0_0_50px_rgba(34,197,94,0.2)]">
@@ -307,7 +377,7 @@ export default function Dashboard() {
                 </a>
               </div>
               <div className="flex flex-col gap-1 border-b border-gray-800 pb-2">
-                <span className="text-gray-500">Revealed Server Seed</span>
+                <span className="text-gray-500">Revealed Seed</span>
                 <span className="text-white text-xs break-all">{selectedBetInfo.clientSeed}</span>
               </div>
             </div>
@@ -315,7 +385,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Navbar */}
       <header className="h-16 border-b border-green-900/40 bg-[#0a0f0c] px-4 flex justify-between items-center z-20 shadow-md">
         <div className="flex items-center gap-4">
           <button onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)} className="text-green-500 hover:text-green-400 p-2 bg-green-900/20 rounded border border-green-900/50">
@@ -344,12 +413,11 @@ export default function Dashboard() {
       </header>
 
       <div className="flex flex-1 h-[calc(100vh-4rem)] relative">
-        {/* Left Sidebar */}
         <aside className={`${isLeftSidebarOpen ? 'w-64' : 'w-0'} absolute md:relative z-40 h-full left-0 transition-all duration-300 border-r border-green-900/30 bg-[#0a0f0c] overflow-hidden flex flex-col shrink-0`}>          
           <div className="p-4 w-64">
             <h2 className="text-xs text-gray-500 font-black uppercase tracking-widest mb-4">Arcade Selection</h2>
             <div className="space-y-3">
-              <button onClick={() => setActiveGame('coinflip')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'coinflip' ? 'bg-green-900/20 border-green-500 text-green-400' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
+              <button onClick={() => setActiveGame('coinflip')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'coinflip' ? 'bg-green-900/20 border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.15)]' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
                 <span className="flex items-center gap-2"><span className="text-xl">🪙</span> Coinflip</span>
               </button>
               
@@ -360,24 +428,75 @@ export default function Dashboard() {
           </div>
         </aside>
 
-        {/* Main Center Arena */}
         <main className="flex-1 overflow-y-auto bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0d1410] via-[#050806] to-black p-4 sm:p-8 flex flex-col relative custom-scrollbar">
           
           {!activeGame && (
             <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto text-center animate-fade-in">
               <div className="text-7xl mb-8 animate-bounce-short">🎰</div>
               <h2 className="text-5xl font-black uppercase tracking-tighter text-white mb-6">Enter the <span className="text-green-500">Free Market</span></h2>
-              <button onClick={() => setActiveGame('whackd')} className="bg-green-500 hover:bg-green-400 text-black px-10 py-4 rounded-lg font-black uppercase tracking-widest mt-4">Play Whackd!</button>
+              <div className="flex gap-4 justify-center">
+                  <button onClick={() => setActiveGame('coinflip')} className="bg-transparent border border-green-500 text-green-500 hover:bg-green-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Coinflip</button>
+                  <button onClick={() => setActiveGame('whackd')} className="bg-green-500 hover:bg-green-400 text-black px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4 shadow-[0_0_15px_rgba(34,197,94,0.2)]">Play Whackd!</button>
+              </div>
             </div>
           )}
 
           {/* ========================================== */}
-          {/* COINFLIP ARENA (Preserved) */}
+          {/* FULLY RESTORED COINFLIP ARENA */}
           {/* ========================================== */}
           {activeGame === 'coinflip' && (
-             <div className="flex-1 flex flex-col items-center justify-center animate-fade-in">
-               <h2 className="text-xl text-gray-500">Coinflip Arena Under Maintenance</h2>
-             </div>
+            <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full animate-fade-in">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-black text-white uppercase tracking-tight">DEGEN COINFLIP</h2>
+                <button onClick={() => setShowProvablyFair(true)} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-green-500 hover:text-green-400 bg-green-900/20 px-2 py-1 rounded border border-green-900/50 transition-colors">
+                  🛡️ Provably Fair
+                </button>
+              </div>
+
+              <div className="bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-8 flex flex-col items-center shadow-2xl">
+                 <div className="h-56 w-full flex items-center justify-center perspective-[1000px] mb-6 relative z-10">
+                  <div className="relative w-40 h-40 transition-transform duration-[3000ms] ease-out transform-style-3d" style={{ transform: `rotateY(${coinDegrees}deg)` }}>
+                    <div className="absolute inset-0 w-full h-full bg-[#0a0f0c] rounded-full overflow-hidden backface-hidden" style={{ transform: 'rotateY(0deg)' }}>
+                      <img src="/cf_head.png" alt="Heads" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="absolute inset-0 w-full h-full bg-[#0a0f0c] rounded-full overflow-hidden backface-hidden" style={{ transform: 'rotateY(180deg)' }}>
+                      <img src="/cf_tail.png" alt="Tails" className="w-full h-full object-cover" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-24 w-full mb-6 flex items-center justify-center">
+                  {flipState === "resolved" && result && (
+                    <div className={`px-10 py-4 rounded-xl border-2 animate-bounce-short shadow-2xl ${result.win ? 'bg-green-900/30 border-green-500 text-green-400' : 'bg-red-900/30 border-red-500 text-red-400'}`}>
+                      <h3 className="text-3xl font-black uppercase tracking-widest text-center">{result.win ? 'Victorious' : 'Rekt'}</h3>
+                      <p className="text-center font-mono mt-2 text-lg">{result.side.toUpperCase()} • {result.win ? '+' : '-'}{result.amount} SOL</p>
+                    </div>
+                  )}
+                  {flipState === "flipping" && (
+                    <div className="text-green-500 font-mono animate-pulse flex flex-col items-center bg-green-900/10 px-8 py-4 rounded-xl border border-green-900/30">
+                      <span className="text-xl font-bold">Awaiting On-Chain Execution...</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="w-full max-w-md space-y-5">
+                   <div className="flex gap-4">
+                    <button onClick={() => setGuess("heads")} className={`flex-1 py-4 rounded-xl font-black uppercase transition-all border-2 ${guess === 'heads' ? 'border-yellow-500 bg-yellow-500/10 text-yellow-500' : 'border-gray-800'}`}>Heads</button>
+                    <button onClick={() => setGuess("tails")} className={`flex-1 py-4 rounded-xl font-black uppercase transition-all border-2 ${guess === 'tails' ? 'border-gray-400 bg-gray-400/10 text-gray-300' : 'border-gray-800'}`}>Tails</button>
+                  </div>
+
+                  <div className="bg-black border-2 border-gray-800 rounded-xl p-1 flex focus-within:border-green-500">
+                    <input type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} className="w-full bg-transparent p-3 text-2xl font-mono text-white outline-none pl-4" />
+                    <div className="flex gap-1 pr-2 items-center">
+                      <button onClick={() => multiplyBet(0.5)} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded">1/2</button>
+                      <button onClick={() => multiplyBet(2)} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded">2x</button>
+                      <button onClick={() => setBetAmount(balance.toFixed(2))} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-xs font-bold rounded">MAX</button>
+                    </div>
+                  </div>
+                  <button onClick={handleFlip} disabled={flipState === "flipping" || !publicKey} className="w-full py-5 bg-green-500 hover:bg-green-400 text-black font-black text-2xl uppercase tracking-widest rounded-xl disabled:opacity-50">Flip</button>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* ========================================== */}
@@ -385,9 +504,7 @@ export default function Dashboard() {
           {/* ========================================== */}
           {activeGame === 'whackd' && (
             <div className="flex-1 flex flex-col lg:flex-row max-w-5xl mx-auto w-full gap-8 animate-fade-in">
-              
               <div className="flex-1 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-6 shadow-2xl flex flex-col items-center justify-center relative">
-                
                 <div className="w-full flex justify-between items-center mb-6 absolute top-6 left-6 right-6">
                     <button onClick={() => setShowProvablyFair(true)} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-green-500 hover:text-green-400 bg-green-900/20 px-2 py-1 rounded border border-green-900/50 transition-colors">
                         🛡️ Provably Fair
@@ -409,21 +526,10 @@ export default function Dashboard() {
                     const forceShow = (whackdState === "busted" || whackdState === "cashed_out") && isBomb;
 
                     return (
-                      <button
-                        key={i}
-                        disabled={whackdState !== "playing" || isRevealed}
-                        onClick={() => handleTileClick(i)}
-                        className={`relative rounded-md overflow-hidden transition-all duration-200 shadow-inner
-                          ${isRevealed || forceShow ? 'bg-[#111a14] border-gray-900 scale-95' : 'bg-gray-800 hover:bg-gray-700 border-b-4 border-gray-900 hover:-translate-y-1'}
-                        `}
-                      >
+                      <button key={i} disabled={whackdState !== "playing" || isRevealed} onClick={() => handleTileClick(i)} className={`relative rounded-md overflow-hidden transition-all duration-200 shadow-inner ${isRevealed || forceShow ? 'bg-[#111a14] border-gray-900 scale-95' : 'bg-gray-800 hover:bg-gray-700 border-b-4 border-gray-900 hover:-translate-y-1'}`}>
                         {(isRevealed || forceShow) && (
                           <div className="absolute inset-0 flex items-center justify-center p-2 animate-fade-in">
-                            {isBomb ? (
-                              <img src="/whackd.png" alt="Bomb" className="w-full h-full object-contain drop-shadow-[0_0_5px_red]" />
-                            ) : (
-                              <img src="/island.png" alt="Safe" className="w-full h-full object-contain drop-shadow-[0_0_5px_#39ff14]" />
-                            )}
+                            {isBomb ? <img src="/wh_whackd.png" alt="Bomb" className="w-full h-full object-contain drop-shadow-[0_0_5px_red]" /> : <img src="/wh_island.png" alt="Safe" className="w-full h-full object-contain drop-shadow-[0_0_5px_#39ff14]" />}
                           </div>
                         )}
                       </button>
@@ -438,25 +544,15 @@ export default function Dashboard() {
                 <div className="space-y-6 flex-1">
                   <div>
                     <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-2 block">Number of Mines</label>
-                    <select 
-                      disabled={whackdState === "playing" || whackdState === "signing"}
-                      value={mineCount}
-                      onChange={(e) => setMineCount(parseInt(e.target.value))}
-                      className="w-full bg-black border border-gray-800 rounded p-3 text-white outline-none focus:border-green-500 disabled:opacity-50"
-                    >
-                      {[...Array(24)].map((_, i) => (
-                        <option key={i+1} value={i+1}>{i+1} {i === 0 ? 'Mine' : 'Mines'}</option>
-                      ))}
+                    <select disabled={whackdState === "playing" || whackdState === "signing"} value={mineCount} onChange={(e) => setMineCount(parseInt(e.target.value))} className="w-full bg-black border border-gray-800 rounded p-3 text-white outline-none focus:border-green-500 disabled:opacity-50">
+                      {[...Array(24)].map((_, i) => ( <option key={i+1} value={i+1}>{i+1} {i === 0 ? 'Mine' : 'Mines'}</option> ))}
                     </select>
                   </div>
 
                   <div>
                     <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-2 block">Bet Amount</label>
                     <div className="bg-black border border-gray-800 rounded flex focus-within:border-green-500">
-                      <input 
-                        type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} disabled={whackdState === "playing" || whackdState === "signing"}
-                        className="w-full bg-transparent p-3 font-mono text-white outline-none pl-4 disabled:opacity-50" 
-                      />
+                      <input type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} disabled={whackdState === "playing" || whackdState === "signing"} className="w-full bg-transparent p-3 font-mono text-white outline-none pl-4 disabled:opacity-50" />
                       <div className="flex gap-1 pr-1 items-center">
                         <button onClick={() => multiplyBet(0.5)} disabled={whackdState === "playing" || whackdState === "signing"} className="px-2 py-1 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-[10px] font-bold rounded">1/2</button>
                         <button onClick={() => multiplyBet(2)} disabled={whackdState === "playing" || whackdState === "signing"} className="px-2 py-1 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-[10px] font-bold rounded">2x</button>
@@ -468,18 +564,11 @@ export default function Dashboard() {
 
                 <div className="mt-6">
                   {whackdState === "playing" ? (
-                    <button 
-                      onClick={() => handleCashout()} 
-                      className="w-full py-4 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xl uppercase tracking-widest rounded shadow-lg animate-pulse"
-                    >
+                    <button onClick={() => handleCashout()} className="w-full py-4 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xl uppercase tracking-widest rounded shadow-lg animate-pulse">
                       Cash Out ({(parseFloat(betAmount) * currentMultiplier).toFixed(2)})
                     </button>
                   ) : (
-                    <button 
-                      onClick={handleStartWhackd}
-                      disabled={whackdState === "signing"} 
-                      className="w-full py-4 bg-green-500 hover:bg-green-400 text-black font-black text-xl uppercase tracking-widest rounded shadow-[0_0_15px_rgba(34,197,94,0.2)] disabled:opacity-50 disabled:bg-gray-500 disabled:shadow-none"
-                    >
+                    <button onClick={handleStartWhackd} disabled={whackdState === "signing" || !publicKey} className="w-full py-4 bg-green-500 hover:bg-green-400 text-black font-black text-xl uppercase tracking-widest rounded shadow-[0_0_15px_rgba(34,197,94,0.2)] disabled:opacity-50 disabled:bg-gray-500 disabled:shadow-none">
                       {whackdState === "signing" ? "Awaiting Signature..." : "Start Game"}
                     </button>
                   )}
@@ -489,21 +578,15 @@ export default function Dashboard() {
           )}
         </main>
 
-        {/* Right Sidebar - Live Wagers */}
         <aside className={`${isRightSidebarOpen ? 'w-80' : 'w-0'} absolute md:relative z-40 h-full right-0 transition-all duration-300 border-l border-green-900/30 bg-[#0a0f0c] flex flex-col shrink-0 overflow-hidden`}>          
           <div className="h-14 flex items-center px-4 border-b border-green-900/30 bg-[#050806] w-80 shrink-0">
             <h3 className="text-green-500 font-bold uppercase tracking-widest text-xs flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              Live Global Wagers
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Live Global Wagers
             </h3>
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar w-80">
             {recentBets.map((bet) => (
-              <div 
-                key={bet.id} 
-                onClick={() => setSelectedBetInfo(bet)}
-                className="p-3 bg-[#111a14] rounded border border-gray-900 hover:border-green-900/50 hover:bg-[#16221a] transition-all cursor-pointer flex justify-between items-center group"
-              >
+              <div key={bet.id} onClick={() => setSelectedBetInfo(bet)} className="p-3 bg-[#111a14] rounded border border-gray-900 hover:border-green-900/50 hover:bg-[#16221a] transition-all cursor-pointer flex justify-between items-center group">
                 <div className="flex flex-col">
                   <span className="font-mono text-xs text-gray-500 group-hover:text-gray-400 transition-colors">{bet.player}</span>
                   <span className="text-xs font-bold text-gray-300 mt-1">{bet.game}</span>
