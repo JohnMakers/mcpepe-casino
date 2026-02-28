@@ -127,8 +127,9 @@ export default function Dashboard() {
     try {
         const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
         const program = new anchor.Program(
-        { ...idl, address: PROGRAM_ID.toBase58() } as unknown as anchor.Idl, 
-        provider
+          idl as anchor.Idl, 
+          PROGRAM_ID, 
+          provider
         );
         
         const whackdGameKeypair = anchor.web3.Keypair.generate();
