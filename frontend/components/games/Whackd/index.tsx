@@ -164,33 +164,48 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
   };
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row max-w-5xl mx-auto w-full gap-8 animate-fade-in">
-      <div className="flex-1 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-6 shadow-2xl flex flex-col items-center justify-center relative">
-        <div className="w-full flex justify-between items-center mb-6 absolute top-6 left-6 right-6">
-            <button onClick={() => setShowProvablyFair(true)} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-green-500 hover:text-green-400 bg-green-900/20 px-2 py-1 rounded border border-green-900/50 transition-colors">
+    <div className="flex-1 flex flex-col xl:flex-row max-w-6xl mx-auto w-full gap-6 sm:gap-8 animate-fade-in">
+      
+      {/* GAME BOARD SECTION */}
+      <div className="flex-1 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-4 sm:p-8 shadow-2xl flex flex-col items-center justify-center relative min-h-[400px]">
+        
+        {/* Provably Fair Button - Restructured for normal document flow to prevent overflow */}
+        <div className="w-full flex justify-end mb-4 sm:mb-8">
+            <button onClick={() => setShowProvablyFair(true)} className="flex items-center gap-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-green-500 hover:text-green-400 bg-green-900/20 px-3 py-1.5 rounded border border-green-900/50 transition-colors">
                 🛡️ Provably Fair
             </button>
         </div>
 
-        <div className="w-full max-w-[400px] flex justify-between items-center mb-6 mt-10">
-          <div className="bg-black border border-gray-800 px-4 py-2 rounded text-green-400 font-mono text-xl">
+        {/* Multiplier & Status Header */}
+        <div className="w-full max-w-full sm:max-w-[500px] flex justify-between items-center mb-6">
+          <div className="bg-black border border-gray-800 px-4 py-2 rounded text-green-400 font-mono text-lg sm:text-2xl font-black shadow-inner">
             {currentMultiplier.toFixed(2)}x
           </div>
-          {whackdState === "busted" && <span className="text-red-500 font-black animate-pulse uppercase tracking-widest">WHACKD!</span>}
-          {whackdState === "cashed_out" && <span className="text-green-500 font-black uppercase tracking-widest">Secured</span>}
+          {whackdState === "busted" && <span className="text-red-500 font-black text-xl sm:text-2xl animate-pulse uppercase tracking-widest">WHACKD!</span>}
+          {whackdState === "cashed_out" && <span className="text-green-500 font-black text-xl sm:text-2xl uppercase tracking-widest">Secured</span>}
         </div>
 
-        <div className="grid grid-cols-5 gap-2 w-full max-w-[400px] aspect-square">
+        {/* Scalable Grid Container */}
+        <div className="grid grid-cols-5 gap-2 sm:gap-3 w-full max-w-full sm:max-w-[500px] aspect-square mx-auto">
           {Array.from({ length: 25 }).map((_, i) => {
             const isRevealed = (revealedMask & (1 << i)) !== 0;
             const isBomb = (bombMask & (1 << i)) !== 0;
             const forceShow = (whackdState === "busted" || whackdState === "cashed_out") && isBomb;
 
             return (
-              <button key={i} disabled={whackdState !== "playing" || isRevealed} onClick={() => handleTileClick(i)} className={`relative rounded-md overflow-hidden transition-all duration-200 shadow-inner ${isRevealed || forceShow ? 'bg-[#111a14] border-gray-900 scale-95' : 'bg-gray-800 hover:bg-gray-700 border-b-4 border-gray-900 hover:-translate-y-1'}`}>
+              <button 
+                key={i} 
+                disabled={whackdState !== "playing" || isRevealed} 
+                onClick={() => handleTileClick(i)} 
+                className={`relative w-full h-full rounded-md sm:rounded-lg overflow-hidden transition-all duration-200 shadow-inner ${isRevealed || forceShow ? 'bg-[#111a14] border-gray-900 scale-95' : 'bg-gray-800 hover:bg-gray-700 border-b-[3px] sm:border-b-4 border-gray-900 hover:-translate-y-1'}`}
+              >
                 {(isRevealed || forceShow) && (
-                  <div className="absolute inset-0 flex items-center justify-center p-2 animate-fade-in">
-                    {isBomb ? <img src="/wh_whackd.png" alt="Bomb" className="w-full h-full object-contain drop-shadow-[0_0_5px_red]" /> : <img src="/wh_island.png" alt="Safe" className="w-full h-full object-contain drop-shadow-[0_0_5px_#39ff14]" />}
+                  <div className="absolute inset-0 flex items-center justify-center p-1 sm:p-2 animate-fade-in">
+                    {isBomb ? (
+                        <img src="/wh_whackd.png" alt="Bomb" className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+                    ) : (
+                        <img src="/wh_island.png" alt="Safe" className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(57,255,20,0.6)]" />
+                    )}
                   </div>
                 )}
               </button>
@@ -199,38 +214,39 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
         </div>
       </div>
 
-      <div className="w-full lg:w-80 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-6 flex flex-col shadow-2xl">
-        <h2 className="text-3xl font-black text-white uppercase tracking-tight mb-6">WHACKD!</h2>
+      {/* CONTROLS SECTION */}
+      <div className="w-full xl:w-96 shrink-0 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-6 sm:p-8 flex flex-col shadow-2xl h-fit">
+        <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight mb-6 sm:mb-8">WHACKD!</h2>
         
-        <div className="space-y-6 flex-1">
+        <div className="space-y-6 sm:space-y-8 flex-1">
           <div>
-            <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-2 block">Number of Mines</label>
-            <select disabled={whackdState === "playing" || whackdState === "signing"} value={mineCount} onChange={(e) => setMineCount(parseInt(e.target.value))} className="w-full bg-black border border-gray-800 rounded p-3 text-white outline-none focus:border-green-500 disabled:opacity-50">
+            <label className="text-xs sm:text-sm text-gray-500 font-bold uppercase tracking-widest mb-3 block">Number of Mines</label>
+            <select disabled={whackdState === "playing" || whackdState === "signing"} value={mineCount} onChange={(e) => setMineCount(parseInt(e.target.value))} className="w-full bg-black border border-gray-800 rounded-lg p-3 sm:p-4 text-white text-lg outline-none focus:border-green-500 disabled:opacity-50 transition-colors">
               {[...Array(24)].map((_, i) => ( <option key={i+1} value={i+1}>{i+1} {i === 0 ? 'Mine' : 'Mines'}</option> ))}
             </select>
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-2 block">Bet Amount</label>
-            <div className="bg-black border border-gray-800 rounded flex focus-within:border-green-500">
-              <input type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} disabled={whackdState === "playing" || whackdState === "signing"} className="w-full bg-transparent p-3 font-mono text-white outline-none pl-4 disabled:opacity-50" />
-              <div className="flex gap-1 pr-1 items-center">
-                <button onClick={() => multiplyBet(0.5)} disabled={whackdState === "playing" || whackdState === "signing"} className="px-2 py-1 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-[10px] font-bold rounded">1/2</button>
-                <button onClick={() => multiplyBet(2)} disabled={whackdState === "playing" || whackdState === "signing"} className="px-2 py-1 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-[10px] font-bold rounded">2x</button>
-                <button onClick={() => setBetAmount(balance.toFixed(2))} disabled={whackdState === "playing" || whackdState === "signing"} className="px-2 py-1 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-[10px] font-bold rounded">MAX</button>
+            <label className="text-xs sm:text-sm text-gray-500 font-bold uppercase tracking-widest mb-3 block">Bet Amount</label>
+            <div className="bg-black border border-gray-800 rounded-lg flex focus-within:border-green-500 transition-colors overflow-hidden">
+              <input type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} disabled={whackdState === "playing" || whackdState === "signing"} className="w-full bg-transparent p-3 sm:p-4 font-mono text-white text-lg outline-none pl-4 disabled:opacity-50" />
+              <div className="flex gap-1 pr-2 items-center bg-black">
+                <button onClick={() => multiplyBet(0.5)} disabled={whackdState === "playing" || whackdState === "signing"} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded">1/2</button>
+                <button onClick={() => multiplyBet(2)} disabled={whackdState === "playing" || whackdState === "signing"} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded">2x</button>
+                <button onClick={() => setBetAmount(balance.toFixed(2))} disabled={whackdState === "playing" || whackdState === "signing"} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-xs font-bold rounded">MAX</button>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-8 sm:mt-10">
           {whackdState === "playing" ? (
-            <button onClick={() => handleCashout()} className="w-full py-4 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xl uppercase tracking-widest rounded shadow-lg animate-pulse">
+            <button onClick={() => handleCashout()} className="w-full py-4 sm:py-5 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xl sm:text-2xl uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] animate-pulse transition-all">
               Cash Out ({(parseFloat(betAmount) * currentMultiplier).toFixed(2)})
             </button>
           ) : (
-            <button onClick={handleStartWhackd} disabled={whackdState === "signing" || !publicKey} className="w-full py-4 bg-green-500 hover:bg-green-400 text-black font-black text-xl uppercase tracking-widest rounded shadow-[0_0_15px_rgba(34,197,94,0.2)] disabled:opacity-50 disabled:bg-gray-500 disabled:shadow-none">
-              {whackdState === "signing" ? "Awaiting Signature..." : "Start Game"}
+            <button onClick={handleStartWhackd} disabled={whackdState === "signing" || !publicKey} className="w-full py-4 sm:py-5 bg-green-500 hover:bg-green-400 text-black font-black text-xl sm:text-2xl uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.3)] disabled:opacity-50 disabled:bg-gray-500 disabled:shadow-none transition-all">
+              {whackdState === "signing" ? "Awaiting..." : "Start Game"}
             </button>
           )}
         </div>
