@@ -1,0 +1,186 @@
+{
+  "version": "0.1.0",
+  "name": "mcpepe_coinflip",
+  "instructions": [
+    {
+      "name": "initializeGame",
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "serverSeedHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "playCoinflip",
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "clientSeed",
+          "type": "string"
+        },
+        {
+          "name": "guess",
+          "type": "u8"
+        },
+        {
+          "name": "betAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "resolveCoinflip",
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "unhashedServerSeed",
+          "type": "string"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "GameState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "publicKey"
+          },
+          {
+            "name": "serverSeedHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "isActive",
+            "type": "bool"
+          },
+          {
+            "name": "force",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "player",
+            "type": "publicKey"
+          },
+          {
+            "name": "guess",
+            "type": "u8"
+          },
+          {
+            "name": "betAmount",
+            "type": "u64"
+          },
+          {
+            "name": "clientSeed",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "GameNotActive",
+      "msg": "The game is currently inactive."
+    },
+    {
+      "code": 6001,
+      "name": "InvalidGuess",
+      "msg": "Guess must be 0 (Heads) or 1 (Tails)."
+    },
+    {
+      "code": 6002,
+      "name": "SeedMismatch",
+      "msg": "The revealed server seed does not match the commitment hash. The House tried to cheat!"
+    }
+  ]
+}
