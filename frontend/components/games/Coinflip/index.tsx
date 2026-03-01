@@ -88,9 +88,10 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
       }).instruction();
 
       const tx = new anchor.web3.Transaction().add(initIx, playIx, resolveIx);
-      const latestBlockhash = await connection.getLatestBlockhash("processed");
+      const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+      tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = publicKey;
-
+      
       const signedTx = await wallet.signTransaction(tx);
       signedTx.partialSign(gameStateKeypair);
 

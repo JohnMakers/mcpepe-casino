@@ -13,7 +13,15 @@ process.on('uncaughtException', (err) => console.error('FATAL CRASH (Exception):
 process.on('unhandledRejection', (err) => console.error('FATAL CRASH (Rejection):', err));
 
 const app = express();
-app.use(cors());
+
+// 🛡️ THE CORS FIX: Explicitly allow all pre-flight requests and cross-origin traffic
+app.use(cors({
+    origin: '*', 
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.options('*', cors()); // Catch-all for pre-flight requests
+
 app.use(express.json());
 
 // 🔧 Use dedicated RPC if available, fallback to public. 

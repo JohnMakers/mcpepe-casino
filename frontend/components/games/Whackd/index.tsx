@@ -80,7 +80,9 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
             .instruction();
 
         const tx = new anchor.web3.Transaction().add(startIx);
-        tx.recentBlockhash = (await connection.getLatestBlockhash("processed")).blockhash;
+        const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+        tx.recentBlockhash = latestBlockhash.blockhash;
+        tx.feePayer = publicKey;
 
         const signedTx = await wallet.signTransaction(tx);
         signedTx.partialSign(whackdGameKeypair);
