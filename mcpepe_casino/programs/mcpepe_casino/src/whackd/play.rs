@@ -69,15 +69,27 @@ pub fn resolve_whackd(
         game.state = 2; 
         game.revealed_mask = revealed_mask;
         game.bomb_mask = actual_bomb_mask; 
-    } else if is_cashout {
+        } else if is_cashout {
         game.state = 1; 
         game.revealed_mask = revealed_mask;
         game.bomb_mask = actual_bomb_mask;
 
         let payout = calculate_payout(game.bet_amount, game.mine_count, successful_reveals)?;
 
-        **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= payout;
-        **ctx.accounts.player.to_account_info().try_borrow_mut_lamports()? += payout;
+        // 🔨 THE FIX: Use CPI Transfer with PDA Signer Seeds
+        let bump = ctx.bumps.vault;
+        let seeds = &[b"vault".as_ref(), &[bump]];
+        let signer = &[&seeds[..]];
+
+        let cpi_context = CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: ctx.accounts.vault.to_account_info(),
+                to: ctx.accounts.player.to_account_info(),
+            },
+            signer,
+        );
+        anchor_lang::system_program::transfer(cpi_context, payout)?;
     } else {
         return err!(CustomError::InvalidResolutionState);
     }

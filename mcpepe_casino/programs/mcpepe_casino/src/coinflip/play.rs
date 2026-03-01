@@ -40,15 +40,22 @@ pub fn play_coinflip(
 }
 
 pub fn withdraw_profits(ctx: Context<WithdrawProfits>, amount: u64) -> Result<()> {
-    let vault = &ctx.accounts.vault;
-    let authority = &ctx.accounts.authority;
+    let bump = ctx.bumps.vault;
+    let seeds = &[b"vault".as_ref(), &[bump]];
+    let signer = &[&seeds[..]];
 
-    // Extract SOL directly from the PDA by modifying lamport balances
-    **vault.to_account_info().try_borrow_mut_lamports()? -= amount;
-    **authority.to_account_info().try_borrow_mut_lamports()? += amount;
+    let cpi_context = CpiContext::new_with_signer(
+        ctx.accounts.system_program.to_account_info(),
+        anchor_lang::system_program::Transfer {
+            from: ctx.accounts.vault.to_account_info(),
+            to: ctx.accounts.authority.to_account_info(),
+        },
+        signer,
+    );
+    anchor_lang::system_program::transfer(cpi_context, amount)?;
 
     Ok(())
-}    
+}  
 
 pub fn resolve_coinflip(ctx: Context<ResolveCoinflip>, unhashed_server_seed: String) -> Result<()> {
     let game_state = &mut ctx.accounts.game_state;
@@ -73,8 +80,21 @@ pub fn resolve_coinflip(ctx: Context<ResolveCoinflip>, unhashed_server_seed: Str
     // 4. Execute Payout Logic
     if winning_result == game_state.guess {
         let payout = game_state.bet_amount.checked_mul(2).unwrap();
-        **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= payout;
-        **ctx.accounts.player.to_account_info().try_borrow_mut_lamports()? += payout;
+        
+        // 🔨 THE FIX: Use CPI Transfer with PDA Signer Seeds
+        let bump = ctx.bumps.vault;
+        let seeds = &[b"vault".as_ref(), &[bump]];
+        let signer = &[&seeds[..]];
+
+        let cpi_context = CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: ctx.accounts.vault.to_account_info(),
+                to: ctx.accounts.player.to_account_info(),
+            },
+            signer,
+        );
+        anchor_lang::system_program::transfer(cpi_context, payout)?;
     }
 
     game_state.is_active = false;
@@ -118,7 +138,8 @@ pub struct ResolveCoinflip<'info> {
 #[derive(Accounts)]
 pub struct WithdrawProfits<'info> {
     #[account(mut, seeds = [b"vault"], bump)]
-    pub vault: AccountInfo<'info>,
+    pub vault: SystemAccount<'info>,
     #[account(mut)]
     pub authority: Signer<'info>, 
+    pub system_program: Program<'info, System>,
 }
