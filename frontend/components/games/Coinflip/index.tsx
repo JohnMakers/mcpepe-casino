@@ -144,17 +144,21 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
         </button>
       </div>
 
-      <div className="bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-8 flex flex-col items-center shadow-2xl">
-         <div className="h-56 w-full flex items-center justify-center perspective-[1000px] mb-6 relative z-10">
-          <div className="relative w-40 h-40 transition-transform duration-[3000ms] ease-out transform-style-3d" style={{ transform: `rotateY(${coinDegrees}deg)` }}>
-            <div className="absolute inset-0 w-full h-full bg-[#0a0f0c] rounded-full overflow-hidden backface-hidden" style={{ transform: 'rotateY(0deg)' }}>
+      <div className="h-56 w-full flex items-center justify-center mb-6 relative z-10" style={{ perspective: "1000px" }}>
+          <div className="relative w-40 h-40 transition-transform duration-[3000ms] ease-out" style={{ transformStyle: "preserve-3d", transform: `rotateY(${coinDegrees}deg)` }}>
+            {/* HEADS SIDE */}
+            <div className="absolute inset-0 w-full h-full bg-[#0a0f0c] rounded-full overflow-hidden" 
+                 style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: 'rotateY(0deg)' }}>
               <img src="/cf_head.png" alt="Heads" className="w-full h-full object-cover" />
             </div>
-            <div className="absolute inset-0 w-full h-full bg-[#0a0f0c] rounded-full overflow-hidden backface-hidden" style={{ transform: 'rotateY(180deg)' }}>
+            {/* TAILS SIDE */}
+            <div className="absolute inset-0 w-full h-full bg-[#0a0f0c] rounded-full overflow-hidden" 
+                 style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: 'rotateY(180deg)' }}>
               <img src="/cf_tail.png" alt="Tails" className="w-full h-full object-cover" />
             </div>
           </div>
         </div>
+
 
         <div className="h-24 w-full mb-6 flex items-center justify-center">
           {flipState === "resolved" && result && (
@@ -187,6 +191,5 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
           <button onClick={handleFlip} disabled={flipState === "flipping" || !publicKey} className="w-full py-5 bg-green-500 hover:bg-green-400 text-black font-black text-2xl uppercase tracking-widest rounded-xl disabled:opacity-50">Flip</button>
         </div>
       </div>
-    </div>
   );
 }

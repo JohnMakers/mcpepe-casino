@@ -28,6 +28,10 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
   const [bombMask, setBombMask] = useState<number>(0);
   const [currentMultiplier, setCurrentMultiplier] = useState<number>(1.00);
   const [gameSignature, setGameSignature] = useState<string>("");
+  
+  // New State for Dopamine UI & Hash Regeneration
+  const [clientSeedState, setClientSeedState] = useState<string>("");
+  const [winAmount, setWinAmount] = useState<number>(0);
 
   const multiplyBet = (factor: number) => {
     const current = parseFloat(betAmount) || 0;
@@ -52,20 +56,14 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
         const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
         const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
         
-        const whackdGameKeypair = anchor.web3.Keypair.generate();
         const clientSeed = "degen_" + Math.random().toString(36).substring(7);
+        const whackdGameKeypair = anchor.web3.Keypair.generate();
 
         const initRes = await fetch(`${BACKEND_URL}/api/whackd/init`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                playerPubkey: publicKey.toBase58(),
-                gamePubkey: whackdGameKeypair.publicKey.toBase58(),
-                clientSeed,
-                mineCount,
-                betAmount: wager
-            })
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ playerPubkey: publicKey.toBase58(), gamePubkey: whackdGameKeypair.publicKey.toBase58(), clientSeed, mineCount, betAmount: wager })
         });
+        
         const initData = await initRes.json();
         if (!initData.success) throw new Error("Failed to get commitment from House");
 
@@ -79,13 +77,8 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
 
         const startIx = await program.methods
             .startWhackd(wagerLamports, mineCount, serverSeedHashArray, clientSeed)
-            .accounts({
-                whackdGame: whackdGameKeypair.publicKey,
-                player: publicKey,
-                authority: HOUSE_PUBKEY,
-                vault: vaultPDA,
-                systemProgram: anchor.web3.SystemProgram.programId,
-            }).instruction();
+            .accounts({ whackdGame: whackdGameKeypair.publicKey, player: publicKey, authority: HOUSE_PUBKEY, vault: vaultPDA, systemProgram: anchor.web3.SystemProgram.programId })
+            .instruction();
 
         const tx = new anchor.web3.Transaction().add(startIx);
         tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
@@ -97,10 +90,13 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
         const signature = await connection.sendRawTransaction(signedTx.serialize());
         await connection.confirmTransaction(signature, "processed");
 
+        // Set Local State
         setGameSignature(signature);
+        setClientSeedState(clientSeed);
         setBalance(prev => prev - wager); 
         setRevealedMask(0);
         setBombMask(0);
+        setWinAmount(0);
         setCurrentMultiplier(1.0);
         setWhackdState("playing");
 
@@ -116,8 +112,7 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
 
     try {
         const res = await fetch(`${BACKEND_URL}/api/whackd/click`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ playerPubkey: publicKey?.toBase58(), tileIndex: index })
         });
         const data = await res.json();
@@ -135,9 +130,7 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
             const nextMult = getMultiplier(clicks, mineCount);
             setCurrentMultiplier(nextMult);
             
-            if (clicks === (25 - mineCount)) {
-                handleCashout(nextMult, data.revealedMask);
-            }
+            if (clicks === (25 - mineCount)) handleCashout(nextMult, data.revealedMask);
         }
     } catch (e) { console.error("Failed to process click:", e); }
   };
@@ -146,17 +139,33 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
     if (whackdState !== "playing") return;
     try {
         const res = await fetch(`${BACKEND_URL}/api/whackd/cashout`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ playerPubkey: publicKey?.toBase58() })
         });
         const data = await res.json();
 
-        const maskToUse = overrideMask ?? revealedMask;
         const finalMult = overrideMult ?? currentMultiplier;
         const wager = parseFloat(betAmount);
         const payout = wager * finalMult;
 
+        // 🔥 THE BIG REVEAL: Recreate the board hash locally to expose bombs!
+        // 🔥 THE BIG REVEAL: Recreate the board hash locally to expose bombs!
+        const encoder = new TextEncoder();
+        const combinedData = encoder.encode(data.serverSeed + clientSeedState);
+        // Cast as unknown as ArrayBuffer to silence the TypeScript compiler
+        const hashBuffer = await crypto.subtle.digest('SHA-256', combinedData as unknown as ArrayBuffer);
+        const hashArray = new Uint8Array(hashBuffer);
+        let board = Array.from({length: 25}, (_, i) => i);
+        for (let i = 24; i > 0; i--) {
+            const randByte = hashArray[i % 32];
+            const j = randByte % (i + 1);
+            [board[i], board[j]] = [board[j], board[i]];
+        }
+        let actualBombMask = 0;
+        for (let i = 0; i < mineCount; i++) actualBombMask |= (1 << board[i]);
+        
+        setBombMask(actualBombMask);
+        setWinAmount(payout);
         setBalance(prev => prev + payout);
         setWhackdState("cashed_out");
         logWager("Whackd!", wager, true, payout, gameSignature, data.serverSeed);
@@ -164,47 +173,110 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
   };
 
   return (
-    <div className="flex-1 flex flex-col xl:flex-row max-w-6xl mx-auto w-full gap-6 sm:gap-8 animate-fade-in">
+    <div className="flex-1 flex flex-col xl:flex-row max-w-6xl mx-auto w-full gap-6 sm:gap-8 animate-fade-in relative">
       
+      {/* Injecting CSS for the Dopamine Rush */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fadeInUpDopamine {
+          0% { opacity: 0; transform: translateY(30px) scale(0.8) rotate(-5deg); }
+          60% { opacity: 1; transform: translateY(-10px) scale(1.1) rotate(-5deg); }
+          100% { opacity: 1; transform: translateY(0) scale(1) rotate(-5deg); }
+        }
+        .animate-fade-in-up-dopamine { animation: fadeInUpDopamine 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+      `}} />
+
       {/* GAME BOARD SECTION */}
-      <div className="flex-1 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-4 sm:p-8 shadow-2xl flex flex-col items-center justify-center relative min-h-[400px]">
+      <div className="flex-1 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-4 sm:p-8 shadow-2xl flex flex-col items-center justify-center relative min-h-[400px] overflow-hidden">
         
-        {/* Provably Fair Button - Restructured for normal document flow to prevent overflow */}
-        <div className="w-full flex justify-end mb-4 sm:mb-8">
+        <div className="w-full flex justify-end mb-4 sm:mb-8 relative z-20">
             <button onClick={() => setShowProvablyFair(true)} className="flex items-center gap-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-green-500 hover:text-green-400 bg-green-900/20 px-3 py-1.5 rounded border border-green-900/50 transition-colors">
                 🛡️ Provably Fair
             </button>
         </div>
 
-        {/* Multiplier & Status Header */}
-        <div className="w-full max-w-full sm:max-w-[500px] flex justify-between items-center mb-6">
-          <div className="bg-black border border-gray-800 px-4 py-2 rounded text-green-400 font-mono text-lg sm:text-2xl font-black shadow-inner">
+        {/* Multiplier Header */}
+        <div className="w-full max-w-full sm:max-w-[500px] flex justify-between items-center mb-6 relative z-20">
+          <div className={`bg-black border px-4 py-2 rounded font-mono text-lg sm:text-2xl font-black shadow-inner transition-colors duration-500 ${whackdState === 'cashed_out' ? 'border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 'border-gray-800 text-green-400'}`}>
             {currentMultiplier.toFixed(2)}x
           </div>
-          {whackdState === "busted" && <span className="text-red-500 font-black text-xl sm:text-2xl animate-pulse uppercase tracking-widest">WHACKD!</span>}
-          {whackdState === "cashed_out" && <span className="text-green-500 font-black text-xl sm:text-2xl uppercase tracking-widest">Secured</span>}
+          {whackdState === "busted" && <span className="text-red-500 font-black text-xl sm:text-2xl animate-pulse uppercase tracking-widest drop-shadow-[0_0_10px_red]">WHACKD!</span>}
         </div>
 
+        {/* Dopamine WIN Overlay */}
+        {whackdState === "cashed_out" && (
+            <div className="absolute inset-0 z-40 flex flex-col items-center justify-center pointer-events-none animate-fade-in-up-dopamine">
+               <h2 className="text-5xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-[0_0_30px_rgba(234,179,8,0.5)] uppercase tracking-widest" style={{ WebkitTextStroke: '2px #854d0e' }}>
+                 Winner
+               </h2>
+               <p className="text-3xl sm:text-4xl font-black text-green-400 drop-shadow-[0_0_20px_rgba(34,197,94,1)] mt-4 bg-black/80 px-8 py-3 rounded-full border-2 border-green-500 backdrop-blur-md">
+                 +{winAmount.toFixed(2)} SOL
+               </p>
+            </div>
+        )}
+
         {/* Scalable Grid Container */}
-        <div className="grid grid-cols-5 gap-2 sm:gap-3 w-full max-w-full sm:max-w-[500px] aspect-square mx-auto">
+        <div className="grid grid-cols-5 gap-2 sm:gap-3 w-full max-w-full sm:max-w-[500px] aspect-square mx-auto relative z-10">
           {Array.from({ length: 25 }).map((_, i) => {
-            const isRevealed = (revealedMask & (1 << i)) !== 0;
+            const isClicked = (revealedMask & (1 << i)) !== 0;
             const isBomb = (bombMask & (1 << i)) !== 0;
-            const forceShow = (whackdState === "busted" || whackdState === "cashed_out") && isBomb;
+            const isGameOver = whackdState === "busted" || whackdState === "cashed_out";
+
+            let showAsSafe = false;
+            let showAsBomb = false;
+            let tileClasses = "bg-gray-800 hover:bg-gray-700 border-b-[3px] sm:border-b-4 border-gray-900 hover:-translate-y-1";
+            let imageClasses = "";
+            
+            // Rendering Logic Engine
+            if (isGameOver) {
+                if (isBomb) {
+                    showAsBomb = true;
+                    if (whackdState === "busted" && isClicked) {
+                        // The fatal bomb (Red Alert)
+                        tileClasses = "bg-red-900/80 border-red-900 scale-95 shadow-[0_0_30px_rgba(220,38,38,0.8)] z-10 animate-pulse";
+                        imageClasses = "drop-shadow-[0_0_15px_rgba(239,68,68,1)]";
+                    } else {
+                        // Unclicked bombs (Revealed in grayscale/dim)
+                        tileClasses = "bg-[#111a14] border-gray-900 scale-95 opacity-70 grayscale-[30%]";
+                        imageClasses = "drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]";
+                    }
+                } else {
+                    showAsSafe = true;
+                    if (isClicked) {
+                        // Safes the player successfully found!
+                        if (whackdState === "cashed_out") {
+                            tileClasses = "bg-green-900/40 border-green-500 scale-[0.98] shadow-[0_0_25px_rgba(34,197,94,0.5)] z-10";
+                            imageClasses = "drop-shadow-[0_0_10px_rgba(57,255,20,0.8)]";
+                        } else {
+                            tileClasses = "bg-[#111a14] border-gray-900 scale-95 opacity-50";
+                            imageClasses = "drop-shadow-[0_0_5px_rgba(57,255,20,0.6)]";
+                        }
+                    } else {
+                        // Safes the player missed (Dimmed out so the winning path pops)
+                        tileClasses = "bg-[#111a14] border-gray-900 scale-95 opacity-20";
+                    }
+                }
+            } else {
+                // Mid-game playing state
+                if (isClicked) {
+                    showAsSafe = true;
+                    tileClasses = "bg-[#111a14] border-gray-900 scale-95 shadow-inner";
+                    imageClasses = "drop-shadow-[0_0_8px_rgba(57,255,20,0.6)]";
+                }
+            }
 
             return (
               <button 
                 key={i} 
-                disabled={whackdState !== "playing" || isRevealed} 
+                disabled={whackdState !== "playing" || isClicked} 
                 onClick={() => handleTileClick(i)} 
-                className={`relative w-full h-full rounded-md sm:rounded-lg overflow-hidden transition-all duration-200 shadow-inner ${isRevealed || forceShow ? 'bg-[#111a14] border-gray-900 scale-95' : 'bg-gray-800 hover:bg-gray-700 border-b-[3px] sm:border-b-4 border-gray-900 hover:-translate-y-1'}`}
+                className={`relative w-full h-full rounded-md sm:rounded-lg overflow-hidden transition-all duration-300 ${tileClasses}`}
               >
-                {(isRevealed || forceShow) && (
-                  <div className="absolute inset-0 flex items-center justify-center p-1 sm:p-2 animate-fade-in">
-                    {isBomb ? (
-                        <img src="/wh_whackd.png" alt="Bomb" className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+                {(showAsSafe || showAsBomb) && (
+                  <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-3 animate-fade-in">
+                    {showAsBomb ? (
+                        <img src="/wh_whackd.png" alt="Bomb" className={`w-full h-full object-contain ${imageClasses}`} />
                     ) : (
-                        <img src="/wh_island.png" alt="Safe" className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(57,255,20,0.6)]" />
+                        <img src="/wh_island.png" alt="Safe" className={`w-full h-full object-contain ${imageClasses}`} />
                     )}
                   </div>
                 )}
