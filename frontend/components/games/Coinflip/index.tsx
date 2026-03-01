@@ -122,7 +122,10 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
       setTimeout(() => {
         setFlipState("resolved");
         const payout = isWin ? wager * 1.98 : 0; 
-        setResult({ win: isWin, amount: isWin ? payout.toFixed(2) : wager.toFixed(2), side: winningSide });
+        const profit = isWin ? payout - wager : wager; // Calculates real profit
+        
+        // Report profit with 4 decimals for precision
+        setResult({ win: isWin, amount: profit.toFixed(4), side: winningSide });
         if (isWin) setBalance(prev => prev + payout);
         logWager("Coinflip", wager, isWin, payout, backendData.signature, clientSeed);
       }, 3000);
@@ -176,7 +179,6 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
           </div>
         </div>
 
-
         <div className="h-24 w-full mb-6 flex items-center justify-center">
           {flipState === "resolved" && result && (
             <div className={`px-10 py-4 rounded-xl border-2 animate-bounce-short shadow-2xl ${result.win ? 'bg-green-900/30 border-green-500 text-green-400' : 'bg-red-900/30 border-red-500 text-red-400'}`}>
@@ -191,7 +193,8 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
           )}
         </div>
 
-        <div className="w-full max-w-md space-y-5">
+        {/* ADDED mx-auto to center controls below the coin */}
+        <div className="w-full max-w-md space-y-5 mx-auto">
            <div className="flex gap-4">
             <button onClick={() => setGuess("heads")} className={`flex-1 py-4 rounded-xl font-black uppercase transition-all border-2 ${guess === 'heads' ? 'border-yellow-500 bg-yellow-500/10 text-yellow-500' : 'border-gray-800'}`}>Heads</button>
             <button onClick={() => setGuess("tails")} className={`flex-1 py-4 rounded-xl font-black uppercase transition-all border-2 ${guess === 'tails' ? 'border-gray-400 bg-gray-400/10 text-gray-300' : 'border-gray-800'}`}>Tails</button>

@@ -147,8 +147,8 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
         const finalMult = overrideMult ?? currentMultiplier;
         const wager = parseFloat(betAmount);
         const payout = wager * finalMult;
+        const profit = payout - wager; // Establish correct earnings
 
-        // 🔥 THE BIG REVEAL: Recreate the board hash locally to expose bombs!
         // 🔥 THE BIG REVEAL: Recreate the board hash locally to expose bombs!
         const encoder = new TextEncoder();
         const combinedData = encoder.encode(data.serverSeed + clientSeedState);
@@ -165,7 +165,7 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
         for (let i = 0; i < mineCount; i++) actualBombMask |= (1 << board[i]);
         
         setBombMask(actualBombMask);
-        setWinAmount(payout);
+        setWinAmount(profit); // Assign true profit to dopamine state
         setBalance(prev => prev + payout);
         setWhackdState("cashed_out");
         logWager("Whackd!", wager, true, payout, gameSignature, data.serverSeed);
@@ -208,8 +208,9 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
                <h2 className="text-5xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-[0_0_30px_rgba(234,179,8,0.5)] uppercase tracking-widest" style={{ WebkitTextStroke: '2px #854d0e' }}>
                  Winner
                </h2>
+               {/* Updated .toFixed(4) for precision precision */}
                <p className="text-3xl sm:text-4xl font-black text-green-400 drop-shadow-[0_0_20px_rgba(34,197,94,1)] mt-4 bg-black/80 px-8 py-3 rounded-full border-2 border-green-500 backdrop-blur-md">
-                 +{winAmount.toFixed(2)} SOL
+                 +{winAmount.toFixed(4)} SOL 
                </p>
             </div>
         )}
@@ -231,18 +232,15 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
                 if (isBomb) {
                     showAsBomb = true;
                     if (whackdState === "busted" && isClicked) {
-                        // The fatal bomb (Red Alert)
                         tileClasses = "bg-red-900/80 border-red-900 scale-95 shadow-[0_0_30px_rgba(220,38,38,0.8)] z-10 animate-pulse";
                         imageClasses = "drop-shadow-[0_0_15px_rgba(239,68,68,1)]";
                     } else {
-                        // Unclicked bombs (Revealed in grayscale/dim)
                         tileClasses = "bg-[#111a14] border-gray-900 scale-95 opacity-70 grayscale-[30%]";
                         imageClasses = "drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]";
                     }
                 } else {
                     showAsSafe = true;
                     if (isClicked) {
-                        // Safes the player successfully found!
                         if (whackdState === "cashed_out") {
                             tileClasses = "bg-green-900/40 border-green-500 scale-[0.98] shadow-[0_0_25px_rgba(34,197,94,0.5)] z-10";
                             imageClasses = "drop-shadow-[0_0_10px_rgba(57,255,20,0.8)]";
@@ -251,12 +249,10 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
                             imageClasses = "drop-shadow-[0_0_5px_rgba(57,255,20,0.6)]";
                         }
                     } else {
-                        // Safes the player missed (Dimmed out so the winning path pops)
                         tileClasses = "bg-[#111a14] border-gray-900 scale-95 opacity-20";
                     }
                 }
             } else {
-                // Mid-game playing state
                 if (isClicked) {
                     showAsSafe = true;
                     tileClasses = "bg-[#111a14] border-gray-900 scale-95 shadow-inner";

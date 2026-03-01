@@ -15,17 +15,25 @@ export default function RightSidebar({ isOpen, recentBets, setSelectedBetInfo }:
         </h3>
       </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar w-80">
-        {recentBets.map((bet) => (
-          <div key={bet.id} onClick={() => setSelectedBetInfo(bet)} className="p-3 bg-[#111a14] rounded border border-gray-900 hover:border-green-900/50 hover:bg-[#16221a] transition-all cursor-pointer flex justify-between items-center group">
-            <div className="flex flex-col">
-              <span className="font-mono text-xs text-gray-500 group-hover:text-gray-400 transition-colors">{bet.player}</span>
-              <span className="text-xs font-bold text-gray-300 mt-1">{bet.game}</span>
+        {recentBets.map((bet) => {
+          // Calculate precise profit to prevent arbitrary rounding issues.
+          // Safely extract wager and payout, falling back to amount if undefined.
+          const wagerVal = bet.wager !== undefined ? bet.wager : bet.amount;
+          const payoutVal = bet.payout !== undefined ? bet.payout : (bet.win ? bet.amount : 0);
+          const profit = bet.win ? (payoutVal - wagerVal) : wagerVal;
+
+          return (
+            <div key={bet.id} onClick={() => setSelectedBetInfo(bet)} className="p-3 bg-[#111a14] rounded border border-gray-900 hover:border-green-900/50 hover:bg-[#16221a] transition-all cursor-pointer flex justify-between items-center group">
+              <div className="flex flex-col">
+                <span className="font-mono text-xs text-gray-500 group-hover:text-gray-400 transition-colors">{bet.player}</span>
+                <span className="text-xs font-bold text-gray-300 mt-1">{bet.game}</span>
+              </div>
+              <div className={`font-mono text-sm font-black ${bet.win ? "text-green-400" : "text-red-500"}`}>
+                {bet.win ? "+" : "-"}{Number(profit).toFixed(4)}
+              </div>
             </div>
-            <div className={`font-mono text-sm font-black ${bet.win ? "text-green-400" : "text-red-500"}`}>
-              {bet.win ? "+" : "-"}{bet.amount.toFixed(2)}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </aside>
   );
