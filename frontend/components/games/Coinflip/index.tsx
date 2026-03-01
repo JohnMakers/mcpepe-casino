@@ -144,24 +144,34 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
         </button>
       </div>
 
-      <div className="h-56 w-full flex items-center justify-center mb-6 relative z-10 perspective-[1000px]">
-          <div 
-            className="relative w-40 h-40 transition-transform duration-[3000ms] ease-out [transform-style:preserve-3d]" 
-            style={{ transform: `rotateY(${coinDegrees}deg)` }}
-          >
-            {/* HEADS SIDE */}
+        {/* 1. Flexbox Centering Container */}
+        <div className="h-56 w-full flex items-center justify-center mb-6 relative z-10">
+          
+          {/* 2. 3D Perspective Isolation Wrapper */}
+          <div className="relative w-40 h-40 shrink-0 [perspective:1000px]">
+            
+            {/* 3. The Rotating Coin */}
             <div 
-              className="absolute inset-0 w-full h-full bg-[#0a0f0c] rounded-full overflow-hidden [backface-visibility:hidden] [-webkit-backface-visibility:hidden]" 
-              style={{ transform: 'rotateY(0deg)' }}
+              className="absolute inset-0 w-full h-full transition-transform duration-[3000ms] ease-out [transform-style:preserve-3d]" 
+              style={{ transform: `rotateY(${coinDegrees}deg)` }}
             >
-              <img src="/cf_head.png" alt="Heads" className="w-full h-full object-cover" />
-            </div>
-            {/* TAILS SIDE */}
-            <div 
-              className="absolute inset-0 w-full h-full bg-[#0a0f0c] rounded-full overflow-hidden [backface-visibility:hidden] [-webkit-backface-visibility:hidden]" 
-              style={{ transform: 'rotateY(180deg)' }}
-            >
-              <img src="/cf_tail.png" alt="Tails" className="w-full h-full object-cover" />
+              
+              {/* HEADS SIDE */}
+              <div 
+                className="absolute inset-0 w-full h-full bg-[#0a0f0c] rounded-full overflow-hidden [backface-visibility:hidden] [-webkit-backface-visibility:hidden]" 
+                style={{ transform: 'rotateY(0deg)' }}
+              >
+                <img src="/cf_head.png" alt="Heads" className="w-full h-full object-cover" />
+              </div>
+              
+              {/* TAILS SIDE */}
+              <div 
+                className="absolute inset-0 w-full h-full bg-[#0a0f0c] rounded-full overflow-hidden [backface-visibility:hidden] [-webkit-backface-visibility:hidden]" 
+                style={{ transform: 'rotateY(180deg)' }}
+              >
+                <img src="/cf_tail.png" alt="Tails" className="w-full h-full object-cover" />
+              </div>
+
             </div>
           </div>
         </div>
