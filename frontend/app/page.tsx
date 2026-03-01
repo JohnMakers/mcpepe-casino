@@ -48,10 +48,15 @@ export default function Dashboard() {
       try {
         const bal = await connection.getBalance(publicKey);
         setBalance(bal / LAMPORTS_PER_SOL);
-      } catch (error) {}
+      } catch (error) {
+        // Log the error instead of swallowing it so we can see RPC failures
+        console.error("RPC Error fetching balance:", error);
+      }
     };
+    
     fetchBalance();
-    const interval = setInterval(fetchBalance, 5000);
+    // Increased interval to 10s to be kinder to rate limits
+    const interval = setInterval(fetchBalance, 10000);
     return () => clearInterval(interval);
   }, [publicKey, connection]);
 
