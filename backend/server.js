@@ -16,7 +16,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const connection = new Connection("https://api.devnet.solana.com", "confirmed");
+// 🔧 Use dedicated RPC if available, fallback to public (expect 429s on public)
+const RPC_URL = process.env.RPC_URL || "https://api.devnet.solana.com";
+const connection = new Connection(RPC_URL, "confirmed");
 
 if (!process.env.HOUSE_PRIVATE_KEY) {
     console.error("❌ ERROR: HOUSE_PRIVATE_KEY is missing from .env file!");
@@ -28,6 +30,7 @@ const houseSecretKey = Uint8Array.from(secretArray);
 const houseKeypair = Keypair.fromSecretKey(houseSecretKey);
 
 console.log("🛡️ House Authority Pubkey:", houseKeypair.publicKey.toBase58());
+console.log(`🔌 Connected to RPC: ${RPC_URL.includes("api.devnet") ? "Public (Warning: Rate Limits)" : "Custom"}`);
 
 const activeWhackdGames = new Map(); 
 
