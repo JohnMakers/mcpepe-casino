@@ -20,14 +20,13 @@ app.use(cors({
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.options('*', cors()); // Catch-all for pre-flight requests
 
 app.use(express.json());
 
 // 🔧 Use dedicated RPC if available, fallback to public. 
 // .trim() removes invisible trailing spaces that cause 401 API Key errors!
 const rawRpc = process.env.RPC_URL || "https://api.devnet.solana.com";
-const RPC_URL = rawRpc.trim(); 
+const RPC_URL = rawRpc.replace(/["']/g, "").trim(); 
 const connection = new Connection(RPC_URL, "confirmed");
 
 if (!process.env.HOUSE_PRIVATE_KEY) {
