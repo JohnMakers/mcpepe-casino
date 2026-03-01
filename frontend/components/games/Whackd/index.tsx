@@ -29,7 +29,6 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
   const [currentMultiplier, setCurrentMultiplier] = useState<number>(1.00);
   const [gameSignature, setGameSignature] = useState<string>("");
   
-  // New State for Dopamine UI & Hash Regeneration
   const [clientSeedState, setClientSeedState] = useState<string>("");
   const [winAmount, setWinAmount] = useState<number>(0);
 
@@ -90,7 +89,6 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
         const signature = await connection.sendRawTransaction(signedTx.serialize());
         await connection.confirmTransaction(signature, "processed");
 
-        // Set Local State
         setGameSignature(signature);
         setClientSeedState(clientSeed);
         setBalance(prev => prev - wager); 
@@ -147,12 +145,10 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
         const finalMult = overrideMult ?? currentMultiplier;
         const wager = parseFloat(betAmount);
         const payout = wager * finalMult;
-        const profit = payout - wager; // Establish correct earnings
+        const profit = payout - wager;
 
-        // 🔥 THE BIG REVEAL: Recreate the board hash locally to expose bombs!
         const encoder = new TextEncoder();
         const combinedData = encoder.encode(data.serverSeed + clientSeedState);
-        // Cast as unknown as ArrayBuffer to silence the TypeScript compiler
         const hashBuffer = await crypto.subtle.digest('SHA-256', combinedData as unknown as ArrayBuffer);
         const hashArray = new Uint8Array(hashBuffer);
         let board = Array.from({length: 25}, (_, i) => i);
@@ -165,17 +161,17 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
         for (let i = 0; i < mineCount; i++) actualBombMask |= (1 << board[i]);
         
         setBombMask(actualBombMask);
-        setWinAmount(profit); // Assign true profit to dopamine state
+        setWinAmount(profit); 
         setBalance(prev => prev + payout);
         setWhackdState("cashed_out");
         logWager("Whackd!", wager, true, payout, gameSignature, data.serverSeed);
     } catch (e) { console.error("Failed to cashout:", e); }
   };
 
-  return (
-    <div className="flex-1 flex flex-col xl:flex-row max-w-6xl mx-auto w-full gap-6 sm:gap-8 animate-fade-in relative">
+return (
+    <div className="flex-1 flex flex-col xl:flex-row max-w-6xl mx-auto w-full gap-6 sm:gap-8 animate-fade-in relative items-start">
+      {/* We added items-start to the main container above so it stops stretching vertically */}
       
-      {/* Injecting CSS for the Dopamine Rush */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes fadeInUpDopamine {
           0% { opacity: 0; transform: translateY(30px) scale(0.8) rotate(-5deg); }
@@ -185,8 +181,7 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
         .animate-fade-in-up-dopamine { animation: fadeInUpDopamine 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
       `}} />
 
-      {/* GAME BOARD SECTION */}
-      <div className="flex-1 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-4 sm:p-8 shadow-2xl flex flex-col items-center justify-center relative min-h-[400px] overflow-hidden">
+      <div className="flex-1 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-4 sm:p-8 shadow-2xl flex flex-col items-center justify-center relative min-h-[400px] w-full overflow-hidden">
         
         <div className="w-full flex justify-end mb-4 sm:mb-8 relative z-20">
             <button onClick={() => setShowProvablyFair(true)} className="flex items-center gap-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-green-500 hover:text-green-400 bg-green-900/20 px-3 py-1.5 rounded border border-green-900/50 transition-colors">
@@ -194,7 +189,6 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
             </button>
         </div>
 
-        {/* Multiplier Header */}
         <div className="w-full max-w-full sm:max-w-[500px] flex justify-between items-center mb-6 relative z-20">
           <div className={`bg-black border px-4 py-2 rounded font-mono text-lg sm:text-2xl font-black shadow-inner transition-colors duration-500 ${whackdState === 'cashed_out' ? 'border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 'border-gray-800 text-green-400'}`}>
             {currentMultiplier.toFixed(2)}x
@@ -202,20 +196,17 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
           {whackdState === "busted" && <span className="text-red-500 font-black text-xl sm:text-2xl animate-pulse uppercase tracking-widest drop-shadow-[0_0_10px_red]">WHACKD!</span>}
         </div>
 
-        {/* Dopamine WIN Overlay */}
         {whackdState === "cashed_out" && (
             <div className="absolute inset-0 z-40 flex flex-col items-center justify-center pointer-events-none animate-fade-in-up-dopamine">
                <h2 className="text-5xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-[0_0_30px_rgba(234,179,8,0.5)] uppercase tracking-widest" style={{ WebkitTextStroke: '2px #854d0e' }}>
                  Winner
                </h2>
-               {/* Updated .toFixed(4) for precision precision */}
                <p className="text-3xl sm:text-4xl font-black text-green-400 drop-shadow-[0_0_20px_rgba(34,197,94,1)] mt-4 bg-black/80 px-8 py-3 rounded-full border-2 border-green-500 backdrop-blur-md">
                  +{winAmount.toFixed(4)} SOL 
                </p>
             </div>
         )}
 
-        {/* Scalable Grid Container */}
         <div className="grid grid-cols-5 gap-2 sm:gap-3 w-full max-w-full sm:max-w-[500px] aspect-square mx-auto relative z-10">
           {Array.from({ length: 25 }).map((_, i) => {
             const isClicked = (revealedMask & (1 << i)) !== 0;
@@ -227,7 +218,6 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
             let tileClasses = "bg-gray-800 hover:bg-gray-700 border-b-[3px] sm:border-b-4 border-gray-900 hover:-translate-y-1";
             let imageClasses = "";
             
-            // Rendering Logic Engine
             if (isGameOver) {
                 if (isBomb) {
                     showAsBomb = true;
@@ -282,7 +272,6 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
         </div>
       </div>
 
-      {/* CONTROLS SECTION */}
       <div className="w-full xl:w-96 shrink-0 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-6 sm:p-8 flex flex-col shadow-2xl h-fit">
         <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight mb-6 sm:mb-8">WHACKD!</h2>
         
@@ -321,4 +310,4 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
       </div>
     </div>
   );
-}
+  }
