@@ -16,8 +16,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔧 Use dedicated RPC if available, fallback to public (expect 429s on public)
-const RPC_URL = process.env.RPC_URL || "https://api.devnet.solana.com";
+// 🔧 Use dedicated RPC if available, fallback to public. 
+// .trim() removes invisible trailing spaces that cause 401 API Key errors!
+const rawRpc = process.env.RPC_URL || "https://api.devnet.solana.com";
+const RPC_URL = rawRpc.trim(); 
 const connection = new Connection(RPC_URL, "confirmed");
 
 if (!process.env.HOUSE_PRIVATE_KEY) {
