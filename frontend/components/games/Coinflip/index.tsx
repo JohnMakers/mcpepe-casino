@@ -5,7 +5,7 @@ import * as anchor from "@coral-xyz/anchor";
 // @ts-ignore
 import idl from "../../../idl.json";
 
-const BACKEND_URL = "http://localhost:3005";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 const PROGRAM_ID = new anchor.web3.PublicKey("9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57");
 const HOUSE_PUBKEY = new anchor.web3.PublicKey("Gf9QEwbxosqQY9bLBrgjKommtX8qPdNqFrKazmHfaZBv");
 
@@ -88,8 +88,7 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
       }).instruction();
 
       const tx = new anchor.web3.Transaction().add(initIx, playIx, resolveIx);
-      const latestBlockhash = await connection.getLatestBlockhash();
-      tx.recentBlockhash = latestBlockhash.blockhash;
+      const latestBlockhash = await connection.getLatestBlockhash("processed");
       tx.feePayer = publicKey;
 
       const signedTx = await wallet.signTransaction(tx);

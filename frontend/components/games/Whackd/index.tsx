@@ -5,7 +5,7 @@ import * as anchor from "@coral-xyz/anchor";
 // @ts-ignore
 import idl from "../../../idl.json";
 
-const BACKEND_URL = "http://localhost:3005";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 const PROGRAM_ID = new anchor.web3.PublicKey("9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57");
 const HOUSE_PUBKEY = new anchor.web3.PublicKey("Gf9QEwbxosqQY9bLBrgjKommtX8qPdNqFrKazmHfaZBv");
 
@@ -80,8 +80,7 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
             .instruction();
 
         const tx = new anchor.web3.Transaction().add(startIx);
-        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-        tx.feePayer = publicKey;
+        tx.recentBlockhash = (await connection.getLatestBlockhash("processed")).blockhash;
 
         const signedTx = await wallet.signTransaction(tx);
         signedTx.partialSign(whackdGameKeypair);
