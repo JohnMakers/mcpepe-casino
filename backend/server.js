@@ -62,7 +62,6 @@ app.post('/api/play-coinflip', async (req, res) => {
         const tx = Transaction.from(Buffer.from(transactionBuffer, 'base64'));
         
         let gameStatePubkeyObj, playerPubkeyObj;
-        
         if (gameStatePubkey && playerPubkey) {
             gameStatePubkeyObj = new anchor.web3.PublicKey(gameStatePubkey);
             playerPubkeyObj = new anchor.web3.PublicKey(playerPubkey);
@@ -73,20 +72,23 @@ app.post('/api/play-coinflip', async (req, res) => {
             playerPubkeyObj = playIx.keys[1].pubkey;
         }
 
+        // 1. Broadcast Wager
         tx.partialSign(houseKeypair);
         const playSignature = await connection.sendRawTransaction(tx.serialize());
         
-        // 🔨 THE FIX: We MUST wait for "confirmed" status, not "processed".
-        // This gives the RPC time to index the newly created gameState account.
         const latestBlockhash = await connection.getLatestBlockhash("confirmed");
-        await connection.confirmTransaction({
+        const confirmation = await connection.confirmTransaction({
             signature: playSignature,
             blockhash: latestBlockhash.blockhash,
             lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
         }, "confirmed");
 
+        // 🛡️ SECURITY CHECK: If the wager failed on-chain, stop immediately!
+        if (confirmation.value.err) {
+            throw new Error(`Wager transaction failed on-chain: ${JSON.stringify(confirmation.value.err)}`);
+        }
+
         const wallet = new anchor.Wallet(houseKeypair);
-        // 🔨 THE FIX: Force the provider to strictly use "confirmed" state
         const provider = new anchor.AnchorProvider(connection, wallet, { 
             preflightCommitment: "confirmed",
             commitment: "confirmed"
@@ -98,20 +100,36 @@ app.post('/api/play-coinflip', async (req, res) => {
             PROGRAM_ID 
         );
 
-        // 🔨 THE FIX: skipPreflight bypasses local RPC simulation bugs
-        const resolveSignature = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
-            gameState: gameStatePubkeyObj,
-            player: playerPubkeyObj,
-            vault: vaultPDA,
-            authority: houseKeypair.publicKey,
-            systemProgram: anchor.web3.SystemProgram.programId,
-        }).rpc({ skipPreflight: true });
+        // 🔨 THE MASTER FIX: Aggressive Retry Loop for RPC Desync
+        let resolveSignature;
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                resolveSignature = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
+                    gameState: gameStatePubkeyObj,
+                    player: playerPubkeyObj,
+                    vault: vaultPDA,
+                    authority: houseKeypair.publicKey,
+                    systemProgram: anchor.web3.SystemProgram.programId,
+                }).rpc();
+                break; // Success! Break the loop.
+            } catch (err) {
+                if (err.message && (err.message.includes("Account not found") || err.message.includes("AccountNotInitialized"))) {
+                    console.log(`⚠️ RPC Lag detected. Retrying Coinflip resolution in 2.5s... (${retries} left)`);
+                    await new Promise(r => setTimeout(r, 2500));
+                    retries--;
+                    if (retries === 0) throw new Error("RPC completely failed to sync the game state after 3 attempts.");
+                } else {
+                    throw err; // Real error, throw immediately
+                }
+            }
+        }
 
         res.json({ success: true, playSignature, resolveSignature });
     } catch (error) {
         console.error("❌ Coinflip Error:", error);
-        // 🔨 THE FIX: Safely serialize the error so the frontend doesn't choke on undefined
-        const safeError = error instanceof Error ? error.message : String(error);
+        // Safely extract string to prevent frontend toString() crashes
+        const safeError = error.message ? error.message : JSON.stringify(error);
         res.status(500).json({ success: false, error: safeError });
     }
 });
@@ -145,7 +163,7 @@ app.post('/api/whackd/init', (req, res) => {
         res.json({ success: true, serverSeedHash: hash });
     } catch (error) {
         console.error("❌ Init Error:", error);
-        const safeError = error instanceof Error ? error.message : String(error);
+        const safeError = error.message ? error.message : JSON.stringify(error);
         res.status(500).json({ success: false, error: safeError });
     }
 });
@@ -184,7 +202,7 @@ app.post('/api/whackd/click', async (req, res) => {
         }
     } catch (error) {
         console.error("❌ Click Error:", error);
-        const safeError = error instanceof Error ? error.message : String(error);
+        const safeError = error.message ? error.message : JSON.stringify(error);
         res.status(500).json({ success: false, error: safeError });
     }
 });
@@ -204,7 +222,7 @@ app.post('/api/whackd/cashout', async (req, res) => {
         res.json({ success: true, serverSeed: game.serverSeed });
     } catch (error) {
         console.error("❌ Cashout Error:", error);
-        const safeError = error instanceof Error ? error.message : String(error);
+        const safeError = error.message ? error.message : JSON.stringify(error);
         res.status(500).json({ success: false, error: safeError });
     }
 });
@@ -232,17 +250,33 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
             PROGRAM_ID 
         );
 
-        // 🔨 THE FIX: Skip preflight to bypass ghost RPC cache errors and force the payout
-        const txSignature = await program.methods
-            .resolveWhackd(unhashedServerSeed, revealedMask, isCashout)
-            .accounts({
-                whackdGame: gamePubkey,
-                player: playerPubkey,
-                authority: houseKeypair.publicKey,
-                vault: vaultPDA,
-                systemProgram: anchor.web3.SystemProgram.programId,
-            })
-            .rpc({ skipPreflight: true }); 
+        // 🔨 THE MASTER FIX: Aggressive Retry Loop for Whackd Payouts
+        let txSignature;
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                txSignature = await program.methods
+                    .resolveWhackd(unhashedServerSeed, Number(revealedMask), isCashout)
+                    .accounts({
+                        whackdGame: gamePubkey,
+                        player: playerPubkey,
+                        authority: houseKeypair.publicKey,
+                        vault: vaultPDA,
+                        systemProgram: anchor.web3.SystemProgram.programId,
+                    })
+                    .rpc(); 
+                break;
+            } catch (err) {
+                 if (err.message && (err.message.includes("Account not found") || err.message.includes("AccountNotInitialized"))) {
+                    console.log(`⚠️ RPC Lag detected in Whackd. Retrying payout in 2.5s... (${retries} left)`);
+                    await new Promise(r => setTimeout(r, 2500));
+                    retries--;
+                    if (retries === 0) throw new Error("RPC completely failed to sync the game state after 3 attempts.");
+                } else {
+                    throw err; 
+                }
+            }
+        }
 
         console.log(`✅ [HOUSE] Whackd Resolved successfully! TX: ${txSignature}`);
         activeWhackdGames.delete(playerPubkeyStr); 
