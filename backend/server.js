@@ -8,13 +8,20 @@ const anchor = require('@coral-xyz/anchor');
 // Ensure you have copied idl.json into your backend folder!
 const idl = require('./idl.json'); 
 
-// 🛡️ Catch the Silent Assassins
+// 🛡️ THE MASTER FIX: Forcefully inject the Program ID into the IDL.
+// This guarantees Anchor will NEVER throw a '_bn' undefined error.
+const PROGRAM_ID_STRING = "9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57";
+const PROGRAM_ID = new anchor.web3.PublicKey(PROGRAM_ID_STRING);
+idl.address = PROGRAM_ID_STRING;
+if (!idl.metadata) idl.metadata = {};
+idl.metadata.address = PROGRAM_ID_STRING;
+
+// Catch the Silent Assassins
 process.on('uncaughtException', (err) => console.error('FATAL CRASH (Exception):', err));
 process.on('unhandledRejection', (err) => console.error('FATAL CRASH (Rejection):', err));
 
 const app = express();
 
-// 🛡️ THE CORS FIX: Explicitly allow all pre-flight requests and cross-origin traffic
 app.use(cors({
     origin: '*', 
     methods: ['GET', 'POST', 'OPTIONS'],
@@ -23,7 +30,6 @@ app.use(cors({
 
 app.use(express.json());
 
-// 🔧 Use dedicated RPC if available, fallback to public. 
 const rawRpc = process.env.RPC_URL || "https://api.devnet.solana.com";
 const RPC_URL = rawRpc.replace(/["']/g, "").trim(); 
 const connection = new Connection(RPC_URL, "confirmed");
@@ -42,9 +48,6 @@ console.log(`🔌 Connected to RPC: ${RPC_URL.includes("api.devnet") ? "Public (
 
 const activeWhackdGames = new Map(); 
 
-// 🛡️ We keep the explicit ID for PDA derivations, but stop forcing it into the Program constructor
-const PROGRAM_ID = new anchor.web3.PublicKey("9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57");
-
 // ==========================================
 // COINFLIP ENDPOINT
 // ==========================================
@@ -52,12 +55,25 @@ app.post('/api/play-coinflip', async (req, res) => {
     try {
         const { transactionBuffer, unhashedServerSeed, gameStatePubkey, playerPubkey } = req.body;
         
-        if (!gameStatePubkey || !playerPubkey) {
-            return res.status(400).json({ success: false, error: "Missing keys. Hard refresh your frontend!" });
+        if (!unhashedServerSeed) {
+            return res.status(400).json({ success: false, error: "Missing server seed. Please hard refresh your frontend window!" });
         }
 
         const tx = Transaction.from(Buffer.from(transactionBuffer, 'base64'));
         
+        let gameStatePubkeyObj, playerPubkeyObj;
+        
+        // 🛡️ Fallback extraction logic
+        if (gameStatePubkey && playerPubkey) {
+            gameStatePubkeyObj = new anchor.web3.PublicKey(gameStatePubkey);
+            playerPubkeyObj = new anchor.web3.PublicKey(playerPubkey);
+        } else {
+            const initIx = tx.instructions[tx.instructions.length - 2];
+            const playIx = tx.instructions[tx.instructions.length - 1];
+            gameStatePubkeyObj = initIx.keys[0].pubkey;
+            playerPubkeyObj = playIx.keys[1].pubkey;
+        }
+
         // 1. House countersigns and broadcasts the Wager transaction
         tx.partialSign(houseKeypair);
         const playSignature = await connection.sendRawTransaction(tx.serialize());
@@ -72,18 +88,16 @@ app.post('/api/play-coinflip', async (req, res) => {
         // 2. House independently executes the Resolution transaction
         const wallet = new anchor.Wallet(houseKeypair);
         const provider = new anchor.AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
-        
-        // 🔨 THE FIX: Anchor v0.29+ strictly requires only 2 arguments.
         const program = new anchor.Program(idl, provider);
 
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("vault")], 
-            PROGRAM_ID 
+            PROGRAM_ID // 🔨 Use explicit constant instead of program.programId
         );
 
         const resolveSignature = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
-            gameState: new anchor.web3.PublicKey(gameStatePubkey),
-            player: new anchor.web3.PublicKey(playerPubkey),
+            gameState: gameStatePubkeyObj,
+            player: playerPubkeyObj,
             vault: vaultPDA,
             authority: houseKeypair.publicKey,
             systemProgram: anchor.web3.SystemProgram.programId,
@@ -156,6 +170,7 @@ app.post('/api/whackd/click', async (req, res) => {
 
         if (hitBomb) {
             game.status = "busted";
+            // 🔨 FIX: Must await the on-chain resolution before responding
             await resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, false);
             return res.json({ success: true, status: "busted", bombMask: bombMask, serverSeed: game.serverSeed });
         } else {
@@ -177,6 +192,7 @@ app.post('/api/whackd/cashout', async (req, res) => {
         }
 
         game.status = "cashed_out";
+        // 🔨 FIX: Must await the on-chain payout so Render doesn't kill the task early!
         await resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, true);
         
         res.json({ success: true, serverSeed: game.serverSeed });
@@ -199,13 +215,11 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
 
         const wallet = new anchor.Wallet(houseKeypair);
         const provider = new anchor.AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
-        
-        // 🔨 THE FIX: Clean instantiation.
         const program = new anchor.Program(idl, provider);
 
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("vault")], 
-            PROGRAM_ID
+            PROGRAM_ID // 🔨 Use explicit constant instead of program.programId
         );
 
         const txSignature = await program.methods
@@ -224,7 +238,7 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
 
     } catch (err) {
         console.error("❌ [HOUSE] Failed to resolve on-chain:", err);
-        throw err; 
+        throw err; // Re-throw the error so the API catches it and returns the 500 error properly
     }
 }
 
