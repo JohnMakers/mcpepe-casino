@@ -79,10 +79,8 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
           systemProgram: anchor.web3.SystemProgram.programId,
       }).instruction();
 
-      // 🔨 FIX: We DO NOT add resolveIx here. The user only signs the Wager.
-      // Phantom will now strictly simulate the funds leaving the user's wallet.
+      // 🔨 FIX: Removed resolveIx here so the gameState stays open for the backend
       const tx = new anchor.web3.Transaction().add(initIx, playIx);
-      
       const latestBlockhash = await connection.getLatestBlockhash("confirmed");
       tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = publicKey;
@@ -92,14 +90,13 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
 
       const serializedTx = signedTx.serialize({ requireAllSignatures: false });
       
-      // Send the wager to the backend, along with the data needed for the House to resolve it
       const backendResponse = await fetch(`${BACKEND_URL}/api/play-coinflip`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
               transactionBuffer: serializedTx.toString("base64"),
               clientSeed: clientSeed,
-              unhashedServerSeed: unhashedServerSeed,
+              unhashedServerSeed: unhashedServerSeed, // 🔨 FIX: Passed required backend data
               gameStatePubkey: gameStateKeypair.publicKey.toBase58(),
               playerPubkey: publicKey.toBase58()
           })
