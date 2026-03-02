@@ -44,34 +44,29 @@ console.log(`🔌 Connected to RPC: ${RPC_URL.includes("api.devnet") ? "Public (
 const activeWhackdGames = new Map(); 
 
 // ==========================================
+// 🛡️ EXPLICIT PROGRAM BINDING
+// ==========================================
+// We hardcode the Program ID so Anchor NEVER throws a '_bn' undefined error 
+// when trying to calculate the Vault PDA.
+const PROGRAM_ID = new anchor.web3.PublicKey("9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57");
+
+// ==========================================
 // COINFLIP ENDPOINT
 // ==========================================
 app.post('/api/play-coinflip', async (req, res) => {
     try {
-        const { transactionBuffer, unhashedServerSeed } = req.body;
+        const { transactionBuffer, unhashedServerSeed, gameStatePubkey, playerPubkey } = req.body;
         
-        if (!unhashedServerSeed) {
-            return res.status(400).json({ success: false, error: "Missing server seed. Please hard refresh your frontend window!" });
+        if (!gameStatePubkey || !playerPubkey) {
+            return res.status(400).json({ success: false, error: "Missing keys. Hard refresh your frontend!" });
         }
 
         const tx = Transaction.from(Buffer.from(transactionBuffer, 'base64'));
         
-        // 🛡️ SECURITY & BUG FIX: 
-        // Phantom wallet often prepends invisible Compute Budget instructions.
-        // We look at the LAST two instructions to guarantee we grab our Game instructions,
-        // and securely extract the EXACT PublicKeys that the user signed for.
-        const initIx = tx.instructions[tx.instructions.length - 2];
-        const playIx = tx.instructions[tx.instructions.length - 1];
-
-        // This gives us raw PublicKey objects, completely bypassing the '_bn' crash!
-        const gameStatePubkeyObj = initIx.keys[0].pubkey;
-        const playerPubkeyObj = playIx.keys[1].pubkey;
-
         // 1. House countersigns and broadcasts the Wager transaction
         tx.partialSign(houseKeypair);
         const playSignature = await connection.sendRawTransaction(tx.serialize());
         
-        // Wait for the Wager to be processed
         const latestBlockhash = await connection.getLatestBlockhash("processed");
         await connection.confirmTransaction({
             signature: playSignature,
@@ -82,17 +77,18 @@ app.post('/api/play-coinflip', async (req, res) => {
         // 2. House independently executes the Resolution transaction
         const wallet = new anchor.Wallet(houseKeypair);
         const provider = new anchor.AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
-        const program = new anchor.Program(idl, provider);
+        
+        // 🔨 FIX: Pass the explicit PROGRAM_ID here
+        const program = new anchor.Program(idl, PROGRAM_ID, provider);
 
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("vault")], 
-            program.programId
+            PROGRAM_ID // 🔨 FIX: Use explicit ID instead of program.programId
         );
 
-        // We pass the securely extracted objects directly to the accounts
         const resolveSignature = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
-            gameState: gameStatePubkeyObj,
-            player: playerPubkeyObj,
+            gameState: new anchor.web3.PublicKey(gameStatePubkey),
+            player: new anchor.web3.PublicKey(playerPubkey),
             vault: vaultPDA,
             authority: houseKeypair.publicKey,
             systemProgram: anchor.web3.SystemProgram.programId,
@@ -140,7 +136,7 @@ app.post('/api/whackd/init', (req, res) => {
 });
 
 // 2. Evaluate a Tile Click
-app.post('/api/whackd/click', (req, res) => {
+app.post('/api/whackd/click', async (req, res) => {
     try {
         const { playerPubkey, tileIndex } = req.body;
         const game = activeWhackdGames.get(playerPubkey);
@@ -167,7 +163,8 @@ app.post('/api/whackd/click', (req, res) => {
 
         if (hitBomb) {
             game.status = "busted";
-            resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, false);
+            // 🔨 FIX: Await the on-chain resolution!
+            await resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, false);
             return res.json({ success: true, status: "busted", bombMask: bombMask, serverSeed: game.serverSeed });
         } else {
             return res.json({ success: true, status: "safe", revealedMask: game.revealedMask });
@@ -179,7 +176,7 @@ app.post('/api/whackd/click', (req, res) => {
 });
 
 // 3. Cash Out
-app.post('/api/whackd/cashout', (req, res) => {
+app.post('/api/whackd/cashout', async (req, res) => {
     try {
         const { playerPubkey } = req.body;
         const game = activeWhackdGames.get(playerPubkey);
@@ -189,7 +186,8 @@ app.post('/api/whackd/cashout', (req, res) => {
         }
 
         game.status = "cashed_out";
-        resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, true);
+        // 🔨 FIX: Await the on-chain payout to ensure Render doesn't kill the request!
+        await resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, true);
         
         res.json({ success: true, serverSeed: game.serverSeed });
     } catch (error) {
@@ -211,11 +209,13 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
 
         const wallet = new anchor.Wallet(houseKeypair);
         const provider = new anchor.AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
-        const program = new anchor.Program(idl, provider);
+        
+        // 🔨 FIX: Pass explicit PROGRAM_ID to Whackd as well
+        const program = new anchor.Program(idl, PROGRAM_ID, provider);
 
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("vault")], 
-            program.programId
+            PROGRAM_ID
         );
 
         const txSignature = await program.methods
@@ -234,6 +234,7 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
 
     } catch (err) {
         console.error("❌ [HOUSE] Failed to resolve on-chain:", err);
+        throw err; // Re-throw the error so the API endpoint catches it and alerts the frontend
     }
 }
 
