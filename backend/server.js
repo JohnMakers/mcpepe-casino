@@ -8,8 +8,10 @@ const anchor = require('@coral-xyz/anchor');
 // Ensure you have copied idl.json into your backend folder!
 const idl = require('./idl.json'); 
 
-// 🛡️ THE MASTER FIX: Forcefully inject the Program ID into the IDL.
-// This guarantees Anchor will NEVER throw a '_bn' undefined error.
+// 🛡️ THE MASTER FIX: Forcefully inject missing properties into the IDL.
+// Anchor JS violently crashes if 'idl.types' is undefined. We force an empty array to satisfy the parser.
+if (!idl.types) idl.types = [];
+
 const PROGRAM_ID_STRING = "9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57";
 const PROGRAM_ID = new anchor.web3.PublicKey(PROGRAM_ID_STRING);
 idl.address = PROGRAM_ID_STRING;
@@ -92,7 +94,7 @@ app.post('/api/play-coinflip', async (req, res) => {
 
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("vault")], 
-            PROGRAM_ID // 🔨 Use explicit constant instead of program.programId
+            PROGRAM_ID 
         );
 
         const resolveSignature = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
@@ -170,7 +172,6 @@ app.post('/api/whackd/click', async (req, res) => {
 
         if (hitBomb) {
             game.status = "busted";
-            // 🔨 FIX: Must await the on-chain resolution before responding
             await resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, false);
             return res.json({ success: true, status: "busted", bombMask: bombMask, serverSeed: game.serverSeed });
         } else {
@@ -192,7 +193,6 @@ app.post('/api/whackd/cashout', async (req, res) => {
         }
 
         game.status = "cashed_out";
-        // 🔨 FIX: Must await the on-chain payout so Render doesn't kill the task early!
         await resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, true);
         
         res.json({ success: true, serverSeed: game.serverSeed });
@@ -219,7 +219,7 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
 
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("vault")], 
-            PROGRAM_ID // 🔨 Use explicit constant instead of program.programId
+            PROGRAM_ID 
         );
 
         const txSignature = await program.methods
@@ -238,7 +238,7 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
 
     } catch (err) {
         console.error("❌ [HOUSE] Failed to resolve on-chain:", err);
-        throw err; // Re-throw the error so the API catches it and returns the 500 error properly
+        throw err; 
     }
 }
 
