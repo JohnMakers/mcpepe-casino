@@ -5,11 +5,9 @@ const { Connection, Keypair, Transaction } = require('@solana/web3.js');
 const crypto = require('crypto');
 const anchor = require('@coral-xyz/anchor');
 
-// Ensure you have copied idl.json into your backend folder!
 const idl = require('./idl.json'); 
 
 // 🛡️ THE MASTER FIX: Forcefully inject missing properties into the IDL.
-// Anchor JS violently crashes if 'idl.types' is undefined. We force an empty array to satisfy the parser.
 if (!idl.types) idl.types = [];
 
 const PROGRAM_ID_STRING = "9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57";
@@ -65,7 +63,6 @@ app.post('/api/play-coinflip', async (req, res) => {
         
         let gameStatePubkeyObj, playerPubkeyObj;
         
-        // 🛡️ Fallback extraction logic
         if (gameStatePubkey && playerPubkey) {
             gameStatePubkeyObj = new anchor.web3.PublicKey(gameStatePubkey);
             playerPubkeyObj = new anchor.web3.PublicKey(playerPubkey);
@@ -76,20 +73,24 @@ app.post('/api/play-coinflip', async (req, res) => {
             playerPubkeyObj = playIx.keys[1].pubkey;
         }
 
-        // 1. House countersigns and broadcasts the Wager transaction
         tx.partialSign(houseKeypair);
         const playSignature = await connection.sendRawTransaction(tx.serialize());
         
-        const latestBlockhash = await connection.getLatestBlockhash("processed");
+        // 🔨 THE FIX: We MUST wait for "confirmed" status, not "processed".
+        // This gives the RPC time to index the newly created gameState account.
+        const latestBlockhash = await connection.getLatestBlockhash("confirmed");
         await connection.confirmTransaction({
             signature: playSignature,
             blockhash: latestBlockhash.blockhash,
             lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
-        }, "processed");
+        }, "confirmed");
 
-        // 2. House independently executes the Resolution transaction
         const wallet = new anchor.Wallet(houseKeypair);
-        const provider = new anchor.AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
+        // 🔨 THE FIX: Force the provider to strictly use "confirmed" state
+        const provider = new anchor.AnchorProvider(connection, wallet, { 
+            preflightCommitment: "confirmed",
+            commitment: "confirmed"
+        });
         const program = new anchor.Program(idl, provider);
 
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
@@ -97,18 +98,21 @@ app.post('/api/play-coinflip', async (req, res) => {
             PROGRAM_ID 
         );
 
+        // 🔨 THE FIX: skipPreflight bypasses local RPC simulation bugs
         const resolveSignature = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
             gameState: gameStatePubkeyObj,
             player: playerPubkeyObj,
             vault: vaultPDA,
             authority: houseKeypair.publicKey,
             systemProgram: anchor.web3.SystemProgram.programId,
-        }).rpc();
+        }).rpc({ skipPreflight: true });
 
         res.json({ success: true, playSignature, resolveSignature });
     } catch (error) {
         console.error("❌ Coinflip Error:", error);
-        res.status(500).json({ success: false, error: error.message });
+        // 🔨 THE FIX: Safely serialize the error so the frontend doesn't choke on undefined
+        const safeError = error instanceof Error ? error.message : String(error);
+        res.status(500).json({ success: false, error: safeError });
     }
 });
 
@@ -141,7 +145,8 @@ app.post('/api/whackd/init', (req, res) => {
         res.json({ success: true, serverSeedHash: hash });
     } catch (error) {
         console.error("❌ Init Error:", error);
-        res.status(500).json({ success: false, error: error.message });
+        const safeError = error instanceof Error ? error.message : String(error);
+        res.status(500).json({ success: false, error: safeError });
     }
 });
 
@@ -179,7 +184,8 @@ app.post('/api/whackd/click', async (req, res) => {
         }
     } catch (error) {
         console.error("❌ Click Error:", error);
-        res.status(500).json({ success: false, error: error.message });
+        const safeError = error instanceof Error ? error.message : String(error);
+        res.status(500).json({ success: false, error: safeError });
     }
 });
 
@@ -198,7 +204,8 @@ app.post('/api/whackd/cashout', async (req, res) => {
         res.json({ success: true, serverSeed: game.serverSeed });
     } catch (error) {
         console.error("❌ Cashout Error:", error);
-        res.status(500).json({ success: false, error: error.message });
+        const safeError = error instanceof Error ? error.message : String(error);
+        res.status(500).json({ success: false, error: safeError });
     }
 });
 
@@ -214,7 +221,10 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
         const gamePubkey = new anchor.web3.PublicKey(game.gamePubkey);
 
         const wallet = new anchor.Wallet(houseKeypair);
-        const provider = new anchor.AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
+        const provider = new anchor.AnchorProvider(connection, wallet, { 
+            preflightCommitment: "confirmed",
+            commitment: "confirmed"
+        });
         const program = new anchor.Program(idl, provider);
 
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
@@ -222,6 +232,7 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
             PROGRAM_ID 
         );
 
+        // 🔨 THE FIX: Skip preflight to bypass ghost RPC cache errors and force the payout
         const txSignature = await program.methods
             .resolveWhackd(unhashedServerSeed, revealedMask, isCashout)
             .accounts({
@@ -231,7 +242,7 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
                 vault: vaultPDA,
                 systemProgram: anchor.web3.SystemProgram.programId,
             })
-            .rpc(); 
+            .rpc({ skipPreflight: true }); 
 
         console.log(`✅ [HOUSE] Whackd Resolved successfully! TX: ${txSignature}`);
         activeWhackdGames.delete(playerPubkeyStr); 
