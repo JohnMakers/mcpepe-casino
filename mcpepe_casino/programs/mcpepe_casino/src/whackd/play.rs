@@ -69,14 +69,14 @@ pub fn resolve_whackd(
         game.state = 2; 
         game.revealed_mask = revealed_mask;
         game.bomb_mask = actual_bomb_mask; 
-        } else if is_cashout {
+    } else if is_cashout {
         game.state = 1; 
         game.revealed_mask = revealed_mask;
         game.bomb_mask = actual_bomb_mask;
 
         let payout = calculate_payout(game.bet_amount, game.mine_count, successful_reveals)?;
 
-        // 🔨 THE FIX: Use CPI Transfer with PDA Signer Seeds
+        // 🔨 THE CPI FIX
         let bump = ctx.bumps.vault;
         let seeds = &[b"vault".as_ref(), &[bump]];
         let signer = &[&seeds[..]];

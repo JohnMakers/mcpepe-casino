@@ -20,7 +20,6 @@ pub fn play_coinflip(
     require!(game_state.is_active, CustomError::GameNotActive);
     require!(guess == 0 || guess == 1, CustomError::InvalidGuess);
 
-    // CPI: Transfer wager from Player directly to the autonomous House Vault (PDA)
     let cpi_context = CpiContext::new(
         ctx.accounts.system_program.to_account_info(),
         anchor_lang::system_program::Transfer {
@@ -53,23 +52,18 @@ pub fn withdraw_profits(ctx: Context<WithdrawProfits>, amount: u64) -> Result<()
         signer,
     );
     anchor_lang::system_program::transfer(cpi_context, amount)?;
-
     Ok(())
-}  
+}    
 
 pub fn resolve_coinflip(ctx: Context<ResolveCoinflip>, unhashed_server_seed: String) -> Result<()> {
     let game_state = &mut ctx.accounts.game_state;
 
-    // 1. Hash the revealed seed exactly the same way the frontend did
     let revealed_hash = anchor_lang::solana_program::hash::hash(unhashed_server_seed.as_bytes());
-
-    // 2. Cryptographic Check
     require!(
         game_state.server_seed_hash == revealed_hash.to_bytes(),
         CustomError::SeedMismatch
     );
 
-    // 3. Combine Server Seed and Client Seed
     let mut combined_data = String::new();
     combined_data.push_str(&unhashed_server_seed);
     combined_data.push_str(&game_state.client_seed);
@@ -77,11 +71,10 @@ pub fn resolve_coinflip(ctx: Context<ResolveCoinflip>, unhashed_server_seed: Str
     let outcome_hash = anchor_lang::solana_program::hash::hash(combined_data.as_bytes());
     let winning_result = outcome_hash.to_bytes()[0] % 2; 
 
-    // 4. Execute Payout Logic
     if winning_result == game_state.guess {
         let payout = game_state.bet_amount.checked_mul(2).unwrap();
         
-        // 🔨 THE FIX: Use CPI Transfer with PDA Signer Seeds
+        // 🔨 THE CPI FIX
         let bump = ctx.bumps.vault;
         let seeds = &[b"vault".as_ref(), &[bump]];
         let signer = &[&seeds[..]];
@@ -141,5 +134,5 @@ pub struct WithdrawProfits<'info> {
     pub vault: SystemAccount<'info>,
     #[account(mut)]
     pub authority: Signer<'info>, 
-    pub system_program: Program<'info, System>,
+    pub system_program: Program<'info, System>, // Added missing system_program
 }
