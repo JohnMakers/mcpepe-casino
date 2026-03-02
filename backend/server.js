@@ -48,14 +48,30 @@ const activeWhackdGames = new Map();
 // ==========================================
 app.post('/api/play-coinflip', async (req, res) => {
     try {
-        const { transactionBuffer, unhashedServerSeed, gameStatePubkey, playerPubkey } = req.body;
+        const { transactionBuffer, unhashedServerSeed } = req.body;
         
-        // 1. House countersigns and broadcasts the Wager transaction
+        if (!unhashedServerSeed) {
+            return res.status(400).json({ success: false, error: "Missing server seed. Please hard refresh your frontend window!" });
+        }
+
         const tx = Transaction.from(Buffer.from(transactionBuffer, 'base64'));
+        
+        // 🛡️ SECURITY & BUG FIX: 
+        // Phantom wallet often prepends invisible Compute Budget instructions.
+        // We look at the LAST two instructions to guarantee we grab our Game instructions,
+        // and securely extract the EXACT PublicKeys that the user signed for.
+        const initIx = tx.instructions[tx.instructions.length - 2];
+        const playIx = tx.instructions[tx.instructions.length - 1];
+
+        // This gives us raw PublicKey objects, completely bypassing the '_bn' crash!
+        const gameStatePubkeyObj = initIx.keys[0].pubkey;
+        const playerPubkeyObj = playIx.keys[1].pubkey;
+
+        // 1. House countersigns and broadcasts the Wager transaction
         tx.partialSign(houseKeypair);
         const playSignature = await connection.sendRawTransaction(tx.serialize());
         
-        // Wait for the game state account to be created on-chain to prevent race conditions
+        // Wait for the Wager to be processed
         const latestBlockhash = await connection.getLatestBlockhash("processed");
         await connection.confirmTransaction({
             signature: playSignature,
@@ -73,9 +89,10 @@ app.post('/api/play-coinflip', async (req, res) => {
             program.programId
         );
 
+        // We pass the securely extracted objects directly to the accounts
         const resolveSignature = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
-            gameState: new anchor.web3.PublicKey(gameStatePubkey),
-            player: new anchor.web3.PublicKey(playerPubkey),
+            gameState: gameStatePubkeyObj,
+            player: playerPubkeyObj,
             vault: vaultPDA,
             authority: houseKeypair.publicKey,
             systemProgram: anchor.web3.SystemProgram.programId,
