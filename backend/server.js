@@ -48,11 +48,40 @@ const activeWhackdGames = new Map();
 // ==========================================
 app.post('/api/play-coinflip', async (req, res) => {
     try {
-        const { transactionBuffer } = req.body;
+        const { transactionBuffer, unhashedServerSeed, gameStatePubkey, playerPubkey } = req.body;
+        
+        // 1. House countersigns and broadcasts the Wager transaction
         const tx = Transaction.from(Buffer.from(transactionBuffer, 'base64'));
         tx.partialSign(houseKeypair);
-        const signature = await connection.sendRawTransaction(tx.serialize());
-        res.json({ success: true, signature });
+        const playSignature = await connection.sendRawTransaction(tx.serialize());
+        
+        // Wait for the game state account to be created on-chain to prevent race conditions
+        const latestBlockhash = await connection.getLatestBlockhash("processed");
+        await connection.confirmTransaction({
+            signature: playSignature,
+            blockhash: latestBlockhash.blockhash,
+            lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
+        }, "processed");
+
+        // 2. House independently executes the Resolution transaction
+        const wallet = new anchor.Wallet(houseKeypair);
+        const provider = new anchor.AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
+        const program = new anchor.Program(idl, provider);
+
+        const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("vault")], 
+            program.programId
+        );
+
+        const resolveSignature = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
+            gameState: new anchor.web3.PublicKey(gameStatePubkey),
+            player: new anchor.web3.PublicKey(playerPubkey),
+            vault: vaultPDA,
+            authority: houseKeypair.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId,
+        }).rpc();
+
+        res.json({ success: true, playSignature, resolveSignature });
     } catch (error) {
         console.error("❌ Coinflip Error:", error);
         res.status(500).json({ success: false, error: error.message });

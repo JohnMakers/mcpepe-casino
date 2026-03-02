@@ -79,15 +79,10 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
           systemProgram: anchor.web3.SystemProgram.programId,
       }).instruction();
 
-      const resolveIx = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
-          gameState: gameStateKeypair.publicKey,
-          player: publicKey,
-          vault: vaultPDA,
-          authority: HOUSE_PUBKEY, 
-          systemProgram: anchor.web3.SystemProgram.programId,
-      }).instruction();
-
-      const tx = new anchor.web3.Transaction().add(initIx, playIx, resolveIx);
+      // 🔨 FIX: We DO NOT add resolveIx here. The user only signs the Wager.
+      // Phantom will now strictly simulate the funds leaving the user's wallet.
+      const tx = new anchor.web3.Transaction().add(initIx, playIx);
+      
       const latestBlockhash = await connection.getLatestBlockhash("confirmed");
       tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = publicKey;
@@ -97,24 +92,24 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
 
       const serializedTx = signedTx.serialize({ requireAllSignatures: false });
       
+      // Send the wager to the backend, along with the data needed for the House to resolve it
       const backendResponse = await fetch(`${BACKEND_URL}/api/play-coinflip`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
               transactionBuffer: serializedTx.toString("base64"),
-              clientSeed: clientSeed
+              clientSeed: clientSeed,
+              unhashedServerSeed: unhashedServerSeed,
+              gameStatePubkey: gameStateKeypair.publicKey.toBase58(),
+              playerPubkey: publicKey.toBase58()
           })
       });
 
       const backendData = await backendResponse.json();
       if (!backendData.success) throw new Error(backendData.error);
       
-      await connection.confirmTransaction({ 
-        signature: backendData.signature, 
-        blockhash: latestBlockhash.blockhash,
-        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
-      }, "processed");
-
+      // The backend has already processed both the Wager and Resolution on-chain.
+      // We can safely proceed with the visual animation.
       const baseSpins = 1800; 
       const extraTurn = winningSide === "tails" ? 180 : 0; 
       setCoinDegrees(prev => prev + baseSpins + extraTurn + (prev % 360 !== 0 ? 180 : 0));
@@ -122,12 +117,13 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
       setTimeout(() => {
         setFlipState("resolved");
         const payout = isWin ? wager * 1.98 : 0; 
-        const profit = isWin ? payout - wager : wager; // Calculates real profit
+        const profit = isWin ? payout - wager : wager; 
         
-        // Report profit with 4 decimals for precision
         setResult({ win: isWin, amount: profit.toFixed(4), side: winningSide });
         if (isWin) setBalance(prev => prev + payout);
-        logWager("Coinflip", wager, isWin, payout, backendData.signature, clientSeed);
+        
+        // Log the resolve signature instead of the play signature
+        logWager("Coinflip", wager, isWin, payout, backendData.resolveSignature, clientSeed);
       }, 3000);
 
     } catch (error) {
