@@ -98,7 +98,22 @@ app.post('/api/play-coinflip', async (req, res) => {
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("vault")], 
             PROGRAM_ID 
+
+        
         );
+
+        console.log(`Waiting for Helius to sync gameState: ${gameStatePubkeyObj.toBase58()}`);
+        let accountReady = false;
+        for (let i = 0; i < 10; i++) {
+            const accInfo = await connection.getAccountInfo(gameStatePubkeyObj, "confirmed");
+            if (accInfo) {
+                accountReady = true;
+                break;
+            }
+            await new Promise(r => setTimeout(r, 1000));
+        }
+
+        if (!accountReady) throw new Error("Network failed to sync the game state in time.");
 
         console.log(`🛡️ Building offline resolution for gameState: ${gameStatePubkeyObj.toBase58()}`);
         
