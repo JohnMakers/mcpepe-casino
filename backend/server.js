@@ -100,34 +100,23 @@ app.post('/api/play-coinflip', async (req, res) => {
             PROGRAM_ID 
         );
 
-        // 🛡️ THE NEW ARMOR: Interrogate the network until it acknowledges the account
-        console.log(`Waiting for Helius to sync gameState: ${gameStatePubkeyObj.toBase58()}`);
-        let accountReady = false;
-        for (let i = 0; i < 10; i++) {
-            const accInfo = await connection.getAccountInfo(gameStatePubkeyObj, "confirmed");
-            if (accInfo) {
-                accountReady = true;
-                break;
-            }
-            await new Promise(r => setTimeout(r, 1000)); // Wait 1 second and check again
-        }
-
-        if (!accountReady) throw new Error("Network failed to sync the game state in time.");
-
-        // 2. Manually build the instruction to bypass Anchor's strict checks
-        const resolveIx = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
-            gameState: gameStatePubkeyObj,
-            player: playerPubkeyObj,
-            vault: vaultPDA,
-            authority: houseKeypair.publicKey,
-            systemProgram: anchor.web3.SystemProgram.programId,
-        }).instruction();
-
-        // 3. Blast the resolution with skipPreflight
+        console.log(`🛡️ Building resolution for gameState: ${gameStatePubkeyObj.toBase58()}`);
+        
         let resolveSignature;
-        let retries = 5;
+        let retries = 10;
+        
         while (retries > 0) {
             try {
+                // 1. Trap Anchor's sneaky background fetch inside the try/catch
+                const resolveIx = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
+                    gameState: gameStatePubkeyObj,
+                    player: playerPubkeyObj,
+                    vault: vaultPDA,
+                    authority: houseKeypair.publicKey,
+                    systemProgram: anchor.web3.SystemProgram.programId,
+                }).instruction();
+
+                // 2. Build and blast the raw transaction
                 const resolveTx = new anchor.web3.Transaction().add(resolveIx);
                 const freshBlockhash = await connection.getLatestBlockhash("confirmed");
                 resolveTx.recentBlockhash = freshBlockhash.blockhash;
@@ -142,12 +131,12 @@ app.post('/api/play-coinflip', async (req, res) => {
                     lastValidBlockHeight: freshBlockhash.lastValidBlockHeight
                 }, "confirmed");
 
-                break;
+                break; // Target destroyed. Break the loop.
             } catch (err) {
-                console.log(`⚠️ Network retry... (${retries} left). Error: ${err.message}`);
+                console.log(`⚠️ Anchor hit a lagging node. Retrying... (${retries} left). Error: ${err.message}`);
                 await new Promise(r => setTimeout(r, 2000));
                 retries--;
-                if (retries === 0) throw new Error("Resolution completely failed after multiple forced attempts.");
+                if (retries === 0) throw new Error("Resolution completely failed after 10 forced attempts.");
             }
         }
 
@@ -276,29 +265,27 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
             PROGRAM_ID 
         );
 
-        // 1. Manually build the instruction
-        const resolveIx = await program.methods
-            .resolveWhackd(unhashedServerSeed, Number(revealedMask), isCashout)
-            .accounts({
-                whackdGame: gamePubkey,
-                player: playerPubkey,
-                authority: houseKeypair.publicKey,
-                vault: vaultPDA,
-                systemProgram: anchor.web3.SystemProgram.programId,
-            }).instruction();
-
-        // 🔨 THE MASTER FIX: Aggressive Retry Loop
         let txSignature;
-        let retries = 5;
+        let retries = 10;
         while (retries > 0) {
             try {
+                // Trap the Anchor fetch
+                const resolveIx = await program.methods
+                    .resolveWhackd(unhashedServerSeed, Number(revealedMask), isCashout)
+                    .accounts({
+                        whackdGame: gamePubkey,
+                        player: playerPubkey,
+                        authority: houseKeypair.publicKey,
+                        vault: vaultPDA,
+                        systemProgram: anchor.web3.SystemProgram.programId,
+                    }).instruction();
+
                 const resolveTx = new anchor.web3.Transaction().add(resolveIx);
                 const freshBlockhash = await connection.getLatestBlockhash("confirmed");
                 resolveTx.recentBlockhash = freshBlockhash.blockhash;
                 resolveTx.feePayer = houseKeypair.publicKey;
                 resolveTx.sign(houseKeypair);
 
-                // Force broadcast
                 txSignature = await connection.sendRawTransaction(resolveTx.serialize(), { skipPreflight: true });
                 
                 await connection.confirmTransaction({
@@ -309,10 +296,10 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
 
                 break;
             } catch (err) {
-                console.log(`⚠️ RPC Load Balancer Lag detected in Whackd. Blasting again in 3s... (${retries} left). Error: ${err.message}`);
-                await new Promise(r => setTimeout(r, 3000));
+                console.log(`⚠️ Anchor hit a lagging node in Whackd. Retrying... (${retries} left). Error: ${err.message}`);
+                await new Promise(r => setTimeout(r, 2000));
                 retries--;
-                if (retries === 0) throw new Error("RPC completely failed to sync the game state after multiple forced attempts.");
+                if (retries === 0) throw new Error("RPC completely failed to sync after 10 forced attempts.");
             }
         }
 
