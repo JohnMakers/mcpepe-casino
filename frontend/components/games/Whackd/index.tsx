@@ -115,6 +115,7 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
             body: JSON.stringify({ playerPubkey: publicKey?.toBase58(), tileIndex: index })
         });
         const data = await res.json();
+        if (!data.success) throw new Error(data.error || "Backend failed to process click");
 
         const newRevealedMask = revealedMask | (1 << index);
 
@@ -142,6 +143,7 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
             body: JSON.stringify({ playerPubkey: publicKey?.toBase58() })
         });
         const data = await res.json();
+        if (!data.success) throw new Error(data.error || "Backend failed to process cashout");
 
         const finalMult = overrideMult ?? currentMultiplier;
         const wager = parseFloat(betAmount);

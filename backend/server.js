@@ -100,9 +100,9 @@ app.post('/api/play-coinflip', async (req, res) => {
             PROGRAM_ID 
         );
 
-        // 🔨 THE MASTER FIX: Aggressive Retry Loop for RPC Desync
+// 🔨 THE MASTER FIX: Aggressive Retry Loop for RPC Desync
         let resolveSignature;
-        let retries = 3;
+        let retries = 5; // Increased from 3
         while (retries > 0) {
             try {
                 resolveSignature = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
@@ -111,17 +111,13 @@ app.post('/api/play-coinflip', async (req, res) => {
                     vault: vaultPDA,
                     authority: houseKeypair.publicKey,
                     systemProgram: anchor.web3.SystemProgram.programId,
-                }).rpc();
+                }).rpc({ skipPreflight: true }); // SKIP PREFLIGHT IS KEY
                 break; // Success! Break the loop.
             } catch (err) {
-                if (err.message && (err.message.includes("Account not found") || err.message.includes("AccountNotInitialized"))) {
-                    console.log(`⚠️ RPC Lag detected. Retrying Coinflip resolution in 2.5s... (${retries} left)`);
-                    await new Promise(r => setTimeout(r, 2500));
-                    retries--;
-                    if (retries === 0) throw new Error("RPC completely failed to sync the game state after 3 attempts.");
-                } else {
-                    throw err; // Real error, throw immediately
-                }
+                console.log(`⚠️ RPC Lag detected. Retrying Coinflip resolution in 2.5s... (${retries} left). Error: ${err.message}`);
+                await new Promise(r => setTimeout(r, 2500));
+                retries--;
+                if (retries === 0) throw new Error("RPC completely failed to sync the game state after 5 attempts.");
             }
         }
 
@@ -250,9 +246,9 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
             PROGRAM_ID 
         );
 
-        // 🔨 THE MASTER FIX: Aggressive Retry Loop for Whackd Payouts
+// 🔨 THE MASTER FIX: Aggressive Retry Loop for Whackd Payouts
         let txSignature;
-        let retries = 3;
+        let retries = 5;
         while (retries > 0) {
             try {
                 txSignature = await program.methods
@@ -264,17 +260,13 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
                         vault: vaultPDA,
                         systemProgram: anchor.web3.SystemProgram.programId,
                     })
-                    .rpc(); 
+                    .rpc({ skipPreflight: true }); // SKIP PREFLIGHT IS KEY
                 break;
             } catch (err) {
-                 if (err.message && (err.message.includes("Account not found") || err.message.includes("AccountNotInitialized"))) {
-                    console.log(`⚠️ RPC Lag detected in Whackd. Retrying payout in 2.5s... (${retries} left)`);
-                    await new Promise(r => setTimeout(r, 2500));
-                    retries--;
-                    if (retries === 0) throw new Error("RPC completely failed to sync the game state after 3 attempts.");
-                } else {
-                    throw err; 
-                }
+                console.log(`⚠️ RPC Lag detected in Whackd. Retrying payout in 2.5s... (${retries} left). Error: ${err.message}`);
+                await new Promise(r => setTimeout(r, 2500));
+                retries--;
+                if (retries === 0) throw new Error("RPC completely failed to sync the game state after 5 attempts.");
             }
         }
 
