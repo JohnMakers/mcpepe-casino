@@ -87,6 +87,14 @@ app.post('/api/play-coinflip', async (req, res) => {
             throw new Error(`Wager transaction failed on-chain: ${JSON.stringify(confirmation.value.err)}`);
         }
 
+        // 🛡️ THE MISSING LINK: Re-initialize the Anchor Program before using it
+        const wallet = new anchor.Wallet(houseKeypair);
+        const provider = new anchor.AnchorProvider(connection, wallet, { 
+            preflightCommitment: "confirmed",
+            commitment: "confirmed"
+        });
+        const program = new anchor.Program(idl, provider);
+
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("vault")], 
             PROGRAM_ID 
@@ -144,7 +152,7 @@ app.post('/api/play-coinflip', async (req, res) => {
         }
 
         res.json({ success: true, playSignature, resolveSignature });
-        
+
     } catch (error) {
         console.error("❌ Coinflip Error:", error);
         const safeError = error.message ? error.message : JSON.stringify(error);
