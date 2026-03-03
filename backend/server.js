@@ -72,7 +72,7 @@ app.post('/api/play-coinflip', async (req, res) => {
             playerPubkeyObj = playIx.keys[1].pubkey;
         }
 
-        // 1. Broadcast Wager
+// 1. Broadcast Wager
         tx.partialSign(houseKeypair);
         const playSignature = await connection.sendRawTransaction(tx.serialize());
         
@@ -83,28 +83,30 @@ app.post('/api/play-coinflip', async (req, res) => {
             lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
         }, "confirmed");
 
-        // 🛡️ SECURITY CHECK: If the wager failed on-chain, stop immediately!
         if (confirmation.value.err) {
             throw new Error(`Wager transaction failed on-chain: ${JSON.stringify(confirmation.value.err)}`);
         }
-
-        const wallet = new anchor.Wallet(houseKeypair);
-        const provider = new anchor.AnchorProvider(connection, wallet, { 
-            preflightCommitment: "confirmed",
-            commitment: "confirmed"
-        });
-        const program = new anchor.Program(idl, provider);
 
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("vault")], 
             PROGRAM_ID 
         );
 
-// 🔨 THE MASTER FIX: Bypassing Anchor's strict pre-checks
-        let resolveSignature;
-        let retries = 5;
-        
-        // 1. Manually build the instruction to bypass Anchor's .rpc() checks
+        // 🛡️ THE NEW ARMOR: Interrogate the network until it acknowledges the account
+        console.log(`Waiting for Helius to sync gameState: ${gameStatePubkeyObj.toBase58()}`);
+        let accountReady = false;
+        for (let i = 0; i < 10; i++) {
+            const accInfo = await connection.getAccountInfo(gameStatePubkeyObj, "confirmed");
+            if (accInfo) {
+                accountReady = true;
+                break;
+            }
+            await new Promise(r => setTimeout(r, 1000)); // Wait 1 second and check again
+        }
+
+        if (!accountReady) throw new Error("Network failed to sync the game state in time.");
+
+        // 2. Manually build the instruction to bypass Anchor's strict checks
         const resolveIx = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
             gameState: gameStatePubkeyObj,
             player: playerPubkeyObj,
@@ -113,38 +115,36 @@ app.post('/api/play-coinflip', async (req, res) => {
             systemProgram: anchor.web3.SystemProgram.programId,
         }).instruction();
 
+        // 3. Blast the resolution with skipPreflight
+        let resolveSignature;
+        let retries = 5;
         while (retries > 0) {
             try {
-                // 2. Build a raw transaction manually
                 const resolveTx = new anchor.web3.Transaction().add(resolveIx);
-                
-                // Fetch a fresh blockhash inside the loop so it never expires during retries
                 const freshBlockhash = await connection.getLatestBlockhash("confirmed");
                 resolveTx.recentBlockhash = freshBlockhash.blockhash;
                 resolveTx.feePayer = houseKeypair.publicKey;
                 resolveTx.sign(houseKeypair);
 
-                // 3. BLAST it forcefully to the network, ignoring all simulations
                 resolveSignature = await connection.sendRawTransaction(resolveTx.serialize(), { skipPreflight: true });
                 
-                // Confirm it actually went through
                 await connection.confirmTransaction({
                     signature: resolveSignature,
                     blockhash: freshBlockhash.blockhash,
                     lastValidBlockHeight: freshBlockhash.lastValidBlockHeight
                 }, "confirmed");
 
-                break; // Success! Break the loop.
+                break;
             } catch (err) {
-                console.log(`⚠️ RPC Load Balancer Lag detected. Blasting again in 3s... (${retries} left). Error: ${err.message}`);
-                await new Promise(r => setTimeout(r, 3000));
+                console.log(`⚠️ Network retry... (${retries} left). Error: ${err.message}`);
+                await new Promise(r => setTimeout(r, 2000));
                 retries--;
-                if (retries === 0) throw new Error("RPC completely failed to sync the game state after multiple forced attempts.");
+                if (retries === 0) throw new Error("Resolution completely failed after multiple forced attempts.");
             }
         }
 
-        // Respond to client after successful resolve
         res.json({ success: true, playSignature, resolveSignature });
+        
     } catch (error) {
         console.error("❌ Coinflip Error:", error);
         const safeError = error.message ? error.message : JSON.stringify(error);
