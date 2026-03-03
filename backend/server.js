@@ -100,21 +100,23 @@ app.post('/api/play-coinflip', async (req, res) => {
             PROGRAM_ID 
         );
 
-        console.log(`🛡️ Building resolution for gameState: ${gameStatePubkeyObj.toBase58()}`);
+        console.log(`🛡️ Building offline resolution for gameState: ${gameStatePubkeyObj.toBase58()}`);
         
         let resolveSignature;
         let retries = 10;
         
         while (retries > 0) {
             try {
-                // 1. Trap Anchor's sneaky background fetch inside the try/catch
-                const resolveIx = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
-                    gameState: gameStatePubkeyObj,
-                    player: playerPubkeyObj,
-                    vault: vaultPDA,
-                    authority: houseKeypair.publicKey,
-                    systemProgram: anchor.web3.SystemProgram.programId,
-                }).instruction();
+                // 1. Force Anchor offline using the legacy synchronous builder. NO AWAIT.
+                const resolveIx = program.instruction.resolveCoinflip(unhashedServerSeed, {
+                    accounts: {
+                        gameState: gameStatePubkeyObj,
+                        player: playerPubkeyObj,
+                        vault: vaultPDA,
+                        authority: houseKeypair.publicKey,
+                        systemProgram: anchor.web3.SystemProgram.programId,
+                    }
+                });
 
                 // 2. Build and blast the raw transaction
                 const resolveTx = new anchor.web3.Transaction().add(resolveIx);
@@ -133,7 +135,7 @@ app.post('/api/play-coinflip', async (req, res) => {
 
                 break; // Target destroyed. Break the loop.
             } catch (err) {
-                console.log(`⚠️ Anchor hit a lagging node. Retrying... (${retries} left). Error: ${err.message}`);
+                console.log(`⚠️ Network hit a snag. Blasting again... (${retries} left). Error: ${err.message}`);
                 await new Promise(r => setTimeout(r, 2000));
                 retries--;
                 if (retries === 0) throw new Error("Resolution completely failed after 10 forced attempts.");
@@ -269,16 +271,16 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
         let retries = 10;
         while (retries > 0) {
             try {
-                // Trap the Anchor fetch
-                const resolveIx = await program.methods
-                    .resolveWhackd(unhashedServerSeed, Number(revealedMask), isCashout)
-                    .accounts({
+                // 1. Force offline compilation. Arguments go first, accounts object last.
+                const resolveIx = program.instruction.resolveWhackd(unhashedServerSeed, Number(revealedMask), isCashout, {
+                    accounts: {
                         whackdGame: gamePubkey,
                         player: playerPubkey,
                         authority: houseKeypair.publicKey,
                         vault: vaultPDA,
                         systemProgram: anchor.web3.SystemProgram.programId,
-                    }).instruction();
+                    }
+                });
 
                 const resolveTx = new anchor.web3.Transaction().add(resolveIx);
                 const freshBlockhash = await connection.getLatestBlockhash("confirmed");
@@ -296,7 +298,7 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
 
                 break;
             } catch (err) {
-                console.log(`⚠️ Anchor hit a lagging node in Whackd. Retrying... (${retries} left). Error: ${err.message}`);
+                console.log(`⚠️ Network hit a snag in Whackd. Retrying... (${retries} left). Error: ${err.message}`);
                 await new Promise(r => setTimeout(r, 2000));
                 retries--;
                 if (retries === 0) throw new Error("RPC completely failed to sync after 10 forced attempts.");
