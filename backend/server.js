@@ -100,31 +100,53 @@ app.post('/api/play-coinflip', async (req, res) => {
             PROGRAM_ID 
         );
 
-// 🔨 THE MASTER FIX: Aggressive Retry Loop for RPC Desync
+// 🔨 THE MASTER FIX: Bypassing Anchor's strict pre-checks
         let resolveSignature;
-        let retries = 5; // Increased from 3
+        let retries = 5;
+        
+        // 1. Manually build the instruction to bypass Anchor's .rpc() checks
+        const resolveIx = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
+            gameState: gameStatePubkeyObj,
+            player: playerPubkeyObj,
+            vault: vaultPDA,
+            authority: houseKeypair.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId,
+        }).instruction();
+
         while (retries > 0) {
             try {
-                resolveSignature = await program.methods.resolveCoinflip(unhashedServerSeed).accounts({
-                    gameState: gameStatePubkeyObj,
-                    player: playerPubkeyObj,
-                    vault: vaultPDA,
-                    authority: houseKeypair.publicKey,
-                    systemProgram: anchor.web3.SystemProgram.programId,
-                }).rpc({ skipPreflight: true }); // SKIP PREFLIGHT IS KEY
+                // 2. Build a raw transaction manually
+                const resolveTx = new anchor.web3.Transaction().add(resolveIx);
+                
+                // Fetch a fresh blockhash inside the loop so it never expires during retries
+                const freshBlockhash = await connection.getLatestBlockhash("confirmed");
+                resolveTx.recentBlockhash = freshBlockhash.blockhash;
+                resolveTx.feePayer = houseKeypair.publicKey;
+                resolveTx.sign(houseKeypair);
+
+                // 3. BLAST it forcefully to the network, ignoring all simulations
+                resolveSignature = await connection.sendRawTransaction(resolveTx.serialize(), { skipPreflight: true });
+                
+                // Confirm it actually went through
+                await connection.confirmTransaction({
+                    signature: resolveSignature,
+                    blockhash: freshBlockhash.blockhash,
+                    lastValidBlockHeight: freshBlockhash.lastValidBlockHeight
+                }, "confirmed");
+
                 break; // Success! Break the loop.
             } catch (err) {
-                console.log(`⚠️ RPC Lag detected. Retrying Coinflip resolution in 2.5s... (${retries} left). Error: ${err.message}`);
-                await new Promise(r => setTimeout(r, 2500));
+                console.log(`⚠️ RPC Load Balancer Lag detected. Blasting again in 3s... (${retries} left). Error: ${err.message}`);
+                await new Promise(r => setTimeout(r, 3000));
                 retries--;
-                if (retries === 0) throw new Error("RPC completely failed to sync the game state after 5 attempts.");
+                if (retries === 0) throw new Error("RPC completely failed to sync the game state after multiple forced attempts.");
             }
         }
 
+        // Respond to client after successful resolve
         res.json({ success: true, playSignature, resolveSignature });
     } catch (error) {
         console.error("❌ Coinflip Error:", error);
-        // Safely extract string to prevent frontend toString() crashes
         const safeError = error.message ? error.message : JSON.stringify(error);
         res.status(500).json({ success: false, error: safeError });
     }
@@ -246,27 +268,43 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
             PROGRAM_ID 
         );
 
-// 🔨 THE MASTER FIX: Aggressive Retry Loop for Whackd Payouts
+        // 1. Manually build the instruction
+        const resolveIx = await program.methods
+            .resolveWhackd(unhashedServerSeed, Number(revealedMask), isCashout)
+            .accounts({
+                whackdGame: gamePubkey,
+                player: playerPubkey,
+                authority: houseKeypair.publicKey,
+                vault: vaultPDA,
+                systemProgram: anchor.web3.SystemProgram.programId,
+            }).instruction();
+
+        // 🔨 THE MASTER FIX: Aggressive Retry Loop
         let txSignature;
         let retries = 5;
         while (retries > 0) {
             try {
-                txSignature = await program.methods
-                    .resolveWhackd(unhashedServerSeed, Number(revealedMask), isCashout)
-                    .accounts({
-                        whackdGame: gamePubkey,
-                        player: playerPubkey,
-                        authority: houseKeypair.publicKey,
-                        vault: vaultPDA,
-                        systemProgram: anchor.web3.SystemProgram.programId,
-                    })
-                    .rpc({ skipPreflight: true }); // SKIP PREFLIGHT IS KEY
+                const resolveTx = new anchor.web3.Transaction().add(resolveIx);
+                const freshBlockhash = await connection.getLatestBlockhash("confirmed");
+                resolveTx.recentBlockhash = freshBlockhash.blockhash;
+                resolveTx.feePayer = houseKeypair.publicKey;
+                resolveTx.sign(houseKeypair);
+
+                // Force broadcast
+                txSignature = await connection.sendRawTransaction(resolveTx.serialize(), { skipPreflight: true });
+                
+                await connection.confirmTransaction({
+                    signature: txSignature,
+                    blockhash: freshBlockhash.blockhash,
+                    lastValidBlockHeight: freshBlockhash.lastValidBlockHeight
+                }, "confirmed");
+
                 break;
             } catch (err) {
-                console.log(`⚠️ RPC Lag detected in Whackd. Retrying payout in 2.5s... (${retries} left). Error: ${err.message}`);
-                await new Promise(r => setTimeout(r, 2500));
+                console.log(`⚠️ RPC Load Balancer Lag detected in Whackd. Blasting again in 3s... (${retries} left). Error: ${err.message}`);
+                await new Promise(r => setTimeout(r, 3000));
                 retries--;
-                if (retries === 0) throw new Error("RPC completely failed to sync the game state after 5 attempts.");
+                if (retries === 0) throw new Error("RPC completely failed to sync the game state after multiple forced attempts.");
             }
         }
 
