@@ -123,7 +123,8 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
         setResult({ win: isWin, amount: profit.toFixed(4), side: winningSide });
         if (isWin) setBalance(prev => prev + payout);
         
-        logWager("Coinflip", wager, isWin, payout, backendData.signature, clientSeed);
+        // 🛡️ THE FIX: Point to resolveSignature instead of just signature
+        logWager("Coinflip", wager, isWin, payout, backendData.resolveSignature, clientSeed);
       }, 3000);
 
     } catch (error) {
