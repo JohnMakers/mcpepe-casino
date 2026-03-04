@@ -65,7 +65,7 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
       const isWin = winningResult === guessNum;
       const winningSide = winningResult === 0 ? "heads" : "tails";
 
-      // Build the instructions, but DO NOT add them to a transaction yet
+      // 🛡️ THE FIX: Build the instructions and properly sign the Wager
       const initIx = await program.methods.initializeGame(serverSeedHash).accounts({
           gameState: gameStateKeypair.publicKey,
           authority: HOUSE_PUBKEY, 
@@ -80,25 +80,31 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
           systemProgram: anchor.web3.SystemProgram.programId,
       }).instruction();
 
-      // Send the raw instructions to the backend
+      // Combine into a single transaction for the wager
+      const tx = new anchor.web3.Transaction().add(initIx, playIx);
+      const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+      tx.recentBlockhash = latestBlockhash.blockhash;
+      tx.feePayer = publicKey;
+      
+      // Request player signature via Phantom
+      const signedTx = await wallet.signTransaction(tx);
+      // Automatically sign with the ephemeral game state keypair
+      signedTx.partialSign(gameStateKeypair);
+
+      // Serialize and safely convert to Base64 string so it survives the HTTP trip
+      const serializedTx = signedTx.serialize({ requireAllSignatures: false });
+      const base64Tx = Buffer.from(serializedTx).toString('base64');
+      
+      // Blast it to the Armored Backend
       const backendResponse = await fetch(`${BACKEND_URL}/api/play-coinflip`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-              instructions: [
-                  Buffer.from(initIx.data).toString("base64"), 
-                  Buffer.from(playIx.data).toString("base64")
-              ],
-              keys: [
-                  initIx.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable })),
-                  playIx.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable }))
-              ],
-              programId: initIx.programId.toBase58(),
+              transactionBuffer: base64Tx,
               clientSeed: clientSeed,
               unhashedServerSeed: unhashedServerSeed,
               gameStatePubkey: gameStateKeypair.publicKey.toBase58(),
-              playerPubkey: publicKey.toBase58(),
-              wagerLamports: wagerLamports.toString()
+              playerPubkey: publicKey.toBase58()
           })
       });
 
