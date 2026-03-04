@@ -65,6 +65,7 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
       const isWin = winningResult === guessNum;
       const winningSide = winningResult === 0 ? "heads" : "tails";
 
+      // Build the instructions, but DO NOT add them to a transaction yet
       const initIx = await program.methods.initializeGame(serverSeedHash).accounts({
           gameState: gameStateKeypair.publicKey,
           authority: HOUSE_PUBKEY, 
@@ -79,34 +80,31 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
           systemProgram: anchor.web3.SystemProgram.programId,
       }).instruction();
 
-      // 🔨 FIX: Removed resolveIx here so the gameState stays open for the backend
-      const tx = new anchor.web3.Transaction().add(initIx, playIx);
-      const latestBlockhash = await connection.getLatestBlockhash("confirmed");
-      tx.recentBlockhash = latestBlockhash.blockhash;
-      tx.feePayer = publicKey;
-      
-      const signedTx = await wallet.signTransaction(tx);
-      signedTx.partialSign(gameStateKeypair);
-
-      const serializedTx = signedTx.serialize({ requireAllSignatures: false });
-      
+      // Send the raw instructions to the backend
       const backendResponse = await fetch(`${BACKEND_URL}/api/play-coinflip`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-              transactionBuffer: serializedTx.toString("base64"),
+              instructions: [
+                  Buffer.from(initIx.data).toString("base64"), 
+                  Buffer.from(playIx.data).toString("base64")
+              ],
+              keys: [
+                  initIx.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable })),
+                  playIx.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable }))
+              ],
+              programId: initIx.programId.toBase58(),
               clientSeed: clientSeed,
-              unhashedServerSeed: unhashedServerSeed, // 🔨 FIX: Passed required backend data
+              unhashedServerSeed: unhashedServerSeed,
               gameStatePubkey: gameStateKeypair.publicKey.toBase58(),
-              playerPubkey: publicKey.toBase58()
+              playerPubkey: publicKey.toBase58(),
+              wagerLamports: wagerLamports.toString()
           })
       });
 
       const backendData = await backendResponse.json();
       if (!backendData.success) throw new Error(backendData.error);
       
-      // The backend has already processed both the Wager and Resolution on-chain.
-      // We can safely proceed with the visual animation.
       const baseSpins = 1800; 
       const extraTurn = winningSide === "tails" ? 180 : 0; 
       setCoinDegrees(prev => prev + baseSpins + extraTurn + (prev % 360 !== 0 ? 180 : 0));
@@ -119,8 +117,7 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
         setResult({ win: isWin, amount: profit.toFixed(4), side: winningSide });
         if (isWin) setBalance(prev => prev + payout);
         
-        // Log the resolve signature instead of the play signature
-        logWager("Coinflip", wager, isWin, payout, backendData.resolveSignature, clientSeed);
+        logWager("Coinflip", wager, isWin, payout, backendData.signature, clientSeed);
       }, 3000);
 
     } catch (error) {

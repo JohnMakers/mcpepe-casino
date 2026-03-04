@@ -49,17 +49,17 @@ console.log(`🔌 Connected to RPC: ${RPC_URL.includes("api.devnet") ? "Public (
 const activeWhackdGames = new Map(); 
 
 // ==========================================
-// COINFLIP ENDPOINT
+// COINFLIP ENDPOINT (NUCLEAR OPTION)
 // ==========================================
 app.post('/api/play-coinflip', async (req, res) => {
     try {
         const { transactionBuffer, unhashedServerSeed, gameStatePubkey, playerPubkey } = req.body;
         
         if (!unhashedServerSeed) {
-            return res.status(400).json({ success: false, error: "Missing server seed. Please hard refresh your frontend window!" });
+            return res.status(400).json({ success: false, error: "Missing server seed." });
         }
 
-        const tx = Transaction.from(Buffer.from(transactionBuffer, 'base64'));
+        const tx = anchor.web3.Transaction.from(Buffer.from(transactionBuffer, 'base64'));
         
         let gameStatePubkeyObj, playerPubkeyObj;
         if (gameStatePubkey && playerPubkey) {
@@ -72,7 +72,7 @@ app.post('/api/play-coinflip', async (req, res) => {
             playerPubkeyObj = playIx.keys[1].pubkey;
         }
 
-// 1. Broadcast Wager
+        // 1. Broadcast Wager
         tx.partialSign(houseKeypair);
         const playSignature = await connection.sendRawTransaction(tx.serialize());
         
@@ -84,22 +84,12 @@ app.post('/api/play-coinflip', async (req, res) => {
         }, "confirmed");
 
         if (confirmation.value.err) {
-            throw new Error(`Wager transaction failed on-chain: ${JSON.stringify(confirmation.value.err)}`);
+            throw new Error(`Wager transaction failed: ${JSON.stringify(confirmation.value.err)}`);
         }
-
-        // 🛡️ THE MISSING LINK: Re-initialize the Anchor Program before using it
-        const wallet = new anchor.Wallet(houseKeypair);
-        const provider = new anchor.AnchorProvider(connection, wallet, { 
-            preflightCommitment: "confirmed",
-            commitment: "confirmed"
-        });
-        const program = new anchor.Program(idl, provider);
 
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("vault")], 
             PROGRAM_ID 
-
-        
         );
 
         console.log(`Waiting for Helius to sync gameState: ${gameStatePubkeyObj.toBase58()}`);
@@ -115,25 +105,38 @@ app.post('/api/play-coinflip', async (req, res) => {
 
         if (!accountReady) throw new Error("Network failed to sync the game state in time.");
 
-        console.log(`🛡️ Building offline resolution for gameState: ${gameStatePubkeyObj.toBase58()}`);
+        // ☢️ THE NUCLEAR OPTION: Raw Binary Instruction Construction
+        // We bypass Anchor entirely and manually build the instruction buffer
         
+        // 1. Calculate the 8-byte discriminator for "global:resolve_coinflip"
+        const sighash = crypto.createHash('sha256').update("global:resolve_coinflip").digest().slice(0, 8);
+        
+        // 2. Encode the unhashedServerSeed argument (String)
+        const seedBuffer = Buffer.from(unhashedServerSeed, 'utf8');
+        const seedLengthBuffer = Buffer.alloc(4);
+        seedLengthBuffer.writeUInt32LE(seedBuffer.length, 0);
+        
+        // 3. Combine them into the instruction data
+        const ixData = Buffer.concat([sighash, seedLengthBuffer, seedBuffer]);
+
+        // 4. Construct the raw TransactionInstruction
+        const resolveIx = new anchor.web3.TransactionInstruction({
+            programId: PROGRAM_ID,
+            keys: [
+                { pubkey: gameStatePubkeyObj, isSigner: false, isWritable: true },
+                { pubkey: playerPubkeyObj, isSigner: false, isWritable: true },
+                { pubkey: vaultPDA, isSigner: false, isWritable: true },
+                { pubkey: houseKeypair.publicKey, isSigner: true, isWritable: true },
+                { pubkey: anchor.web3.SystemProgram.programId, isSigner: false, isWritable: false },
+            ],
+            data: ixData
+        });
+
         let resolveSignature;
         let retries = 10;
         
         while (retries > 0) {
             try {
-                // 1. Force Anchor offline using the legacy synchronous builder. NO AWAIT.
-                const resolveIx = program.instruction.resolveCoinflip(unhashedServerSeed, {
-                    accounts: {
-                        gameState: gameStatePubkeyObj,
-                        player: playerPubkeyObj,
-                        vault: vaultPDA,
-                        authority: houseKeypair.publicKey,
-                        systemProgram: anchor.web3.SystemProgram.programId,
-                    }
-                });
-
-                // 2. Build and blast the raw transaction
                 const resolveTx = new anchor.web3.Transaction().add(resolveIx);
                 const freshBlockhash = await connection.getLatestBlockhash("confirmed");
                 resolveTx.recentBlockhash = freshBlockhash.blockhash;
@@ -148,9 +151,9 @@ app.post('/api/play-coinflip', async (req, res) => {
                     lastValidBlockHeight: freshBlockhash.lastValidBlockHeight
                 }, "confirmed");
 
-                break; // Target destroyed. Break the loop.
+                break; 
             } catch (err) {
-                console.log(`⚠️ Network hit a snag. Blasting again... (${retries} left). Error: ${err.message}`);
+                console.log(`⚠️ Network retry... (${retries} left). Error: ${err.message}`);
                 await new Promise(r => setTimeout(r, 2000));
                 retries--;
                 if (retries === 0) throw new Error("Resolution completely failed after 10 forced attempts.");
@@ -158,11 +161,9 @@ app.post('/api/play-coinflip', async (req, res) => {
         }
 
         res.json({ success: true, playSignature, resolveSignature });
-
     } catch (error) {
         console.error("❌ Coinflip Error:", error);
-        const safeError = error.message ? error.message : JSON.stringify(error);
-        res.status(500).json({ success: false, error: safeError });
+        res.status(500).json({ success: false, error: error.message || JSON.stringify(error) });
     }
 });
 
