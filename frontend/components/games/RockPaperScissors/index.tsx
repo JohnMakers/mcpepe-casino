@@ -29,10 +29,10 @@ export default function RockPaperScissors() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [balance, setBalance] = useState(0);
     
-    // UI State for History
+    // UI States
     const [rounds, setRounds] = useState<RoundHistory[]>([]);
+    const [isBetLocked, setIsBetLocked] = useState(false);
 
-    // Fetch balance for MAX button
     useEffect(() => {
         if (publicKey) {
             connection.getBalance(publicKey).then(b => setBalance(b / web3.LAMPORTS_PER_SOL));
@@ -44,16 +44,21 @@ export default function RockPaperScissors() {
         setBetAmount((current * factor).toFixed(2));
     };
 
+    const handleStartGame = () => {
+        const wager = parseFloat(betAmount);
+        if (isNaN(wager) || wager <= 0) return alert("Enter a valid bet amount.");
+        if (wager > balance) return alert("Insufficient SOL balance.");
+        
+        setIsBetLocked(true);
+    };
+
     const playHand = async (move: number) => {
         if (!publicKey || !wallet.signTransaction || !wallet.sendTransaction) {
             return alert("Connect Phantom wallet first!");
         }
 
         const wager = parseFloat(betAmount);
-        if (streak === 0 && wager > balance) return alert("Insufficient SOL balance.");
-
         setIsProcessing(true);
-        // Add pending round to UI
         setRounds(prev => [...prev, { player: move, house: null, result: 'pending' }]);
 
         try {
@@ -95,12 +100,10 @@ export default function RockPaperScissors() {
             
             tx.add(playIx);
 
-            // FIX: Explicitly set blockhash and fee payer to force Phantom to open
             const latestBlockhash = await connection.getLatestBlockhash("confirmed");
             tx.recentBlockhash = latestBlockhash.blockhash;
             tx.feePayer = publicKey;
 
-            // FIX: Use wallet.sendTransaction instead of provider.sendAndConfirm for better wallet support
             const signature = await wallet.sendTransaction(tx, connection);
             await connection.confirmTransaction({
                 signature,
@@ -125,11 +128,10 @@ export default function RockPaperScissors() {
                 
                 let resultStatus: 'win' | 'loss' | 'tie' = 'loss';
                 if (state.currentStreak > streak) resultStatus = 'win';
-                else if (state.currentStreak === streak && data.houseMove === move) resultStatus = 'tie'; // Handling Tie
+                else if (state.currentStreak === streak && data.houseMove === move) resultStatus = 'tie';
                 
                 setStreak(state.currentStreak);
                 
-                // Update the pending round with the house's move and result
                 setRounds(prev => {
                     const newRounds = [...prev];
                     const lastIndex = newRounds.length - 1;
@@ -138,21 +140,25 @@ export default function RockPaperScissors() {
                 });
 
                 if (state.currentStreak === 0 && resultStatus !== 'tie') {
-                    // Reset UI on loss after showing result briefly
-                    setTimeout(() => setRounds([]), 3000);
+                    // Reset UI on loss
+                    setTimeout(() => {
+                        setRounds([]);
+                        setIsBetLocked(false);
+                    }, 3000);
                 }
             } else {
                 console.error("House failed to resolve:", data.error);
-                alert("Backend resolution failed. Check console.");
+                alert("Backend resolution failed.");
+                setRounds(prev => prev.slice(0, -1));
+                setIsBetLocked(false);
             }
 
         } catch (error) {
             console.error("Error playing hand:", error);
-            // Remove the pending round if user rejects tx
             setRounds(prev => prev.slice(0, -1));
+            setIsBetLocked(false); // Unlock the UI so they can try again if they rejected the tx
         } finally {
             setIsProcessing(false);
-            // Update balance
             connection.getBalance(publicKey).then(b => setBalance(b / web3.LAMPORTS_PER_SOL));
         }
     };
@@ -193,7 +199,8 @@ export default function RockPaperScissors() {
             await connection.confirmTransaction({ signature, ...latestBlockhash });
             
             setStreak(0);
-            setRounds([]); // Clear history on cashout
+            setRounds([]);
+            setIsBetLocked(false);
             alert("Winnings claimed successfully! SOL deposited to wallet.");
         } catch (error) {
             console.error("Error claiming:", error);
@@ -213,11 +220,11 @@ export default function RockPaperScissors() {
                 </div>
             </div>
 
-            {/* THE ARENA (HISTORY & CURRENT) */}
+            {/* THE ARENA */}
             <div className="flex flex-col items-center gap-6 mb-8 w-full min-h-[300px] p-6 bg-black/40 rounded-2xl border border-gray-800">
                 {rounds.length === 0 && !isProcessing && (
                     <div className="text-gray-500 font-mono uppercase tracking-widest mt-10">
-                        Awaiting your move...
+                        {isBetLocked ? 'Waiting for your move...' : 'Place your wager to begin'}
                     </div>
                 )}
 
@@ -274,33 +281,52 @@ export default function RockPaperScissors() {
 
             {/* CONTROLS */}
             <div className="w-full max-w-md mx-auto space-y-6">
-                {/* Bet Selector (Only show if streak is 0) */}
+                
+                {/* Bet Selector - Beside Start Button */}
                 {streak === 0 && (
-                    <div className="bg-black border-2 border-gray-800 rounded-xl p-1 flex focus-within:border-green-500">
-                        <input 
-                            type="number" 
-                            min="0"
-                            step="0.1"
-                            value={betAmount} 
-                            onChange={(e) => {
-                                const val = e.target.value;
-                                if (val === "") { setBetAmount(""); return; }
-                                const num = parseFloat(val);
-                                setBetAmount(num < 0 ? "0" : val);
-                            }} 
-                            disabled={isProcessing}
-                            className="w-full bg-transparent p-3 text-2xl font-mono text-white outline-none pl-4 disabled:opacity-50" 
-                        />
-                        <div className="flex gap-1 pr-2 items-center">
-                            <button onClick={() => multiplyBet(0.5)} disabled={isProcessing} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded disabled:opacity-50">1/2</button>
-                            <button onClick={() => multiplyBet(2)} disabled={isProcessing} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded disabled:opacity-50">2x</button>
-                            <button onClick={() => setBetAmount(balance.toFixed(2))} disabled={isProcessing} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-xs font-bold rounded disabled:opacity-50">MAX</button>
+                    <div className="flex flex-col sm:flex-row gap-3 w-full">
+                        <div className="flex-1 bg-black border-2 border-gray-800 rounded-xl p-1 flex focus-within:border-green-500">
+                            <input 
+                                type="number" 
+                                min="0" step="0.1"
+                                value={betAmount} 
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === "") { setBetAmount(""); return; }
+                                    setBetAmount(parseFloat(val) < 0 ? "0" : val);
+                                }} 
+                                disabled={isBetLocked}
+                                className="w-full bg-transparent p-3 text-2xl font-mono text-white outline-none pl-4 disabled:opacity-50" 
+                            />
+                            <div className="flex gap-1 pr-2 items-center">
+                                <button onClick={() => multiplyBet(0.5)} disabled={isBetLocked} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded disabled:opacity-50">1/2</button>
+                                <button onClick={() => multiplyBet(2)} disabled={isBetLocked} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded disabled:opacity-50">2x</button>
+                                <button onClick={() => setBetAmount(balance.toFixed(2))} disabled={isBetLocked} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-xs font-bold rounded disabled:opacity-50">MAX</button>
+                            </div>
                         </div>
+
+                        {!isBetLocked && (
+                            <button 
+                                onClick={handleStartGame}
+                                className="px-8 bg-green-500 hover:bg-green-400 text-black font-black text-xl uppercase tracking-widest rounded-xl transition-all shadow-[0_0_15px_rgba(34,197,94,0.4)]"
+                            >
+                                Start
+                            </button>
+                        )}
                     </div>
                 )}
 
                 {/* Move Selectors */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-4 relative">
+                    {/* Blocker Overlay if Wager not started */}
+                    {!isBetLocked && streak === 0 && (
+                        <div className="absolute inset-0 z-10 bg-black/60 backdrop-blur-[2px] rounded-xl border border-gray-800 flex items-center justify-center">
+                            <span className="text-gray-400 font-bold uppercase tracking-widest text-sm text-center px-4">
+                                Input bet and click START
+                            </span>
+                        </div>
+                    )}
+
                     {[1, 2, 3].map((move) => (
                         <button 
                             key={move}
@@ -318,12 +344,20 @@ export default function RockPaperScissors() {
                     ))}
                 </div>
 
+                {/* Animated Subtitle (Shows only when active to pick) */}
+                {(isBetLocked || streak > 0) && !isProcessing && (
+                    <div className="mt-4 text-center animate-fade-in transition-all duration-500">
+                        <h3 className="text-xl font-black text-yellow-500 uppercase tracking-widest animate-pulse drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]">
+                            Select Your Fighter
+                        </h3>
+                    </div>
+                )}
+
                 {/* Cashout Button */}
-                {streak > 0 && (
+                {streak > 0 && !isProcessing && (
                     <button 
                         onClick={settleStreak} 
-                        disabled={isProcessing}
-                        className="w-full py-5 mt-4 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-2xl uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all disabled:opacity-50 animate-pulse"
+                        className="w-full py-5 mt-4 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-2xl uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all animate-bounce-short"
                     >
                         💰 Cash Out Winnings
                     </button>
