@@ -115,15 +115,22 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
       const extraTurn = winningSide === "tails" ? 180 : 0; 
       setCoinDegrees(prev => prev + baseSpins + extraTurn + (prev % 360 !== 0 ? 180 : 0));
 
-      setTimeout(() => {
+      setTimeout(async () => {
         setFlipState("resolved");
         const payout = isWin ? wager * 1.98 : 0; 
         const profit = isWin ? payout - wager : wager; 
         
         setResult({ win: isWin, amount: profit.toFixed(4), side: winningSide });
-        if (isWin) setBalance(prev => prev + payout);
         
-        // 🛡️ THE FIX: Point to resolveSignature instead of just signature
+        // 🛡️ THE FIX: Fetch the authoritative on-chain balance to account for Tx Fees exactly.
+        try {
+            const exactBalance = await connection.getBalance(publicKey);
+            setBalance(exactBalance / LAMPORTS_PER_SOL);
+        } catch (err) {
+            // Fallback to optimistic math only if the RPC randomly fails
+            if (isWin) setBalance(prev => prev + payout);
+        }
+        
         logWager("Coinflip", wager, isWin, payout, backendData.resolveSignature, clientSeed);
       }, 3000);
 
