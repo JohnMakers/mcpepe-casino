@@ -9,7 +9,6 @@ use coinflip::*;
 use whackd::*;  
 use rps::*;
 
-// Ensure your deployed ID is correct
 declare_id!("9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57");
 
 #[program]
@@ -47,8 +46,8 @@ pub mod mcpepe_casino {
     }
 
     // --- ROCK PAPER SCISSORS ROUTES ---
-    pub fn rps_initialize_game(ctx: Context<InitializeGame>) -> Result<()> {
-        rps::initialize_game(ctx)
+    pub fn initialize_rps_game(ctx: Context<InitializeRpsGame>) -> Result<()> {
+        rps::initialize_rps_game(ctx)
     }
 
     pub fn rps_play_hand(ctx: Context<PlayHand>, bet_amount: u64, player_move: u8) -> Result<()> {

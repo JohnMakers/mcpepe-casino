@@ -251,6 +251,127 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "initializeRpsGame",
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "rpsPlayHand",
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "betAmount",
+          "type": "u64"
+        },
+        {
+          "name": "playerMove",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "rpsResolveHand",
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "houseAuthority",
+          "isMut": true,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "houseMove",
+          "type": "u8"
+        },
+        {
+          "name": "secretSalt",
+          "type": {
+            "array": [
+              "u8",
+              16
+            ]
+          }
+        },
+        {
+          "name": "hashedCommitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "rpsSettleStreak",
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -300,6 +421,38 @@
           {
             "name": "clientSeed",
             "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RpsGameState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "publicKey"
+          },
+          {
+            "name": "betAmount",
+            "type": "u64"
+          },
+          {
+            "name": "currentStreak",
+            "type": "u8"
+          },
+          {
+            "name": "isActive",
+            "type": "bool"
+          },
+          {
+            "name": "playerMove",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
@@ -357,46 +510,33 @@
   "errors": [
     {
       "code": 6000,
-      "name": "GameNotActive",
-      "msg": "The game is currently inactive."
+      "name": "InvalidMove",
+      "msg": "Invalid move selected."
     },
     {
       "code": 6001,
-      "name": "InvalidGuess",
-      "msg": "Guess must be 0 (Heads) or 1 (Tails)."
+      "name": "GameAlreadyActive",
+      "msg": "Game is already active. Awaiting house resolution."
     },
     {
       "code": 6002,
-      "name": "SeedMismatch",
-      "msg": "Server seed hash does not match the commitment. The House tried to cheat!"
+      "name": "GameNotActive",
+      "msg": "Game is not active."
     },
     {
       "code": 6003,
-      "name": "InvalidMineCount",
-      "msg": "Mine count must be between 1 and 24."
+      "name": "InvalidHash",
+      "msg": "House commitment hash mismatch."
     },
     {
       "code": 6004,
-      "name": "InvalidBetAmount",
-      "msg": "Bet amount must be greater than 0."
+      "name": "NoWinnings",
+      "msg": "No winnings to claim."
     },
     {
       "code": 6005,
-      "name": "GameAlreadyResolved",
-      "msg": "Game has already been resolved or closed."
-    },
-    {
-      "code": 6006,
-      "name": "MathOverflow",
-      "msg": "Math logic overflowed during calculation."
-    },
-    {
-      "code": 6007,
-      "name": "InvalidResolutionState",
-      "msg": "Resolution state must be either a cashout or a bust."
+      "name": "GameIsActive",
+      "msg": "Cannot settle while round is active."
     }
-  ],
-  "metadata": {
-    "address": "9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57"
-  }
+  ]
 }

@@ -1,5 +1,5 @@
-pub mod instructions;
+pub mod instruction;
 pub mod state;
 
-pub use instructions::*;
+pub use instruction::*; 
 pub use state::*;

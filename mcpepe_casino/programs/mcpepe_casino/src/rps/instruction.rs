@@ -3,11 +3,10 @@ use anchor_lang::system_program::{transfer, Transfer};
 use crate::rps::state::*;
 use solana_program::hash::hash;
 
-// Multipliers scaled by 10 (e.g., 29 = 2.9x)
 const MULTIPLIERS: [u64; 6] = [29, 85, 250, 750, 2200, 6500];
 
 #[derive(Accounts)]
-pub struct InitializeGame<'info> {
+pub struct InitializeRpsGame<'info> { // <--- RENAMED HERE
     #[account(
         init,
         payer = player,
@@ -41,7 +40,7 @@ pub struct ResolveHand<'info> {
     #[account(mut)]
     pub game_state: Account<'info, RpsGameState>,
     #[account(mut)]
-    pub house_authority: Signer<'info>, // The house crank wallet
+    pub house_authority: Signer<'info>, 
 }
 
 #[derive(Accounts)]
@@ -59,7 +58,8 @@ pub struct SettleStreak<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn initialize_game(ctx: Context<InitializeGame>) -> Result<()> {
+// <--- RENAMED HERE
+pub fn initialize_rps_game(ctx: Context<InitializeRpsGame>) -> Result<()> { 
     let game_state = &mut ctx.accounts.game_state;
     game_state.player = ctx.accounts.player.key();
     game_state.current_streak = 0;
@@ -73,7 +73,6 @@ pub fn play_hand(ctx: Context<PlayHand>, bet_amount: u64, player_move: u8) -> Re
     
     require!(player_move >= 1 && player_move <= 3, GameError::InvalidMove);
     
-    // If starting a new streak, transfer SOL bet to vault
     if game_state.current_streak == 0 {
         require!(!game_state.is_active, GameError::GameAlreadyActive);
         let cpi_context = CpiContext::new(
@@ -90,7 +89,7 @@ pub fn play_hand(ctx: Context<PlayHand>, bet_amount: u64, player_move: u8) -> Re
     }
 
     game_state.player_move = player_move;
-    game_state.is_active = true; // Locks the state for the house to resolve
+    game_state.is_active = true; 
     
     Ok(())
 }
@@ -99,7 +98,6 @@ pub fn resolve_hand(ctx: Context<ResolveHand>, house_move: u8, secret_salt: [u8;
     let game_state = &mut ctx.accounts.game_state;
     require!(game_state.is_active, GameError::GameNotActive);
     
-    // Verify House Commitment to ensure no manipulation
     let mut preimage = Vec::new();
     preimage.push(house_move);
     preimage.extend_from_slice(&secret_salt);
@@ -109,22 +107,14 @@ pub fn resolve_hand(ctx: Context<ResolveHand>, house_move: u8, secret_salt: [u8;
     let p_move = game_state.player_move;
     let h_move = house_move;
 
-    // 1: Rock, 2: Paper, 3: Scissors
-    // Win logic
     let is_win = (p_move == 1 && h_move == 3) || 
                  (p_move == 2 && h_move == 1) || 
                  (p_move == 3 && h_move == 2);
 
     if is_win {
         game_state.current_streak += 1;
-        game_state.is_active = false; // Awaiting next play or settle
-        
-        // Auto-settle if max streak reached
-        if game_state.current_streak == 6 {
-            // Settle logic can be CPI or handled by crank
-        }
+        game_state.is_active = false; 
     } else {
-        // Tie or Loss: House sweeps the escrow (Fund remains in Vault for House to claim)
         game_state.current_streak = 0;
         game_state.is_active = false;
         game_state.bet_amount = 0;
@@ -157,7 +147,6 @@ pub fn settle_streak(ctx: Context<SettleStreak>) -> Result<()> {
     );
     transfer(cpi_context, payout)?;
 
-    // Reset game
     game_state.current_streak = 0;
     game_state.bet_amount = 0;
 

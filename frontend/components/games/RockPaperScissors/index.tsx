@@ -29,7 +29,6 @@ export default function RockPaperScissors() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [balance, setBalance] = useState(0);
     
-    // UI States
     const [rounds, setRounds] = useState<RoundHistory[]>([]);
     const [isBetLocked, setIsBetLocked] = useState(false);
 
@@ -62,8 +61,7 @@ export default function RockPaperScissors() {
         setRounds(prev => [...prev, { player: move, house: null, result: 'pending' }]);
 
         try {
-            console.log("1. Initializing Provider & calculating lamports...");
-            // THE FIX: Math.floor prevents silent BigNumber crashes from floating point decimals
+            console.log("1. Initializing Provider...");
             const lamports = new BN(Math.floor(wager * web3.LAMPORTS_PER_SOL)); 
 
             const provider = new AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
@@ -79,42 +77,52 @@ export default function RockPaperScissors() {
                 program.programId
             );
 
-            console.log("2. Fetching existing game state...", gameStatePda.toBase58());
+            console.log("2. Fetching state:", gameStatePda.toBase58());
             const accountInfo = await connection.getAccountInfo(gameStatePda);
             const tx = new web3.Transaction();
 
             if (!accountInfo) {
                 console.log("3a. Building Initialize Instruction");
-                const initIx = await program.methods.initializeGame()
-                    .accounts({
-                        gameState: gameStatePda,
-                        player: publicKey,
-                        systemProgram: SystemProgram.programId,
-                    }).instruction();
-                tx.add(initIx);
+                try {
+                    // NOTE: This must match the unique name exported in your lib.rs!
+                    const initIx = await program.methods.initializeRpsGame()
+                        .accountsStrict({
+                            gameState: gameStatePda,
+                            player: publicKey,
+                            systemProgram: SystemProgram.programId,
+                        }).instruction();
+                    tx.add(initIx);
+                } catch (err) {
+                    console.error("Failed building init ix. Did you rename it in lib.rs?", err);
+                    throw err;
+                }
             }
 
             console.log("3b. Building Play Instruction");
-            const playIx = await program.methods.playHand(lamports, move)
-                .accounts({
-                    gameState: gameStatePda,
-                    vault: vaultPda,
-                    player: publicKey,
-                    systemProgram: SystemProgram.programId,
-                }).instruction();
-            
-            tx.add(playIx);
+            try {
+                // Using accountsStrict prevents Anchor from hallucinating missing IDL accounts
+                const playIx = await program.methods.playHand(lamports, move)
+                    .accountsStrict({
+                        gameState: gameStatePda,
+                        vault: vaultPda,
+                        player: publicKey,
+                        systemProgram: SystemProgram.programId,
+                    }).instruction();
+                tx.add(playIx);
+            } catch (err) {
+                console.error("Failed building play ix. Check your IDL.", err);
+                throw err;
+            }
 
             console.log("4. Fetching Blockhash...");
             const latestBlockhash = await connection.getLatestBlockhash("confirmed");
             tx.recentBlockhash = latestBlockhash.blockhash;
             tx.feePayer = publicKey;
 
-            // THE FIX: Forcing Phantom to pop up via signTransaction (Same as Coinflip)
             console.log("5. Requesting Phantom Signature...");
             const signedTx = await wallet.signTransaction(tx);
             
-            console.log("6. Sending raw transaction to network...");
+            console.log("6. Sending raw transaction...");
             const serializedTx = signedTx.serialize();
             const signature = await connection.sendRawTransaction(serializedTx, { skipPreflight: false });
             
@@ -125,7 +133,7 @@ export default function RockPaperScissors() {
                 lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
             });
             
-            console.log("8. Move locked on chain! Pinging Backend House to resolve...");
+            console.log("8. Move locked! Pinging Backend...");
             const response = await fetch(`${BACKEND_URL}/api/rps/resolve`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -161,14 +169,13 @@ export default function RockPaperScissors() {
                 }
             } else {
                 console.error("House failed to resolve:", data.error);
-                alert("Backend resolution failed. Check console.");
+                alert("Backend resolution failed.");
                 setRounds(prev => prev.slice(0, -1));
                 setIsBetLocked(false);
             }
 
         } catch (error) {
             console.error("FATAL ERROR IN PLAYHAND:", error);
-            // Revert UI if they rejected the wallet popup or it failed
             setRounds(prev => prev.slice(0, -1));
             setIsBetLocked(false); 
         } finally {
@@ -196,7 +203,7 @@ export default function RockPaperScissors() {
 
             const tx = new web3.Transaction();
             const settleIx = await program.methods.settleStreak()
-                .accounts({
+                .accountsStrict({
                     gameState: gameStatePda,
                     vault: vaultPda,
                     player: publicKey,
@@ -209,7 +216,6 @@ export default function RockPaperScissors() {
             tx.recentBlockhash = latestBlockhash.blockhash;
             tx.feePayer = publicKey;
 
-            console.log("Requesting Phantom Signature for Cashout...");
             const signedTx = await wallet.signTransaction(tx);
             const signature = await connection.sendRawTransaction(signedTx.serialize());
             
@@ -335,7 +341,6 @@ export default function RockPaperScissors() {
 
                 {/* Move Selectors */}
                 <div className="grid grid-cols-3 gap-4 relative">
-                    {/* Blocker Overlay if Wager not started */}
                     {!isBetLocked && streak === 0 && (
                         <div className="absolute inset-0 z-10 bg-black/60 backdrop-blur-[2px] rounded-xl border border-gray-800 flex items-center justify-center">
                             <span className="text-gray-400 font-bold uppercase tracking-widest text-sm text-center px-4">
