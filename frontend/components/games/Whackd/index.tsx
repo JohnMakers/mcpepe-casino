@@ -32,6 +32,10 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
   const [clientSeedState, setClientSeedState] = useState<string>("");
   const [winAmount, setWinAmount] = useState<number>(0);
 
+  // New UI states to prevent race conditions and improve feedback
+  const [loadingTile, setLoadingTile] = useState<number | null>(null);
+  const [isCashingOut, setIsCashingOut] = useState<boolean>(false);
+
   const multiplyBet = (factor: number) => {
     const current = parseFloat(betAmount) || 0;
     setBetAmount((current * factor).toFixed(2));
@@ -47,7 +51,9 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
   const handleStartWhackd = async () => {
     if (!publicKey || !wallet.signTransaction) return alert("Wallet not connected.");
     const wager = parseFloat(betAmount);
-    if (wager > balance) return alert("Insufficient funds.");
+    
+    // Add a slight buffer for the refundable rent exemption cost during balance checks
+    if (wager + 0.0025 > balance) return alert("Insufficient funds (Need wager + ~0.002 SOL for rent).");
 
     setWhackdState("signing");
 
@@ -106,8 +112,11 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
   };
 
   const handleTileClick = async (index: number) => {
-    if (whackdState !== "playing") return;
+    // Drop the click if another action is processing to prevent race conditions
+    if (whackdState !== "playing" || loadingTile !== null || isCashingOut) return;
     if ((revealedMask & (1 << index)) !== 0) return;
+
+    setLoadingTile(index);
 
     try {
         const res = await fetch(`${BACKEND_URL}/api/whackd/click`, {
@@ -132,11 +141,18 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
             
             if (clicks === (25 - mineCount)) handleCashout(nextMult, data.revealedMask);
         }
-    } catch (e) { console.error("Failed to process click:", e); }
+    } catch (e) { 
+        console.error("Failed to process click:", e); 
+    } finally {
+        setLoadingTile(null);
+    }
   };
 
   const handleCashout = async (overrideMult?: number, overrideMask?: number) => {
-    if (whackdState !== "playing") return;
+    if (whackdState !== "playing" || loadingTile !== null || isCashingOut) return;
+    
+    setIsCashingOut(true);
+
     try {
         const res = await fetch(`${BACKEND_URL}/api/whackd/cashout`, {
             method: "POST", headers: { "Content-Type": "application/json" },
@@ -171,18 +187,20 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
             const exactBalance = await connection.getBalance(publicKey);
             setBalance(exactBalance / LAMPORTS_PER_SOL);
         } catch (err) {
-            // Fallback to optimistic math only if the RPC randomly drops the request
             setBalance(prev => prev + payout);
         }        
         
         setWhackdState("cashed_out");
         logWager("Whackd!", wager, true, payout, gameSignature, data.serverSeed);
-    } catch (e) { console.error("Failed to cashout:", e); }
+    } catch (e) { 
+        console.error("Failed to cashout:", e); 
+    } finally {
+        setIsCashingOut(false);
+    }
   };
 
 return (
     <div className="flex-1 flex flex-col xl:flex-row max-w-6xl mx-auto w-full gap-6 sm:gap-8 animate-fade-in relative items-start">
-      {/* We added items-start to the main container above so it stops stretching vertically */}
       
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes fadeInUpDopamine {
@@ -191,6 +209,12 @@ return (
           100% { opacity: 1; transform: translateY(0) scale(1) rotate(-5deg); }
         }
         .animate-fade-in-up-dopamine { animation: fadeInUpDopamine 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        
+        @keyframes pulseSlow {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        .animate-pulse-slow { animation: pulseSlow 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
       `}} />
 
       <div className="flex-1 bg-[#0a0f0c]/80 backdrop-blur-md border border-green-900/50 rounded-2xl p-4 sm:p-8 shadow-2xl flex flex-col items-center justify-center relative min-h-[400px] w-full overflow-hidden">
@@ -224,6 +248,7 @@ return (
             const isClicked = (revealedMask & (1 << i)) !== 0;
             const isBomb = (bombMask & (1 << i)) !== 0;
             const isGameOver = whackdState === "busted" || whackdState === "cashed_out";
+            const isTileLoading = loadingTile === i;
 
             let showAsSafe = false;
             let showAsBomb = false;
@@ -259,17 +284,19 @@ return (
                     showAsSafe = true;
                     tileClasses = "bg-[#111a14] border-gray-900 scale-95 shadow-inner";
                     imageClasses = "drop-shadow-[0_0_8px_rgba(57,255,20,0.6)]";
+                } else if (isTileLoading) {
+                    tileClasses = "bg-gray-700 border-b-[3px] sm:border-b-4 border-gray-800 scale-95 animate-pulse-slow";
                 }
             }
 
             return (
               <button 
                 key={i} 
-                disabled={whackdState !== "playing" || isClicked} 
+                disabled={whackdState !== "playing" || isClicked || loadingTile !== null || isCashingOut} 
                 onClick={() => handleTileClick(i)} 
                 className={`relative w-full h-full rounded-md sm:rounded-lg overflow-hidden transition-all duration-300 ${tileClasses}`}
               >
-                {(showAsSafe || showAsBomb) && (
+                {(showAsSafe || showAsBomb) ? (
                   <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-3 animate-fade-in">
                     {showAsBomb ? (
                         <img src="/wh_whackd.png" alt="Bomb" className={`w-full h-full object-contain ${imageClasses}`} />
@@ -277,6 +304,12 @@ return (
                         <img src="/wh_island.png" alt="Safe" className={`w-full h-full object-contain ${imageClasses}`} />
                     )}
                   </div>
+                ) : (
+                  isTileLoading && !isGameOver && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                       <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  )
                 )}
               </button>
             );
@@ -296,8 +329,10 @@ return (
           </div>
 
           <div>
-            <label className="text-xs sm:text-sm text-gray-500 font-bold uppercase tracking-widest mb-3 block">Bet Amount</label>
-            <div className="bg-black border border-gray-800 rounded-lg flex focus-within:border-green-500 transition-colors overflow-hidden">
+            <label className="text-xs sm:text-sm text-gray-500 font-bold uppercase tracking-widest mb-3 flex justify-between">
+               <span>Bet Amount</span>
+            </label>
+            <div className="bg-black border border-gray-800 rounded-lg flex focus-within:border-green-500 transition-colors overflow-hidden relative">
               <input type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} disabled={whackdState === "playing" || whackdState === "signing"} className="w-full bg-transparent p-3 sm:p-4 font-mono text-white text-lg outline-none pl-4 disabled:opacity-50" />
               <div className="flex gap-1 pr-2 items-center bg-black">
                 <button onClick={() => multiplyBet(0.5)} disabled={whackdState === "playing" || whackdState === "signing"} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded">1/2</button>
@@ -305,13 +340,18 @@ return (
                 <button onClick={() => setBetAmount(balance.toFixed(2))} disabled={whackdState === "playing" || whackdState === "signing"} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-xs font-bold rounded">MAX</button>
               </div>
             </div>
+            <p className="text-gray-600 text-[10px] mt-2 font-mono uppercase">+ ~0.002 SOL REFUNDABLE RENT</p>
           </div>
         </div>
 
         <div className="mt-8 sm:mt-10">
           {whackdState === "playing" ? (
-            <button onClick={() => handleCashout()} className="w-full py-4 sm:py-5 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xl sm:text-2xl uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] animate-pulse transition-all">
-              Cash Out ({(parseFloat(betAmount) * currentMultiplier).toFixed(2)})
+            <button 
+              onClick={() => handleCashout()} 
+              disabled={isCashingOut || loadingTile !== null}
+              className={`w-full py-4 sm:py-5 font-black text-xl sm:text-2xl uppercase tracking-widest rounded-xl transition-all ${isCashingOut || loadingTile !== null ? 'bg-yellow-600/50 text-gray-400 cursor-not-allowed' : 'bg-yellow-500 hover:bg-yellow-400 text-black shadow-[0_0_20px_rgba(234,179,8,0.4)] animate-pulse'}`}
+            >
+              {isCashingOut ? "Cashing out..." : `Cash Out (${(parseFloat(betAmount) * currentMultiplier).toFixed(2)})`}
             </button>
           ) : (
             <button onClick={handleStartWhackd} disabled={whackdState === "signing" || !publicKey} className="w-full py-4 sm:py-5 bg-green-500 hover:bg-green-400 text-black font-black text-xl sm:text-2xl uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.3)] disabled:opacity-50 disabled:bg-gray-500 disabled:shadow-none transition-all">
@@ -322,4 +362,4 @@ return (
       </div>
     </div>
   );
-  }
+}
