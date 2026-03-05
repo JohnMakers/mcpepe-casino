@@ -12,6 +12,7 @@ import ProvablyFairModal from "../components/modals/ProvablyFairModal";
 import ReceiptModal from "../components/modals/ReceiptModal";
 import CoinflipGame from "../components/games/Coinflip";
 import WhackdGame from "../components/games/Whackd"; 
+import RockPaperScissorsGame from "../components/games/RockPaperScissors"; // <-- Added RPS Import
 
 const INITIAL_BETS = [
   { id: "tx1", player: "8xTq...3pZx", game: "Coinflip", amount: 2.5, win: true, hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", clientSeed: "degen_1" },
@@ -95,9 +96,10 @@ export default function Dashboard() {
             <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto text-center animate-fade-in">
               <div className="text-7xl mb-8 animate-bounce-short">🎰</div>
               <h2 className="text-5xl font-black uppercase tracking-tighter text-white mb-6">Enter the <span className="text-green-500">Free Market</span></h2>
-              <div className="flex gap-4 justify-center">
+              <div className="flex flex-wrap gap-4 justify-center">
                   <button onClick={() => setActiveGame('coinflip')} className="bg-transparent border border-green-500 text-green-500 hover:bg-green-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Coinflip</button>
                   <button onClick={() => setActiveGame('whackd')} className="bg-green-500 hover:bg-green-400 text-black px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4 shadow-[0_0_15px_rgba(34,197,94,0.2)]">Play Whackd!</button>
+                  <button onClick={() => setActiveGame('rps')} className="bg-transparent border border-yellow-500 text-yellow-500 hover:bg-yellow-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Play RPS</button>
               </div>
             </div>
           )}
@@ -114,6 +116,10 @@ export default function Dashboard() {
                balance={balance} setBalance={setBalance} logWager={logWager} 
                setShowProvablyFair={setShowProvablyFair} 
              />
+          )}
+
+          {activeGame === 'rps' && (
+             <RockPaperScissorsGame />
           )}
         </main>
 
