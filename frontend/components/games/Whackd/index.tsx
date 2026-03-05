@@ -333,14 +333,34 @@ return (
                <span>Bet Amount</span>
             </label>
             <div className="bg-black border border-gray-800 rounded-lg flex focus-within:border-green-500 transition-colors overflow-hidden relative">
-              <input type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} disabled={whackdState === "playing" || whackdState === "signing"} className="w-full bg-transparent p-3 sm:p-4 font-mono text-white text-lg outline-none pl-4 disabled:opacity-50" />
+              <input 
+                type="number" 
+                min="0"
+                step="0.1"
+                value={betAmount} 
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "") {
+                    setBetAmount("");
+                    return;
+                  }
+                  // Prevent negative numbers from being typed or stepped
+                  const num = parseFloat(val);
+                  if (num < 0) {
+                    setBetAmount("0");
+                  } else {
+                    setBetAmount(val);
+                  }
+                }} 
+                disabled={whackdState === "playing" || whackdState === "signing"} 
+                className="w-full bg-transparent p-3 sm:p-4 font-mono text-white text-lg outline-none pl-4 disabled:opacity-50" 
+              />
               <div className="flex gap-1 pr-2 items-center bg-black">
                 <button onClick={() => multiplyBet(0.5)} disabled={whackdState === "playing" || whackdState === "signing"} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded">1/2</button>
                 <button onClick={() => multiplyBet(2)} disabled={whackdState === "playing" || whackdState === "signing"} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded">2x</button>
                 <button onClick={() => setBetAmount(balance.toFixed(2))} disabled={whackdState === "playing" || whackdState === "signing"} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-xs font-bold rounded">MAX</button>
               </div>
             </div>
-            <p className="text-gray-600 text-[10px] mt-2 font-mono uppercase">+ ~0.002 SOL REFUNDABLE RENT</p>
           </div>
         </div>
 

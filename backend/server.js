@@ -228,13 +228,38 @@ app.post('/api/whackd/click', async (req, res) => {
 
         if (hitBomb) {
             game.status = "busted";
-            await resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, false);
+            // 🔥 FIRE AND FORGET: Don't await the blockchain, let it process in the background!
+            resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, false)
+                .catch(err => console.error("On-chain bust resolution failed:", err));
+                
             return res.json({ success: true, status: "busted", bombMask: bombMask, serverSeed: game.serverSeed });
         } else {
             return res.json({ success: true, status: "safe", revealedMask: game.revealedMask });
         }
     } catch (error) {
         console.error("❌ Click Error:", error);
+        const safeError = error.message ? error.message : JSON.stringify(error);
+        res.status(500).json({ success: false, error: safeError });
+    }
+});
+
+app.post('/api/whackd/cashout', async (req, res) => {
+    try {
+        const { playerPubkey } = req.body;
+        const game = activeWhackdGames.get(playerPubkey);
+
+        if (!game || game.status === "busted") {
+            return res.status(400).json({ success: false, error: "Invalid cashout." });
+        }
+
+        game.status = "cashed_out";
+        // 🔥 FIRE AND FORGET: Instant UI feedback, blockchain resolves in the background!
+        resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, true)
+            .catch(err => console.error("On-chain cashout resolution failed:", err));
+        
+        res.json({ success: true, serverSeed: game.serverSeed });
+    } catch (error) {
+        console.error("❌ Cashout Error:", error);
         const safeError = error.message ? error.message : JSON.stringify(error);
         res.status(500).json({ success: false, error: safeError });
     }

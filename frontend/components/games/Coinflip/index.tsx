@@ -204,14 +204,35 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
             <button onClick={() => setGuess("tails")} className={`flex-1 py-4 rounded-xl font-black uppercase transition-all border-2 ${guess === 'tails' ? 'border-gray-400 bg-gray-400/10 text-gray-300' : 'border-gray-800'}`}>Tails</button>
           </div>
 
-          <div className="bg-black border-2 border-gray-800 rounded-xl p-1 flex focus-within:border-green-500">
-            <input type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} className="w-full bg-transparent p-3 text-2xl font-mono text-white outline-none pl-4" />
+<div className="bg-black border-2 border-gray-800 rounded-xl p-1 flex focus-within:border-green-500">
+            <input 
+              type="number" 
+              min="0"
+              step="0.1"
+              value={betAmount} 
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "") {
+                  setBetAmount("");
+                  return;
+                }
+                const num = parseFloat(val);
+                if (num < 0) {
+                  setBetAmount("0");
+                } else {
+                  setBetAmount(val);
+                }
+              }} 
+              disabled={flipState === "flipping"}
+              className="w-full bg-transparent p-3 text-2xl font-mono text-white outline-none pl-4 disabled:opacity-50" 
+            />
             <div className="flex gap-1 pr-2 items-center">
-              <button onClick={() => multiplyBet(0.5)} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded">1/2</button>
-              <button onClick={() => multiplyBet(2)} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded">2x</button>
-              <button onClick={() => setBetAmount(balance.toFixed(2))} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-xs font-bold rounded">MAX</button>
+              <button onClick={() => multiplyBet(0.5)} disabled={flipState === "flipping"} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded disabled:opacity-50">1/2</button>
+              <button onClick={() => multiplyBet(2)} disabled={flipState === "flipping"} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded disabled:opacity-50">2x</button>
+              <button onClick={() => setBetAmount(balance.toFixed(2))} disabled={flipState === "flipping"} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-xs font-bold rounded disabled:opacity-50">MAX</button>
             </div>
           </div>
+
           <button onClick={handleFlip} disabled={flipState === "flipping" || !publicKey} className="w-full py-5 bg-green-500 hover:bg-green-400 text-black font-black text-2xl uppercase tracking-widest rounded-xl disabled:opacity-50">Flip</button>
         </div>
       </div>
