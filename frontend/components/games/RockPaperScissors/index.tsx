@@ -53,7 +53,7 @@ export default function RockPaperScissors() {
     };
 
     const playHand = async (move: number) => {
-        if (!publicKey || !wallet.signTransaction || !wallet.sendTransaction) {
+        if (!publicKey || !wallet.signTransaction) {
             return alert("Connect Phantom wallet first!");
         }
 
@@ -62,6 +62,10 @@ export default function RockPaperScissors() {
         setRounds(prev => [...prev, { player: move, house: null, result: 'pending' }]);
 
         try {
+            console.log("1. Initializing Provider & calculating lamports...");
+            // THE FIX: Math.floor prevents silent BigNumber crashes from floating point decimals
+            const lamports = new BN(Math.floor(wager * web3.LAMPORTS_PER_SOL)); 
+
             const provider = new AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
             const program = new Program(idl as any, PROGRAM_ID, provider);
             
@@ -75,10 +79,12 @@ export default function RockPaperScissors() {
                 program.programId
             );
 
+            console.log("2. Fetching existing game state...", gameStatePda.toBase58());
             const accountInfo = await connection.getAccountInfo(gameStatePda);
             const tx = new web3.Transaction();
 
             if (!accountInfo) {
+                console.log("3a. Building Initialize Instruction");
                 const initIx = await program.methods.initializeGame()
                     .accounts({
                         gameState: gameStatePda,
@@ -88,8 +94,7 @@ export default function RockPaperScissors() {
                 tx.add(initIx);
             }
 
-            const lamports = new BN(wager * web3.LAMPORTS_PER_SOL);
-
+            console.log("3b. Building Play Instruction");
             const playIx = await program.methods.playHand(lamports, move)
                 .accounts({
                     gameState: gameStatePda,
@@ -100,19 +105,27 @@ export default function RockPaperScissors() {
             
             tx.add(playIx);
 
+            console.log("4. Fetching Blockhash...");
             const latestBlockhash = await connection.getLatestBlockhash("confirmed");
             tx.recentBlockhash = latestBlockhash.blockhash;
             tx.feePayer = publicKey;
 
-            const signature = await wallet.sendTransaction(tx, connection);
+            // THE FIX: Forcing Phantom to pop up via signTransaction (Same as Coinflip)
+            console.log("5. Requesting Phantom Signature...");
+            const signedTx = await wallet.signTransaction(tx);
+            
+            console.log("6. Sending raw transaction to network...");
+            const serializedTx = signedTx.serialize();
+            const signature = await connection.sendRawTransaction(serializedTx, { skipPreflight: false });
+            
+            console.log("7. Confirming TX:", signature);
             await connection.confirmTransaction({
                 signature,
                 blockhash: latestBlockhash.blockhash,
                 lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
             });
             
-            console.log("Move locked on chain. Pinging House to resolve...");
-
+            console.log("8. Move locked on chain! Pinging Backend House to resolve...");
             const response = await fetch(`${BACKEND_URL}/api/rps/resolve`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -124,6 +137,7 @@ export default function RockPaperScissors() {
 
             const data = await response.json();
             if (data.success) {
+                console.log("9. House resolved!");
                 const state: any = await program.account.rpsGameState.fetch(gameStatePda);
                 
                 let resultStatus: 'win' | 'loss' | 'tie' = 'loss';
@@ -140,7 +154,6 @@ export default function RockPaperScissors() {
                 });
 
                 if (state.currentStreak === 0 && resultStatus !== 'tie') {
-                    // Reset UI on loss
                     setTimeout(() => {
                         setRounds([]);
                         setIsBetLocked(false);
@@ -148,15 +161,16 @@ export default function RockPaperScissors() {
                 }
             } else {
                 console.error("House failed to resolve:", data.error);
-                alert("Backend resolution failed.");
+                alert("Backend resolution failed. Check console.");
                 setRounds(prev => prev.slice(0, -1));
                 setIsBetLocked(false);
             }
 
         } catch (error) {
-            console.error("Error playing hand:", error);
+            console.error("FATAL ERROR IN PLAYHAND:", error);
+            // Revert UI if they rejected the wallet popup or it failed
             setRounds(prev => prev.slice(0, -1));
-            setIsBetLocked(false); // Unlock the UI so they can try again if they rejected the tx
+            setIsBetLocked(false); 
         } finally {
             setIsProcessing(false);
             connection.getBalance(publicKey).then(b => setBalance(b / web3.LAMPORTS_PER_SOL));
@@ -164,7 +178,7 @@ export default function RockPaperScissors() {
     };
 
     const settleStreak = async () => {
-        if (!publicKey || !wallet.sendTransaction) return;
+        if (!publicKey || !wallet.signTransaction) return;
 
         setIsProcessing(true);
         try {
@@ -195,7 +209,10 @@ export default function RockPaperScissors() {
             tx.recentBlockhash = latestBlockhash.blockhash;
             tx.feePayer = publicKey;
 
-            const signature = await wallet.sendTransaction(tx, connection);
+            console.log("Requesting Phantom Signature for Cashout...");
+            const signedTx = await wallet.signTransaction(tx);
+            const signature = await connection.sendRawTransaction(signedTx.serialize());
+            
             await connection.confirmTransaction({ signature, ...latestBlockhash });
             
             setStreak(0);
@@ -331,8 +348,8 @@ export default function RockPaperScissors() {
                         <button 
                             key={move}
                             onClick={() => playHand(move)}
-                            disabled={isProcessing}
-                            className="flex flex-col items-center p-4 bg-gray-900 border-2 border-gray-800 rounded-xl hover:border-green-500 hover:bg-green-900/20 transition-all disabled:opacity-50 group"
+                            disabled={isProcessing || (!isBetLocked && streak === 0)}
+                            className="flex flex-col items-center p-4 bg-gray-900 border-2 border-gray-800 rounded-xl hover:border-green-500 hover:bg-green-900/20 transition-all disabled:opacity-50 group cursor-pointer"
                         >
                             <div className="w-16 h-16 mb-2 rounded overflow-hidden group-hover:scale-110 transition-transform">
                                 <img src={MOVE_MAP[move].img} alt={MOVE_MAP[move].name} className="w-full h-full object-cover" />
@@ -344,7 +361,7 @@ export default function RockPaperScissors() {
                     ))}
                 </div>
 
-                {/* Animated Subtitle (Shows only when active to pick) */}
+                {/* Animated Subtitle */}
                 {(isBetLocked || streak > 0) && !isProcessing && (
                     <div className="mt-4 text-center animate-fade-in transition-all duration-500">
                         <h3 className="text-xl font-black text-yellow-500 uppercase tracking-widest animate-pulse drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]">
