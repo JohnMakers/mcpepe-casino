@@ -165,7 +165,16 @@ export default function WhackdGame({ balance, setBalance, logWager, setShowProva
         
         setBombMask(actualBombMask);
         setWinAmount(profit); 
-        setBalance(prev => prev + payout);
+
+        try {
+            if (!publicKey) throw new Error("Wallet disconnected");
+            const exactBalance = await connection.getBalance(publicKey);
+            setBalance(exactBalance / LAMPORTS_PER_SOL);
+        } catch (err) {
+            // Fallback to optimistic math only if the RPC randomly drops the request
+            setBalance(prev => prev + payout);
+        }        
+        
         setWhackdState("cashed_out");
         logWager("Whackd!", wager, true, payout, gameSignature, data.serverSeed);
     } catch (e) { console.error("Failed to cashout:", e); }

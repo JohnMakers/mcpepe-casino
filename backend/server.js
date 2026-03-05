@@ -261,7 +261,8 @@ app.post('/api/whackd/cashout', async (req, res) => {
 });
 
 // The House signs the transaction on Devnet
-async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, revealedMask, isCashout) {
+// The House signs the transaction on Devnet
+    async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, revealedMask, isCashout) {
     try {
         console.log(`[HOUSE] Resolving Whackd for ${playerPubkeyStr} on-chain...`);
         
@@ -271,33 +272,43 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
         const playerPubkey = new anchor.web3.PublicKey(playerPubkeyStr);
         const gamePubkey = new anchor.web3.PublicKey(game.gamePubkey);
 
-        const wallet = new anchor.Wallet(houseKeypair);
-        const provider = new anchor.AnchorProvider(connection, wallet, { 
-            preflightCommitment: "confirmed",
-            commitment: "confirmed"
-        });
-        const program = new anchor.Program(idl, provider);
-
         const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("vault")], 
             PROGRAM_ID 
         );
 
+        // ☢️ THE NUCLEAR OPTION: Raw Binary Instruction Construction
+        // Bypassing Anchor's AccountResolver to prevent 500 crashes
+        const sighash = crypto.createHash('sha256').update("global:resolve_whackd").digest().slice(0, 8);
+        
+        const seedBuffer = Buffer.from(unhashedServerSeed, 'utf8');
+        const seedLengthBuffer = Buffer.alloc(4);
+        seedLengthBuffer.writeUInt32LE(seedBuffer.length, 0);
+        
+        const revealedTilesBuffer = Buffer.alloc(4);
+        revealedTilesBuffer.writeUInt32LE(Number(revealedMask), 0);
+        
+        const isCashoutBuffer = Buffer.alloc(1);
+        isCashoutBuffer.writeUInt8(isCashout ? 1 : 0, 0);
+        
+        const ixData = Buffer.concat([sighash, seedLengthBuffer, seedBuffer, revealedTilesBuffer, isCashoutBuffer]);
+
+        const resolveIx = new anchor.web3.TransactionInstruction({
+            programId: PROGRAM_ID,
+            keys: [
+                { pubkey: gamePubkey, isSigner: false, isWritable: true },
+                { pubkey: playerPubkey, isSigner: false, isWritable: true },
+                { pubkey: houseKeypair.publicKey, isSigner: true, isWritable: true },
+                { pubkey: vaultPDA, isSigner: false, isWritable: true },
+                { pubkey: anchor.web3.SystemProgram.programId, isSigner: false, isWritable: false },
+            ],
+            data: ixData
+        });
+
         let txSignature;
         let retries = 10;
         while (retries > 0) {
             try {
-                // 1. Force offline compilation. Arguments go first, accounts object last.
-                const resolveIx = program.instruction.resolveWhackd(unhashedServerSeed, Number(revealedMask), isCashout, {
-                    accounts: {
-                        whackdGame: gamePubkey,
-                        player: playerPubkey,
-                        authority: houseKeypair.publicKey,
-                        vault: vaultPDA,
-                        systemProgram: anchor.web3.SystemProgram.programId,
-                    }
-                });
-
                 const resolveTx = new anchor.web3.Transaction().add(resolveIx);
                 const freshBlockhash = await connection.getLatestBlockhash("confirmed");
                 resolveTx.recentBlockhash = freshBlockhash.blockhash;
