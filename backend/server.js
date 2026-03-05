@@ -228,7 +228,7 @@ app.post('/api/whackd/click', async (req, res) => {
 
         if (hitBomb) {
             game.status = "busted";
-            // 🔥 FIRE AND FORGET: Don't await the blockchain, let it process in the background!
+            // Don't await the blockchain, let it process in the background
             resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, false)
                 .catch(err => console.error("On-chain bust resolution failed:", err));
                 
@@ -365,6 +365,83 @@ app.post('/api/whackd/cashout', async (req, res) => {
         throw err; 
     }
 }
+
+// ==========================================
+// ROCK PAPER SCISSORS ENDPOINT
+// ==========================================
+app.post('/api/rps/resolve', async (req, res) => {
+    try {
+        const { playerPubkeyStr, gameStatePubkeyStr } = req.body;
+
+        if (!playerPubkeyStr || !gameStatePubkeyStr) {
+            return res.status(400).json({ success: false, error: "Missing keys." });
+        }
+
+        const playerPubkey = new anchor.web3.PublicKey(playerPubkeyStr);
+        const gameStatePubkey = new anchor.web3.PublicKey(gameStatePubkeyStr);
+
+        // 1. Generate House Cryptography
+        // 1: Rock, 2: Paper, 3: Scissors
+        const houseMove = Math.floor(Math.random() * 3) + 1; 
+        const secretSalt = crypto.randomBytes(16);
+        
+        // Create Commitment Hash: sha256(house_move + salt)
+        const preimage = Buffer.concat([Buffer.from([houseMove]), secretSalt]);
+        const hashedCommitment = crypto.createHash('sha256').update(preimage).digest();
+
+        // 2. Prepare Transaction using the Nuclear Option (Binary Bypass)
+        const sighash = crypto.createHash('sha256').update("global:rps_resolve_hand").digest().slice(0, 8);
+        
+        // Encode arguments: house_move (u8), secret_salt ([u8; 16]), hashed_commitment ([u8; 32])
+        const moveBuffer = Buffer.from([houseMove]);
+        const ixData = Buffer.concat([sighash, moveBuffer, secretSalt, hashedCommitment]);
+
+        const resolveIx = new anchor.web3.TransactionInstruction({
+            programId: PROGRAM_ID,
+            keys: [
+                { pubkey: gameStatePubkey, isSigner: false, isWritable: true },
+                { pubkey: houseKeypair.publicKey, isSigner: true, isWritable: true },
+            ],
+            data: ixData
+        });
+
+        console.log(`[HOUSE] Cranking RPS resolve for ${playerPubkeyStr}... Move: ${houseMove}`);
+
+        let resolveSignature;
+        let retries = 10;
+        
+        while (retries > 0) {
+            try {
+                const resolveTx = new anchor.web3.Transaction().add(resolveIx);
+                const freshBlockhash = await connection.getLatestBlockhash("confirmed");
+                resolveTx.recentBlockhash = freshBlockhash.blockhash;
+                resolveTx.feePayer = houseKeypair.publicKey;
+                resolveTx.sign(houseKeypair);
+
+                resolveSignature = await connection.sendRawTransaction(resolveTx.serialize(), { skipPreflight: true });
+                
+                await connection.confirmTransaction({
+                    signature: resolveSignature,
+                    blockhash: freshBlockhash.blockhash,
+                    lastValidBlockHeight: freshBlockhash.lastValidBlockHeight
+                }, "confirmed");
+
+                break; 
+            } catch (err) {
+                console.log(`⚠️ Network hit a snag in RPS. Retrying... (${retries} left). Error: ${err.message}`);
+                await new Promise(r => setTimeout(r, 2000));
+                retries--;
+                if (retries === 0) throw new Error("RPS resolution failed after 10 forced attempts.");
+            }
+        }
+
+        res.json({ success: true, resolveSignature, houseMove });
+
+    } catch (error) {
+        console.error("❌ RPS Resolve Error:", error);
+        res.status(500).json({ success: false, error: error.message || JSON.stringify(error) });
+    }
+});
 
 // ==========================================
 // SERVER INITIALIZATION

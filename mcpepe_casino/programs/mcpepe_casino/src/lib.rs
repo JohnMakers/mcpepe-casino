@@ -2,10 +2,12 @@ use anchor_lang::prelude::*;
 
 pub mod errors;
 pub mod coinflip;
-pub mod whackd; // <-- ADD THIS
+pub mod whackd; 
+pub mod rps;
 
 use coinflip::*;
-use whackd::*;  // <-- ADD THIS
+use whackd::*;  
+use rps::*;
 
 // Ensure your deployed ID is correct
 declare_id!("9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57");
@@ -42,5 +44,22 @@ pub mod mcpepe_casino {
 
     pub fn cancel_abandoned_whackd(ctx: Context<CancelWhackd>) -> Result<()> {
         whackd::cancel_abandoned_whackd(ctx)
+    }
+
+    // --- ROCK PAPER SCISSORS ROUTES ---
+    pub fn rps_initialize_game(ctx: Context<InitializeGame>) -> Result<()> {
+        rps::initialize_game(ctx)
+    }
+
+    pub fn rps_play_hand(ctx: Context<PlayHand>, bet_amount: u64, player_move: u8) -> Result<()> {
+        rps::play_hand(ctx, bet_amount, player_move)
+    }
+
+    pub fn rps_resolve_hand(ctx: Context<ResolveHand>, house_move: u8, secret_salt: [u8; 16], hashed_commitment: [u8; 32]) -> Result<()> {
+        rps::resolve_hand(ctx, house_move, secret_salt, hashed_commitment)
+    }
+
+    pub fn rps_settle_streak(ctx: Context<SettleStreak>) -> Result<()> {
+        rps::settle_streak(ctx)
     }
 }
