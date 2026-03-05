@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { Program, AnchorProvider, web3, BN } from '@coral-xyz/anchor';
+// @ts-ignore
 import idl from '../../../idl.json';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 
-const PROGRAM_ID = new PublicKey(idl.metadata.address);
+const PROGRAM_ID = new PublicKey("9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57");
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
 interface RoundHistory {
