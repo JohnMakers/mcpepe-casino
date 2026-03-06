@@ -73,6 +73,34 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                     });
                     setRounds(recoveredRounds);
                 }
+                
+                // If the game is stuck in an active state due to a previous backend drop, force a resolution.
+                if (state.isActive) {
+                    console.log("⚠️ Stuck active game detected. Asking House to resolve...");
+                    setIsProcessing(true);
+                    
+                    fetch(`${BACKEND_URL}/api/rps/resolve`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ playerPubkeyStr: publicKey.toBase58(), gameStatePubkeyStr: gameStatePda.toBase58() })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            console.log("✅ Stuck game recovered successfully!");
+                            // Briefly wait for RPC to sync, then reload the clean state
+                            setTimeout(() => window.location.reload(), 2000); 
+                        } else {
+                            setIsProcessing(false);
+                            console.error("Recovery failed:", data.error);
+                        }
+                    })
+                    .catch((err) => {
+                        console.error("Recovery network error:", err);
+                        setIsProcessing(false);
+                    });
+                }
+
             }).catch(() => {
                 // Ignore: Player hasn't started a game yet.
             });
