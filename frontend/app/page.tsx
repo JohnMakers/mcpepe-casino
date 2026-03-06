@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 
-// Clean imports pointing to your new component folders
 import Header from "../components/layout/Header";
 import LeftSidebar from "../components/layout/LeftSidebar";
 import RightSidebar from "../components/layout/RightSidebar";
@@ -12,7 +11,7 @@ import ProvablyFairModal from "../components/modals/ProvablyFairModal";
 import ReceiptModal from "../components/modals/ReceiptModal";
 import CoinflipGame from "../components/games/Coinflip";
 import WhackdGame from "../components/games/Whackd"; 
-import RockPaperScissorsGame from "../components/games/RockPaperScissors"; // <-- Added RPS Import
+import RockPaperScissorsGame from "../components/games/RockPaperScissors"; 
 
 const INITIAL_BETS = [
   { id: "tx1", player: "8xTq...3pZx", game: "Coinflip", amount: 2.5, win: true, hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", clientSeed: "degen_1" },
@@ -23,16 +22,13 @@ export default function Dashboard() {
   const wallet = useWallet();
   const { publicKey } = wallet;
 
-  // Global State
   const [balance, setBalance] = useState<number>(0);
   const [recentBets, setRecentBets] = useState(INITIAL_BETS);
   
-  // Layout State
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [activeGame, setActiveGame] = useState<string | null>(null);
 
-  // Modal State
   const [showProvablyFair, setShowProvablyFair] = useState(false);
   const [selectedBetInfo, setSelectedBetInfo] = useState<any>(null);
 
@@ -50,13 +46,11 @@ export default function Dashboard() {
         const bal = await connection.getBalance(publicKey);
         setBalance(bal / LAMPORTS_PER_SOL);
       } catch (error) {
-        // Log the error instead of swallowing it so we can see RPC failures
         console.error("RPC Error fetching balance:", error);
       }
     };
     
     fetchBalance();
-    // Increased interval to 10s to be kinder to rate limits
     const interval = setInterval(fetchBalance, 10000);
     return () => clearInterval(interval);
   }, [publicKey, connection]);
@@ -65,7 +59,7 @@ export default function Dashboard() {
     const newBet = {
       id: Math.random().toString(36).substring(2, 10), 
       player: publicKey ? publicKey.toBase58().substring(0, 4) + "..." + publicKey.toBase58().slice(-4) : "Anon",
-      game, amount: win ? payout : wager, win, hash, clientSeed: seed
+      game, amount: win ? payout : wager, win, wager, payout, hash, clientSeed: seed // Safely appended wager and payout to map to RightSidebar
     };
     setRecentBets(prev => [newBet, ...prev].slice(0, 20));
   };
@@ -119,7 +113,7 @@ export default function Dashboard() {
           )}
 
           {activeGame === 'rps' && (
-             <RockPaperScissorsGame />
+             <RockPaperScissorsGame logWager={logWager} />
           )}
         </main>
 

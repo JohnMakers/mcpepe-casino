@@ -26,10 +26,10 @@ const MOVE_MAP: Record<number, { name: string, img: string }> = {
 };
 
 interface RpsProps {
-    onWagerComplete?: (bet: any) => void;
+    logWager?: (game: string, wager: number, win: boolean, payout: number, hash: string, seed: string) => void;
 }
 
-export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
+export default function RockPaperScissors({ logWager }: RpsProps) {
     const { connection } = useConnection();
     const wallet = useWallet();
     const { publicKey } = wallet;
@@ -39,16 +39,18 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
     const [lockedBet, setLockedBet] = useState<number>(0); 
     
     const [isProcessing, setIsProcessing] = useState(false);
-    const [isGameOver, setIsGameOver] = useState(false); // Fixes the Tie disappearing bug
+    const [isGameOver, setIsGameOver] = useState(false); 
     const [balance, setBalance] = useState(0);
     const [rounds, setRounds] = useState<RoundHistory[]>([]);
     const [selectedMove, setSelectedMove] = useState<number | null>(null);
 
-    // Provably Fair State
     const [pfModalOpen, setPfModalOpen] = useState(false);
     const [currentPfData, setCurrentPfData] = useState<{hash: string, salt: string} | null>(null);
 
     const arenaRef = useRef<HTMLDivElement>(null);
+
+    // Determines if we are in the middle of a continuous session (including ties on streak 0)
+    const isOngoing = rounds.length > 0 && !isGameOver;
 
     useEffect(() => {
         if (publicKey) {
@@ -66,19 +68,17 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
     };
 
     const handlePlaySubmit = async () => {
-        if (!selectedMove) return alert("Select a fighter first!");
-        if (!publicKey || !wallet.signTransaction) return alert("Connect Phantom wallet first!");
+        if (!selectedMove) return;
+        if (!publicKey || !wallet.signTransaction) return;
 
         const wager = parseFloat(betAmount);
-        if (streak === 0 && (isNaN(wager) || wager <= 0)) return alert("Enter a valid bet amount.");
-        if (streak === 0 && wager > balance) return alert("Insufficient SOL balance.");
+        if (!isOngoing && (isNaN(wager) || wager <= 0)) return;
+        if (!isOngoing && wager > balance) return;
 
         setIsProcessing(true);
         const currentMove = selectedMove; 
         
-        // FIX: Only wipe the board if the game actually ended (Cashout or Loss). 
-        // If they Tied on streak 0, it simply appends!
-        if (isGameOver) {
+        if (isGameOver || rounds.length === 0) {
             setRounds([{ player: currentMove, house: null, result: 'pending' }]);
             setLockedBet(0);
             setIsGameOver(false);
@@ -145,17 +145,8 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
                     resultStatus = 'loss';
                     setIsGameOver(true);
                     
-                    // LIVE WAGER EVENT: Emit Loss
-                    if (onWagerComplete) {
-                        onWagerComplete({
-                            id: Math.random().toString(36).substring(7),
-                            player: publicKey.toBase58().slice(0, 4) + '...' + publicKey.toBase58().slice(-4),
-                            game: 'RPS',
-                            win: false,
-                            wager: actualLockedBet || wager,
-                            amount: actualLockedBet || wager,
-                            payout: 0
-                        });
+                    if (logWager) {
+                        logWager('Rock Paper Scissors', actualLockedBet || wager, false, 0, data.serverSeedHash, "player_seed");
                     }
                 }
                 
@@ -173,12 +164,10 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
 
                 setSelectedMove(null); 
             } else {
-                console.error("House failed to resolve:", data.error);
                 setRounds(prev => prev.slice(0, -1));
             }
 
         } catch (error) {
-            console.error("FATAL ERROR IN PLAYHAND:", error);
             setRounds(prev => prev.slice(0, -1));
         } finally {
             setIsProcessing(false);
@@ -213,7 +202,6 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
             
             await connection.confirmTransaction({ signature, ...latestBlockhash });
             
-            // WINNING ANIMATION
             confetti({
                 particleCount: 150,
                 spread: 80,
@@ -221,16 +209,8 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
                 colors: ['#22c55e', '#eab308', '#ffffff']
             });
 
-            // LIVE WAGER EVENT: Emit Win
-            if (onWagerComplete) {
-                onWagerComplete({
-                    id: Math.random().toString(36).substring(7),
-                    player: publicKey.toBase58().slice(0, 4) + '...' + publicKey.toBase58().slice(-4),
-                    game: 'RPS',
-                    win: true,
-                    wager: lockedBet,
-                    payout: lockedBet * MULTIPLIERS[streak - 1]
-                });
+            if (logWager) {
+                logWager('Rock Paper Scissors', lockedBet, true, lockedBet * MULTIPLIERS[streak - 1], currentPfData?.hash || "unknown", "player_seed");
             }
             
             setIsGameOver(true);
@@ -249,7 +229,6 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
     return (
         <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full animate-fade-in relative">
             
-            {/* Provably Fair Modal */}
             <ProvablyFairModal 
                 isOpen={pfModalOpen} 
                 onClose={() => setPfModalOpen(false)} 
@@ -257,7 +236,6 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
                 serverSeedHash={currentPfData?.hash || "Pending"}
             />
 
-            {/* HEADER */}
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-black text-white uppercase tracking-tight">Pepe's High-Stakes RPS</h2>
                 <div className="flex gap-3">
@@ -273,7 +251,6 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
                 </div>
             </div>
 
-            {/* THE ARENA */}
             <div 
                 ref={arenaRef}
                 className="flex flex-col items-center gap-6 mb-8 w-full min-h-[300px] max-h-[450px] overflow-y-auto p-6 bg-black/40 rounded-2xl border border-gray-800 scroll-smooth custom-scrollbar"
@@ -300,7 +277,6 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
                                 'border-gray-700 bg-gray-900/50 animate-pulse'
                             }`}
                         >
-                            {/* Player Side */}
                             <div className="flex flex-col items-center gap-2 w-1/3">
                                 <span className="text-sm font-bold text-gray-400 uppercase">You</span>
                                 <div className="w-24 h-24 bg-gray-800 rounded-lg overflow-hidden border border-gray-600 shadow-lg">
@@ -309,7 +285,6 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
                                 <span className="text-white font-mono font-bold">{MOVE_MAP[round.player].name}</span>
                             </div>
 
-                            {/* VS / Result Center */}
                             <div className="w-1/3 flex flex-col items-center justify-center">
                                 {round.result === 'pending' ? (
                                     <div className="text-3xl font-black text-yellow-500 animate-bounce">VS</div>
@@ -331,7 +306,6 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
                                 )}
                             </div>
 
-                            {/* House Side */}
                             <div className="flex flex-col items-center gap-2 w-1/3">
                                 <span className="text-sm font-bold text-gray-400 uppercase">House</span>
                                 <div className="w-24 h-24 bg-gray-800 rounded-lg overflow-hidden border border-gray-600 shadow-lg flex items-center justify-center relative">
@@ -350,11 +324,11 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
                 })}
             </div>
 
-            {/* CONTROLS */}
             <div className="w-full max-w-md mx-auto space-y-6">
                 
-                {(!streak || isGameOver) && (
-                    <div className="flex flex-col gap-2 w-full">
+                {/* Wager Input disappears when a game is actively ongoing (including tied state) */}
+                {(!isOngoing) && (
+                    <div className="flex flex-col gap-2 w-full animate-fade-in">
                         <label className="text-gray-400 text-sm font-bold uppercase tracking-widest pl-1">Wager Amount</label>
                         <div className="flex-1 bg-black border-2 border-gray-800 rounded-xl p-1 flex focus-within:border-green-500 transition-colors">
                             <input 
@@ -414,7 +388,8 @@ export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
                 >
                     {isProcessing ? 'Processing...' : 
                      !selectedMove ? 'Select A Fighter First' : 
-                     (streak === 0 || isGameOver) ? `START BATTLE WITH ${MOVE_MAP[selectedMove].name}` : 
+                     (!isOngoing) ? `START BATTLE WITH ${MOVE_MAP[selectedMove].name}` : 
+                     (streak === 0) ? `FREE REPLAY WITH ${MOVE_MAP[selectedMove].name}` : 
                      `LET IT RIDE WITH ${MOVE_MAP[selectedMove].name}`}
                 </button>
 
