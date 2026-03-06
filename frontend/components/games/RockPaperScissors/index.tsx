@@ -5,7 +5,7 @@ import { Program, AnchorProvider, web3, BN } from '@coral-xyz/anchor';
 import idl from '../../../idl.json';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 
-const PROGRAM_ID = new PublicKey("9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57");
+const PROGRAM_ID = new PublicKey("BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz");
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
 interface RoundHistory {

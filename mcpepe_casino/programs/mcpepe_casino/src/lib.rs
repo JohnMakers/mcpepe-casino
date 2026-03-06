@@ -9,7 +9,7 @@ use coinflip::*;
 use whackd::*;  
 use rps::*;
 
-declare_id!("9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57");
+declare_id!("BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz");
 
 #[program]
 pub mod mcpepe_casino {

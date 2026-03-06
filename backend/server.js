@@ -10,7 +10,7 @@ const idl = require('./idl.json');
 // 🛡️ THE MASTER FIX: Forcefully inject missing properties into the IDL.
 if (!idl.types) idl.types = [];
 
-const PROGRAM_ID_STRING = "9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57";
+const PROGRAM_ID_STRING = "BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz";
 const PROGRAM_ID = new anchor.web3.PublicKey(PROGRAM_ID_STRING);
 idl.address = PROGRAM_ID_STRING;
 if (!idl.metadata) idl.metadata = {};
