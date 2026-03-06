@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { Program, AnchorProvider, web3, BN } from '@coral-xyz/anchor';
+import confetti from 'canvas-confetti';
 // @ts-ignore
 import idl from '../../../idl.json';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
+import ProvablyFairModal from '../../modals/ProvablyFairModal';
 
 const PROGRAM_ID = new PublicKey("BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz");
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
-// We match the multipliers from the Rust contract (divided by 10)
 const MULTIPLIERS = [1.9, 3.6, 6.8, 13.0, 24.5, 46.5];
 
 interface RoundHistory {
     player: number;
     house: number | null;
     result: 'win' | 'loss' | 'tie' | 'pending';
+    pfData?: { hash: string, salt: string };
 }
 
 const MOVE_MAP: Record<number, { name: string, img: string }> = {
@@ -23,7 +25,11 @@ const MOVE_MAP: Record<number, { name: string, img: string }> = {
     3: { name: 'Scissors', img: '/rps_scissors.png' }
 };
 
-export default function RockPaperScissors() {
+interface RpsProps {
+    onWagerComplete?: (bet: any) => void;
+}
+
+export default function RockPaperScissors({ onWagerComplete }: RpsProps) {
     const { connection } = useConnection();
     const wallet = useWallet();
     const { publicKey } = wallet;
@@ -33,11 +39,15 @@ export default function RockPaperScissors() {
     const [lockedBet, setLockedBet] = useState<number>(0); 
     
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isGameOver, setIsGameOver] = useState(false); // Fixes the Tie disappearing bug
     const [balance, setBalance] = useState(0);
     const [rounds, setRounds] = useState<RoundHistory[]>([]);
     const [selectedMove, setSelectedMove] = useState<number | null>(null);
 
-    // Auto-scroll reference for the Arena
+    // Provably Fair State
+    const [pfModalOpen, setPfModalOpen] = useState(false);
+    const [currentPfData, setCurrentPfData] = useState<{hash: string, salt: string} | null>(null);
+
     const arenaRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -46,11 +56,8 @@ export default function RockPaperScissors() {
         }
     }, [publicKey, connection]);
 
-    // Auto-scroll to bottom whenever a new round is added or updated
     useEffect(() => {
-        if (arenaRef.current) {
-            arenaRef.current.scrollTop = arenaRef.current.scrollHeight;
-        }
+        if (arenaRef.current) arenaRef.current.scrollTop = arenaRef.current.scrollHeight;
     }, [rounds]);
 
     const multiplyBet = (factor: number) => {
@@ -69,11 +76,12 @@ export default function RockPaperScissors() {
         setIsProcessing(true);
         const currentMove = selectedMove; 
         
-        // FIX: If starting a brand new game (streak 0), wipe the old board to prevent bugs.
-        // Otherwise, append to the existing streak.
-        if (streak === 0) {
+        // FIX: Only wipe the board if the game actually ended (Cashout or Loss). 
+        // If they Tied on streak 0, it simply appends!
+        if (isGameOver) {
             setRounds([{ player: currentMove, house: null, result: 'pending' }]);
             setLockedBet(0);
+            setIsGameOver(false);
         } else {
             setRounds(prev => [...prev, { player: currentMove, house: null, result: 'pending' }]);
         }
@@ -129,25 +137,40 @@ export default function RockPaperScissors() {
                 
                 let resultStatus: 'win' | 'loss' | 'tie' = 'loss';
                 
-                // FIX: Accurate Tie matching based on Rust contract keeping streak identical
                 if (state.currentStreak > streak) {
                     resultStatus = 'win';
                 } else if (state.currentStreak === streak && data.houseMove === currentMove) {
                     resultStatus = 'tie';
                 } else {
                     resultStatus = 'loss';
+                    setIsGameOver(true);
+                    
+                    // LIVE WAGER EVENT: Emit Loss
+                    if (onWagerComplete) {
+                        onWagerComplete({
+                            id: Math.random().toString(36).substring(7),
+                            player: publicKey.toBase58().slice(0, 4) + '...' + publicKey.toBase58().slice(-4),
+                            game: 'RPS',
+                            win: false,
+                            wager: actualLockedBet || wager,
+                            amount: actualLockedBet || wager,
+                            payout: 0
+                        });
+                    }
                 }
                 
                 setStreak(state.currentStreak);
                 
+                const pfObj = { hash: data.serverSeedHash, salt: data.serverSalt };
+                setCurrentPfData(pfObj);
+                
                 setRounds(prev => {
                     const newRounds = [...prev];
                     const lastIndex = newRounds.length - 1;
-                    newRounds[lastIndex] = { ...newRounds[lastIndex], house: data.houseMove, result: resultStatus };
+                    newRounds[lastIndex] = { ...newRounds[lastIndex], house: data.houseMove, result: resultStatus, pfData: pfObj };
                     return newRounds;
                 });
 
-                // Clear selected move to prompt next action, but LEAVE rounds array intact!
                 setSelectedMove(null); 
             } else {
                 console.error("House failed to resolve:", data.error);
@@ -190,11 +213,29 @@ export default function RockPaperScissors() {
             
             await connection.confirmTransaction({ signature, ...latestBlockhash });
             
+            // WINNING ANIMATION
+            confetti({
+                particleCount: 150,
+                spread: 80,
+                origin: { y: 0.6 },
+                colors: ['#22c55e', '#eab308', '#ffffff']
+            });
+
+            // LIVE WAGER EVENT: Emit Win
+            if (onWagerComplete) {
+                onWagerComplete({
+                    id: Math.random().toString(36).substring(7),
+                    player: publicKey.toBase58().slice(0, 4) + '...' + publicKey.toBase58().slice(-4),
+                    game: 'RPS',
+                    win: true,
+                    wager: lockedBet,
+                    payout: lockedBet * MULTIPLIERS[streak - 1]
+                });
+            }
+            
+            setIsGameOver(true);
             setStreak(0);
-            setRounds([]);
             setSelectedMove(null);
-            setLockedBet(0);
-            alert("Winnings claimed successfully! SOL deposited to wallet.");
         } catch (error) {
             console.error("Error claiming:", error);
         } finally {
@@ -206,16 +247,33 @@ export default function RockPaperScissors() {
     const currentTotalValue = streak > 0 ? (lockedBet * MULTIPLIERS[streak - 1]) : 0;
 
     return (
-        <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full animate-fade-in">
+        <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full animate-fade-in relative">
+            
+            {/* Provably Fair Modal */}
+            <ProvablyFairModal 
+                isOpen={pfModalOpen} 
+                onClose={() => setPfModalOpen(false)} 
+                serverSeed={currentPfData?.salt || "Pending"}
+                serverSeedHash={currentPfData?.hash || "Pending"}
+            />
+
             {/* HEADER */}
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-black text-white uppercase tracking-tight">Pepe's High-Stakes RPS</h2>
-                <div className="text-green-500 font-mono text-lg font-bold bg-green-900/20 px-4 py-2 rounded border border-green-900/50">
-                    Streak: {streak} 🔥
+                <div className="flex gap-3">
+                    <button 
+                        onClick={() => setPfModalOpen(true)}
+                        className="px-3 py-2 bg-gray-900/50 hover:bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-400 transition-colors"
+                    >
+                        ⚖️ Fairness
+                    </button>
+                    <div className="text-green-500 font-mono text-lg font-bold bg-green-900/20 px-4 py-2 rounded border border-green-900/50">
+                        Streak: {streak} 🔥
+                    </div>
                 </div>
             </div>
 
-            {/* THE ARENA (SCROLLABLE FIX) */}
+            {/* THE ARENA */}
             <div 
                 ref={arenaRef}
                 className="flex flex-col items-center gap-6 mb-8 w-full min-h-[300px] max-h-[450px] overflow-y-auto p-6 bg-black/40 rounded-2xl border border-gray-800 scroll-smooth custom-scrollbar"
@@ -228,7 +286,6 @@ export default function RockPaperScissors() {
 
                 {rounds.map((round, idx) => {
                     const isSuccess = round.result === 'win';
-                    // Ties do not advance the multiplier index, so we only show the previous multiplier value
                     const displayIdx = round.result === 'win' ? idx : Math.max(0, streak - 1);
                     const roundMultiplier = MULTIPLIERS[displayIdx];
                     const roundPayoutValue = lockedBet * (roundMultiplier || 0);
@@ -265,7 +322,6 @@ export default function RockPaperScissors() {
                                             {round.result === 'win' ? 'VICTORY' : round.result === 'loss' ? 'REKT' : 'TIE (FREE REPLAY)'}
                                         </div>
                                         
-                                        {/* INDICATOR: Payout Value for this specific tile/streak */}
                                         {isSuccess && (
                                             <div className="mt-2 px-3 py-1 bg-black/50 rounded-lg text-green-400 font-mono text-sm font-bold border border-green-500/30">
                                                 {roundMultiplier}x (+{roundPayoutValue.toFixed(2)} SOL)
@@ -297,8 +353,7 @@ export default function RockPaperScissors() {
             {/* CONTROLS */}
             <div className="w-full max-w-md mx-auto space-y-6">
                 
-                {/* Bet Selector - Only editable if streak is 0 */}
-                {streak === 0 && (
+                {(!streak || isGameOver) && (
                     <div className="flex flex-col gap-2 w-full">
                         <label className="text-gray-400 text-sm font-bold uppercase tracking-widest pl-1">Wager Amount</label>
                         <div className="flex-1 bg-black border-2 border-gray-800 rounded-xl p-1 flex focus-within:border-green-500 transition-colors">
@@ -323,7 +378,6 @@ export default function RockPaperScissors() {
                     </div>
                 )}
 
-                {/* Move Selectors - Click to visually select */}
                 <div className="grid grid-cols-3 gap-4">
                     {[1, 2, 3].map((move) => {
                         const isSelected = selectedMove === move;
@@ -349,7 +403,6 @@ export default function RockPaperScissors() {
                     })}
                 </div>
 
-                {/* The Master Action Button */}
                 <button 
                     onClick={handlePlaySubmit}
                     disabled={!selectedMove || isProcessing}
@@ -361,12 +414,11 @@ export default function RockPaperScissors() {
                 >
                     {isProcessing ? 'Processing...' : 
                      !selectedMove ? 'Select A Fighter First' : 
-                     streak === 0 ? `START BATTLE WITH ${MOVE_MAP[selectedMove].name}` : 
+                     (streak === 0 || isGameOver) ? `START BATTLE WITH ${MOVE_MAP[selectedMove].name}` : 
                      `LET IT RIDE WITH ${MOVE_MAP[selectedMove].name}`}
                 </button>
 
-                {/* Cashout Button */}
-                {streak > 0 && !isProcessing && (
+                {streak > 0 && !isProcessing && !isGameOver && (
                     <button 
                         onClick={settleStreak} 
                         className="w-full py-5 mt-2 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xl uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all hover:scale-[1.02] flex flex-col items-center justify-center leading-tight"

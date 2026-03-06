@@ -160,9 +160,16 @@ app.post('/api/play-coinflip', async (req, res) => {
             }
         }
 
-        res.json({ success: true, playSignature, resolveSignature });
+        res.json({ 
+            success: true, 
+            resolveSignature, 
+            houseMove,
+            serverSeedHash: hashedCommitment.toString('hex'),
+            serverSalt: secretSalt.toString('hex') 
+        });
+
     } catch (error) {
-        console.error("❌ Coinflip Error:", error);
+        console.error("❌ RPS Resolve Error:", error);
         res.status(500).json({ success: false, error: error.message || JSON.stringify(error) });
     }
 });
