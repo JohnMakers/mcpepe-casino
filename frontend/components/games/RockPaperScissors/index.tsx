@@ -8,6 +8,9 @@ import { PublicKey, SystemProgram } from '@solana/web3.js';
 const PROGRAM_ID = new PublicKey("BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz");
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
+// We match the multipliers from the Rust contract (divided by 10)
+const MULTIPLIERS = [1.9, 3.6, 6.8, 13.0, 24.5, 46.5];
+
 interface RoundHistory {
     player: number;
     house: number | null;
@@ -27,12 +30,13 @@ export default function RockPaperScissors() {
 
     const [streak, setStreak] = useState(0);
     const [betAmount, setBetAmount] = useState<string>("0.1");
+    
+    // NEW: Track the actual confirmed bet amount from the contract to calculate payouts accurately
+    const [lockedBet, setLockedBet] = useState<number>(0); 
+    
     const [isProcessing, setIsProcessing] = useState(false);
     const [balance, setBalance] = useState(0);
-    
     const [rounds, setRounds] = useState<RoundHistory[]>([]);
-    
-    // NEW UI STATE: Keeps track of the fighter they clicked before starting
     const [selectedMove, setSelectedMove] = useState<number | null>(null);
 
     useEffect(() => {
@@ -55,46 +59,30 @@ export default function RockPaperScissors() {
         if (streak === 0 && wager > balance) return alert("Insufficient SOL balance.");
 
         setIsProcessing(true);
-        const currentMove = selectedMove; // Lock it in for the UI
+        const currentMove = selectedMove; 
         setRounds(prev => [...prev, { player: currentMove, house: null, result: 'pending' }]);
 
         try {
-            console.log("1. Initializing Provider...");
             const lamports = new BN(Math.floor(wager * web3.LAMPORTS_PER_SOL)); 
-
             const provider = new AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
             const program = new Program(idl as any, PROGRAM_ID, provider);
             
-            const [gameStatePda] = PublicKey.findProgramAddressSync(
-                [Buffer.from("rps_game"), publicKey.toBuffer()],
-                program.programId
-            );
-
-            const [vaultPda] = PublicKey.findProgramAddressSync(
-                [Buffer.from("rps_vault")],
-                program.programId
-            );
+            const [gameStatePda] = PublicKey.findProgramAddressSync([Buffer.from("rps_game"), publicKey.toBuffer()], program.programId);
+            const [vaultPda] = PublicKey.findProgramAddressSync([Buffer.from("rps_vault")], program.programId);
 
             const accountInfo = await connection.getAccountInfo(gameStatePda);
             const tx = new web3.Transaction();
 
             if (!accountInfo) {
                 const initIx = await program.methods.initializeRpsGame()
-                    .accountsStrict({
-                        gameState: gameStatePda,
-                        player: publicKey,
-                        systemProgram: SystemProgram.programId,
-                    }).instruction();
+                    .accountsStrict({ gameState: gameStatePda, player: publicKey, systemProgram: SystemProgram.programId })
+                    .instruction();
                 tx.add(initIx);
             }
 
             const playIx = await program.methods.rpsPlayHand(lamports, currentMove)
-                .accountsStrict({
-                    gameState: gameStatePda,
-                    vault: vaultPda,
-                    player: publicKey,
-                    systemProgram: SystemProgram.programId,
-                }).instruction();
+                .accountsStrict({ gameState: gameStatePda, vault: vaultPda, player: publicKey, systemProgram: SystemProgram.programId })
+                .instruction();
             tx.add(playIx);
 
             const latestBlockhash = await connection.getLatestBlockhash("confirmed");
@@ -102,8 +90,7 @@ export default function RockPaperScissors() {
             tx.feePayer = publicKey;
 
             const signedTx = await wallet.signTransaction(tx);
-            const serializedTx = signedTx.serialize();
-            const signature = await connection.sendRawTransaction(serializedTx, { skipPreflight: false });
+            const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false });
             
             await connection.confirmTransaction({
                 signature,
@@ -111,23 +98,26 @@ export default function RockPaperScissors() {
                 lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
             });
             
-            console.log("Move locked! Pinging Backend...");
             const response = await fetch(`${BACKEND_URL}/api/rps/resolve`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    playerPubkeyStr: publicKey.toBase58(),
-                    gameStatePubkeyStr: gameStatePda.toBase58()
-                })
+                body: JSON.stringify({ playerPubkeyStr: publicKey.toBase58(), gameStatePubkeyStr: gameStatePda.toBase58() })
             });
 
             const data = await response.json();
             if (data.success) {
                 const state: any = await program.account.rpsGameState.fetch(gameStatePda);
                 
+                // Fetch the true locked bet directly from the smart contract state
+                const actualLockedBet = state.betAmount.toNumber() / web3.LAMPORTS_PER_SOL;
+                if (actualLockedBet > 0) setLockedBet(actualLockedBet);
+                
                 let resultStatus: 'win' | 'loss' | 'tie' = 'loss';
-                if (state.currentStreak > streak) resultStatus = 'win';
-                else if (state.currentStreak === streak && data.houseMove === currentMove) resultStatus = 'tie';
+                
+                // If streak increased, it's either a pure win or a tie that counted as a win
+                if (state.currentStreak > streak) {
+                    resultStatus = (data.houseMove === currentMove) ? 'tie' : 'win';
+                }
                 
                 setStreak(state.currentStreak);
                 
@@ -138,17 +128,17 @@ export default function RockPaperScissors() {
                     return newRounds;
                 });
 
-                if (state.currentStreak === 0 && resultStatus !== 'tie') {
+                if (state.currentStreak === 0) {
                     setTimeout(() => {
                         setRounds([]);
-                        setSelectedMove(null); // Reset choice on loss
+                        setSelectedMove(null);
+                        setLockedBet(0);
                     }, 3000);
                 } else {
-                    setSelectedMove(null); // Reset choice so they have to pick again for next streak
+                    setSelectedMove(null); 
                 }
             } else {
                 console.error("House failed to resolve:", data.error);
-                alert("Backend resolution failed.");
                 setRounds(prev => prev.slice(0, -1));
             }
 
@@ -169,23 +159,13 @@ export default function RockPaperScissors() {
             const provider = new AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
             const program = new Program(idl as any, PROGRAM_ID, provider);
             
-            const [gameStatePda] = PublicKey.findProgramAddressSync(
-                [Buffer.from("rps_game"), publicKey.toBuffer()],
-                program.programId
-            );
-            const [vaultPda] = PublicKey.findProgramAddressSync(
-                [Buffer.from("rps_vault")],
-                program.programId
-            );
+            const [gameStatePda] = PublicKey.findProgramAddressSync([Buffer.from("rps_game"), publicKey.toBuffer()], program.programId);
+            const [vaultPda] = PublicKey.findProgramAddressSync([Buffer.from("rps_vault")], program.programId);
 
             const tx = new web3.Transaction();
             const settleIx = await program.methods.rpsSettleStreak()
-                .accountsStrict({
-                    gameState: gameStatePda,
-                    vault: vaultPda,
-                    player: publicKey,
-                    systemProgram: SystemProgram.programId,
-                }).instruction();
+                .accountsStrict({ gameState: gameStatePda, vault: vaultPda, player: publicKey, systemProgram: SystemProgram.programId })
+                .instruction();
             
             tx.add(settleIx);
             
@@ -201,6 +181,7 @@ export default function RockPaperScissors() {
             setStreak(0);
             setRounds([]);
             setSelectedMove(null);
+            setLockedBet(0);
             alert("Winnings claimed successfully! SOL deposited to wallet.");
         } catch (error) {
             console.error("Error claiming:", error);
@@ -209,6 +190,9 @@ export default function RockPaperScissors() {
             connection.getBalance(publicKey).then(b => setBalance(b / web3.LAMPORTS_PER_SOL));
         }
     };
+
+    // Calculate current total value of the run
+    const currentTotalValue = streak > 0 ? (lockedBet * MULTIPLIERS[streak - 1]) : 0;
 
     return (
         <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full animate-fade-in">
@@ -228,55 +212,70 @@ export default function RockPaperScissors() {
                     </div>
                 )}
 
-                {rounds.map((round, idx) => (
-                    <div 
-                        key={idx} 
-                        className={`w-full max-w-2xl flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-500 ${
-                            round.result === 'win' ? 'border-green-500 bg-green-900/20' : 
-                            round.result === 'loss' ? 'border-red-500 bg-red-900/20' : 
-                            round.result === 'tie' ? 'border-yellow-500 bg-yellow-900/20' : 
-                            'border-gray-700 bg-gray-900/50 animate-pulse'
-                        }`}
-                    >
-                        {/* Player Side */}
-                        <div className="flex flex-col items-center gap-2 w-1/3">
-                            <span className="text-sm font-bold text-gray-400 uppercase">You</span>
-                            <div className="w-24 h-24 bg-gray-800 rounded-lg overflow-hidden border border-gray-600 shadow-lg">
-                                <img src={MOVE_MAP[round.player].img} alt={MOVE_MAP[round.player].name} className="w-full h-full object-cover" />
-                            </div>
-                            <span className="text-white font-mono font-bold">{MOVE_MAP[round.player].name}</span>
-                        </div>
+                {rounds.map((round, idx) => {
+                    const isSuccess = round.result === 'win' || round.result === 'tie';
+                    const roundMultiplier = MULTIPLIERS[idx];
+                    const roundPayoutValue = lockedBet * (roundMultiplier || 0);
 
-                        {/* VS / Result Center */}
-                        <div className="w-1/3 flex flex-col items-center justify-center">
-                            {round.result === 'pending' ? (
-                                <div className="text-3xl font-black text-yellow-500 animate-bounce">VS</div>
-                            ) : (
-                                <div className={`text-2xl font-black uppercase tracking-widest ${
-                                    round.result === 'win' ? 'text-green-500' : 
-                                    round.result === 'loss' ? 'text-red-500' : 'text-yellow-500'
-                                }`}>
-                                    {round.result === 'win' ? 'VICTORY' : round.result === 'loss' ? 'REKT' : 'TIE'}
+                    return (
+                        <div 
+                            key={idx} 
+                            className={`w-full max-w-2xl flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-500 ${
+                                round.result === 'win' ? 'border-green-500 bg-green-900/20' : 
+                                round.result === 'loss' ? 'border-red-500 bg-red-900/20' : 
+                                round.result === 'tie' ? 'border-yellow-500 bg-yellow-900/20' : 
+                                'border-gray-700 bg-gray-900/50 animate-pulse'
+                            }`}
+                        >
+                            {/* Player Side */}
+                            <div className="flex flex-col items-center gap-2 w-1/3">
+                                <span className="text-sm font-bold text-gray-400 uppercase">You</span>
+                                <div className="w-24 h-24 bg-gray-800 rounded-lg overflow-hidden border border-gray-600 shadow-lg">
+                                    <img src={MOVE_MAP[round.player].img} alt={MOVE_MAP[round.player].name} className="w-full h-full object-cover" />
                                 </div>
-                            )}
-                        </div>
+                                <span className="text-white font-mono font-bold">{MOVE_MAP[round.player].name}</span>
+                            </div>
 
-                        {/* House Side */}
-                        <div className="flex flex-col items-center gap-2 w-1/3">
-                            <span className="text-sm font-bold text-gray-400 uppercase">House</span>
-                            <div className="w-24 h-24 bg-gray-800 rounded-lg overflow-hidden border border-gray-600 shadow-lg flex items-center justify-center relative">
-                                {round.house ? (
-                                    <img src={MOVE_MAP[round.house].img} alt={MOVE_MAP[round.house].name} className="w-full h-full object-cover" />
+                            {/* VS / Result Center */}
+                            <div className="w-1/3 flex flex-col items-center justify-center">
+                                {round.result === 'pending' ? (
+                                    <div className="text-3xl font-black text-yellow-500 animate-bounce">VS</div>
                                 ) : (
-                                    <div className="w-10 h-10 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+                                    <div className="flex flex-col items-center">
+                                        <div className={`text-2xl font-black uppercase tracking-widest ${
+                                            round.result === 'win' ? 'text-green-500' : 
+                                            round.result === 'loss' ? 'text-red-500' : 'text-yellow-500'
+                                        }`}>
+                                            {round.result === 'win' ? 'VICTORY' : round.result === 'loss' ? 'REKT' : 'TIE (FREE REPLAY)'}
+                                        </div>
+                                        
+                                        {/* INDICATOR: Payout Value for this specific tile/streak */}
+                                        {isSuccess && (
+                                            <div className="mt-2 px-3 py-1 bg-black/50 rounded-lg text-green-400 font-mono text-sm font-bold border border-green-500/30">
+                                                {roundMultiplier}x (+{roundPayoutValue.toFixed(2)} SOL)
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
-                            <span className="text-white font-mono font-bold">
-                                {round.house ? MOVE_MAP[round.house].name : 'Thinking...'}
-                            </span>
+
+                            {/* House Side */}
+                            <div className="flex flex-col items-center gap-2 w-1/3">
+                                <span className="text-sm font-bold text-gray-400 uppercase">House</span>
+                                <div className="w-24 h-24 bg-gray-800 rounded-lg overflow-hidden border border-gray-600 shadow-lg flex items-center justify-center relative">
+                                    {round.house ? (
+                                        <img src={MOVE_MAP[round.house].img} alt={MOVE_MAP[round.house].name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-10 h-10 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+                                    )}
+                                </div>
+                                <span className="text-white font-mono font-bold">
+                                    {round.house ? MOVE_MAP[round.house].name : 'Thinking...'}
+                                </span>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             {/* CONTROLS */}
@@ -350,13 +349,16 @@ export default function RockPaperScissors() {
                      `LET IT RIDE WITH ${MOVE_MAP[selectedMove].name}`}
                 </button>
 
-                {/* Cashout Button */}
+                {/* Cashout Button - UPDATED WITH TOTAL SOL */}
                 {streak > 0 && !isProcessing && (
                     <button 
                         onClick={settleStreak} 
-                        className="w-full py-5 mt-2 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xl uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all hover:scale-[1.02]"
+                        className="w-full py-5 mt-2 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xl uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all hover:scale-[1.02] flex flex-col items-center justify-center leading-tight"
                     >
-                        💰 Cash Out Winnings
+                        <span>💰 Cash Out Winnings</span>
+                        <span className="text-sm font-bold opacity-80 mt-1">
+                            TOTAL: {currentTotalValue.toFixed(2)} SOL
+                        </span>
                     </button>
                 )}
             </div>

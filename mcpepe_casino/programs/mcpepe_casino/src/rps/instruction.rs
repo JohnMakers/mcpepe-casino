@@ -2,8 +2,11 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
 use crate::rps::state::*;
 use solana_program::hash::hash;
+use std::str::FromStr;
 
-const MULTIPLIERS: [u64; 6] = [29, 85, 250, 750, 2200, 6500];
+// ⚖️ THE BALANCE FIX: Adjusted for 50/50 odds (Ties don't count)
+// 1.9x, 3.6x, 6.8x, 13.0x, 24.5x, 46.5x
+const MULTIPLIERS: [u64; 6] = [19, 36, 68, 130, 245, 465];
 
 #[derive(Accounts)]
 pub struct InitializeRpsGame<'info> {
@@ -39,7 +42,11 @@ pub struct PlayHand<'info> {
 pub struct ResolveHand<'info> {
     #[account(mut)]
     pub game_state: Account<'info, RpsGameState>,
-    #[account(mut)]
+    // 🛡️ SECURITY FIX INCLUDED: Lock to your backend wallet
+    #[account(
+        mut, 
+        address = Pubkey::from_str("YOUR_HOUSE_WALLET_PUBLIC_KEY_HERE").unwrap() @ GameError::InvalidAuthority
+    )]
     pub house_authority: Signer<'info>, 
 }
 
@@ -71,8 +78,6 @@ pub fn play_hand(ctx: Context<PlayHand>, bet_amount: u64, player_move: u8) -> Re
     let game_state = &mut ctx.accounts.game_state;
     
     require!(player_move >= 1 && player_move <= 3, GameError::InvalidMove);
-    
-    // 🔥 THE FIX: The game MUST be inactive to place a new bet, whether it's streak 0 or streak 5.
     require!(!game_state.is_active, GameError::GameAlreadyActive);
     
     if game_state.current_streak == 0 {
@@ -109,11 +114,18 @@ pub fn resolve_hand(ctx: Context<ResolveHand>, house_move: u8, secret_salt: [u8;
     let is_win = (p_move == 1 && h_move == 3) || 
                  (p_move == 2 && h_move == 1) || 
                  (p_move == 3 && h_move == 2);
+    
+    let is_tie = p_move == h_move;
 
     if is_win {
+        // Pure Win: Advance streak
         game_state.current_streak += 1;
         game_state.is_active = false; 
+    } else if is_tie {
+        // 🔄 TIE FIX: Do nothing to the streak or bet, just open the game back up!
+        game_state.is_active = false;
     } else {
+        // Pure Loss: Wipe everything
         game_state.current_streak = 0;
         game_state.is_active = false;
         game_state.bet_amount = 0;
@@ -166,4 +178,6 @@ pub enum GameError {
     NoWinnings,
     #[msg("Cannot settle while round is active.")]
     GameIsActive,
+    #[msg("Invalid House Authority signer.")]
+    InvalidAuthority,
 }
