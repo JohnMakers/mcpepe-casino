@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { Program, AnchorProvider, web3, BN } from '@coral-xyz/anchor';
 // @ts-ignore
@@ -30,8 +30,6 @@ export default function RockPaperScissors() {
 
     const [streak, setStreak] = useState(0);
     const [betAmount, setBetAmount] = useState<string>("0.1");
-    
-    // NEW: Track the actual confirmed bet amount from the contract to calculate payouts accurately
     const [lockedBet, setLockedBet] = useState<number>(0); 
     
     const [isProcessing, setIsProcessing] = useState(false);
@@ -39,11 +37,21 @@ export default function RockPaperScissors() {
     const [rounds, setRounds] = useState<RoundHistory[]>([]);
     const [selectedMove, setSelectedMove] = useState<number | null>(null);
 
+    // Auto-scroll reference for the Arena
+    const arenaRef = useRef<HTMLDivElement>(null);
+
     useEffect(() => {
         if (publicKey) {
             connection.getBalance(publicKey).then(b => setBalance(b / web3.LAMPORTS_PER_SOL));
         }
     }, [publicKey, connection]);
+
+    // Auto-scroll to bottom whenever a new round is added or updated
+    useEffect(() => {
+        if (arenaRef.current) {
+            arenaRef.current.scrollTop = arenaRef.current.scrollHeight;
+        }
+    }, [rounds]);
 
     const multiplyBet = (factor: number) => {
         const current = parseFloat(betAmount) || 0;
@@ -60,7 +68,15 @@ export default function RockPaperScissors() {
 
         setIsProcessing(true);
         const currentMove = selectedMove; 
-        setRounds(prev => [...prev, { player: currentMove, house: null, result: 'pending' }]);
+        
+        // FIX: If starting a brand new game (streak 0), wipe the old board to prevent bugs.
+        // Otherwise, append to the existing streak.
+        if (streak === 0) {
+            setRounds([{ player: currentMove, house: null, result: 'pending' }]);
+            setLockedBet(0);
+        } else {
+            setRounds(prev => [...prev, { player: currentMove, house: null, result: 'pending' }]);
+        }
 
         try {
             const lamports = new BN(Math.floor(wager * web3.LAMPORTS_PER_SOL)); 
@@ -108,15 +124,18 @@ export default function RockPaperScissors() {
             if (data.success) {
                 const state: any = await program.account.rpsGameState.fetch(gameStatePda);
                 
-                // Fetch the true locked bet directly from the smart contract state
                 const actualLockedBet = state.betAmount.toNumber() / web3.LAMPORTS_PER_SOL;
                 if (actualLockedBet > 0) setLockedBet(actualLockedBet);
                 
                 let resultStatus: 'win' | 'loss' | 'tie' = 'loss';
                 
-                // If streak increased, it's either a pure win or a tie that counted as a win
+                // FIX: Accurate Tie matching based on Rust contract keeping streak identical
                 if (state.currentStreak > streak) {
-                    resultStatus = (data.houseMove === currentMove) ? 'tie' : 'win';
+                    resultStatus = 'win';
+                } else if (state.currentStreak === streak && data.houseMove === currentMove) {
+                    resultStatus = 'tie';
+                } else {
+                    resultStatus = 'loss';
                 }
                 
                 setStreak(state.currentStreak);
@@ -128,15 +147,8 @@ export default function RockPaperScissors() {
                     return newRounds;
                 });
 
-                if (state.currentStreak === 0) {
-                    setTimeout(() => {
-                        setRounds([]);
-                        setSelectedMove(null);
-                        setLockedBet(0);
-                    }, 3000);
-                } else {
-                    setSelectedMove(null); 
-                }
+                // Clear selected move to prompt next action, but LEAVE rounds array intact!
+                setSelectedMove(null); 
             } else {
                 console.error("House failed to resolve:", data.error);
                 setRounds(prev => prev.slice(0, -1));
@@ -191,7 +203,6 @@ export default function RockPaperScissors() {
         }
     };
 
-    // Calculate current total value of the run
     const currentTotalValue = streak > 0 ? (lockedBet * MULTIPLIERS[streak - 1]) : 0;
 
     return (
@@ -204,8 +215,11 @@ export default function RockPaperScissors() {
                 </div>
             </div>
 
-            {/* THE ARENA */}
-            <div className="flex flex-col items-center gap-6 mb-8 w-full min-h-[300px] p-6 bg-black/40 rounded-2xl border border-gray-800">
+            {/* THE ARENA (SCROLLABLE FIX) */}
+            <div 
+                ref={arenaRef}
+                className="flex flex-col items-center gap-6 mb-8 w-full min-h-[300px] max-h-[450px] overflow-y-auto p-6 bg-black/40 rounded-2xl border border-gray-800 scroll-smooth custom-scrollbar"
+            >
                 {rounds.length === 0 && !isProcessing && (
                     <div className="text-gray-500 font-mono uppercase tracking-widest mt-10">
                         Select a fighter to begin
@@ -213,14 +227,16 @@ export default function RockPaperScissors() {
                 )}
 
                 {rounds.map((round, idx) => {
-                    const isSuccess = round.result === 'win' || round.result === 'tie';
-                    const roundMultiplier = MULTIPLIERS[idx];
+                    const isSuccess = round.result === 'win';
+                    // Ties do not advance the multiplier index, so we only show the previous multiplier value
+                    const displayIdx = round.result === 'win' ? idx : Math.max(0, streak - 1);
+                    const roundMultiplier = MULTIPLIERS[displayIdx];
                     const roundPayoutValue = lockedBet * (roundMultiplier || 0);
 
                     return (
                         <div 
                             key={idx} 
-                            className={`w-full max-w-2xl flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-500 ${
+                            className={`w-full max-w-2xl flex-shrink-0 flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-500 ${
                                 round.result === 'win' ? 'border-green-500 bg-green-900/20' : 
                                 round.result === 'loss' ? 'border-red-500 bg-red-900/20' : 
                                 round.result === 'tie' ? 'border-yellow-500 bg-yellow-900/20' : 
@@ -349,7 +365,7 @@ export default function RockPaperScissors() {
                      `LET IT RIDE WITH ${MOVE_MAP[selectedMove].name}`}
                 </button>
 
-                {/* Cashout Button - UPDATED WITH TOTAL SOL */}
+                {/* Cashout Button */}
                 {streak > 0 && !isProcessing && (
                     <button 
                         onClick={settleStreak} 
