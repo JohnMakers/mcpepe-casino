@@ -5,6 +5,7 @@ import { Program, AnchorProvider, web3, BN } from '@coral-xyz/anchor';
 import idl from '../../../idl.json';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 
+// Hardcoded to bypass missing metadata in the new IDL
 const PROGRAM_ID = new PublicKey("9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57");
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
@@ -85,7 +86,6 @@ export default function RockPaperScissors() {
             if (!accountInfo) {
                 console.log("3a. Building Initialize Instruction");
                 try {
-                    // NOTE: This must match the unique name exported in your lib.rs!
                     const initIx = await program.methods.initializeRpsGame()
                         .accountsStrict({
                             gameState: gameStatePda,
@@ -94,15 +94,15 @@ export default function RockPaperScissors() {
                         }).instruction();
                     tx.add(initIx);
                 } catch (err) {
-                    console.error("Failed building init ix. Did you rename it in lib.rs?", err);
+                    console.error("Failed building init ix.", err);
                     throw err;
                 }
             }
 
             console.log("3b. Building Play Instruction");
             try {
-                // Using accountsStrict prevents Anchor from hallucinating missing IDL accounts
-                const playIx = await program.methods.playHand(lamports, move)
+                // FIXED: Changed playHand to rpsPlayHand to match the new IDL
+                const playIx = await program.methods.rpsPlayHand(lamports, move)
                     .accountsStrict({
                         gameState: gameStatePda,
                         vault: vaultPda,
@@ -203,7 +203,8 @@ export default function RockPaperScissors() {
             );
 
             const tx = new web3.Transaction();
-            const settleIx = await program.methods.settleStreak()
+            // FIXED: Changed settleStreak to rpsSettleStreak to match the new IDL
+            const settleIx = await program.methods.rpsSettleStreak()
                 .accountsStrict({
                     gameState: gameStatePda,
                     vault: vaultPda,
