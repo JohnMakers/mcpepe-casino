@@ -51,7 +51,6 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
 
     const isOngoing = rounds.length > 0 && !isGameOver;
 
-    // 🔥 THE FIX: Sync On-Chain Game State on Load
     useEffect(() => {
         if (publicKey && connection) {
             connection.getBalance(publicKey).then(b => setBalance(b / web3.LAMPORTS_PER_SOL));
@@ -69,7 +68,6 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                     setLockedBet(actualLockedBet);
                     setBetAmount(actualLockedBet.toString());
                     
-                    // Manually build fake history to align UI with contract
                     const recoveredRounds = Array(currentOnChainStreak).fill({ 
                         player: 1, house: 3, result: 'win' 
                     });
@@ -187,10 +185,16 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
 
                 setSelectedMove(null); 
             } else {
+                // 🔥 THE FIX: Stop failing silently! Tell the user the backend broke.
+                console.error("House failed to resolve:", data.error);
+                alert(`Casino Error: The House failed to resolve the game. Error: ${data.error}`);
                 setRounds(prev => prev.slice(0, -1));
             }
 
-        } catch (error) {
+        } catch (error: any) {
+            // 🔥 THE FIX: Catch blockchain errors properly
+            console.error("FATAL ERROR IN PLAYHAND:", error);
+            alert(`Blockchain Error: ${error.message || "Simulation failed."}`);
             setRounds(prev => prev.slice(0, -1));
         } finally {
             setIsProcessing(false);
@@ -239,9 +243,10 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
             setIsGameOver(true);
             setStreak(0);
             setSelectedMove(null);
-            setRounds([]); // Clear board on cashout
-        } catch (error) {
+            setRounds([]); 
+        } catch (error: any) {
             console.error("Error claiming:", error);
+            alert(`Claim Error: ${error.message}`);
         } finally {
             setIsProcessing(false);
             connection.getBalance(publicKey).then(b => setBalance(b / web3.LAMPORTS_PER_SOL));

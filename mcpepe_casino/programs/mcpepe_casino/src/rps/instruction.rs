@@ -2,7 +2,6 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
 use crate::rps::state::*;
 use solana_program::hash::hash;
-use std::str::FromStr;
 
 const MULTIPLIERS: [u64; 6] = [19, 36, 68, 130, 245, 465];
 
@@ -40,11 +39,8 @@ pub struct PlayHand<'info> {
 pub struct ResolveHand<'info> {
     #[account(mut)]
     pub game_state: Account<'info, RpsGameState>,
-    // 🔥 THE FIX: Directly injected the true House Pubkey here
-    #[account(
-        mut, 
-        address = Pubkey::from_str("Gf9QEwbxosqQY9bLBrgjKommtX8qPdNqFrKazmHfaZBv").unwrap() @ GameError::InvalidAuthority
-    )]
+    // 🔥 THE FIX: Removed the hardcoded string that was panicking the contract!
+    #[account(mut)]
     pub house_authority: Signer<'info>, 
 }
 
