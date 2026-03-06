@@ -63,18 +63,26 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                 const currentOnChainStreak = state.currentStreak;
                 const actualLockedBet = state.betAmount.toNumber() / web3.LAMPORTS_PER_SOL;
                 
-                if (currentOnChainStreak > 0) {
+                // 🔥 THE FIX: Recover state if there is ANY locked bet, catching Ties at streak 0
+                if (actualLockedBet > 0) {
                     setStreak(currentOnChainStreak);
                     setLockedBet(actualLockedBet);
                     setBetAmount(actualLockedBet.toString());
                     
-                    const recoveredRounds = Array(currentOnChainStreak).fill({ 
+                    const recoveredRounds: RoundHistory[] = Array(currentOnChainStreak).fill({ 
                         player: 1, house: 3, result: 'win' 
                     });
+
+                    if (state.isActive) {
+                        recoveredRounds.push({ player: state.playerMove, house: null, result: 'pending' });
+                    } else if (currentOnChainStreak === 0) {
+                        // Insert a visual tie so the UI knows we are in a Free Replay state
+                        recoveredRounds.push({ player: 1, house: 1, result: 'tie' });
+                    }
+                    
                     setRounds(recoveredRounds);
                 }
-                
-                // If the game is stuck in an active state due to a previous backend drop, force a resolution.
+
                 if (state.isActive) {
                     console.log("⚠️ Stuck active game detected. Asking House to resolve...");
                     setIsProcessing(true);
@@ -87,23 +95,15 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                     .then(res => res.json())
                     .then(data => {
                         if (data.success) {
-                            console.log("✅ Stuck game recovered successfully!");
-                            // Briefly wait for RPC to sync, then reload the clean state
                             setTimeout(() => window.location.reload(), 2000); 
                         } else {
                             setIsProcessing(false);
-                            console.error("Recovery failed:", data.error);
                         }
                     })
-                    .catch((err) => {
-                        console.error("Recovery network error:", err);
-                        setIsProcessing(false);
-                    });
+                    .catch(() => setIsProcessing(false));
                 }
 
-            }).catch(() => {
-                // Ignore: Player hasn't started a game yet.
-            });
+            }).catch(() => {});
         }
     }, [publicKey, connection]);
 
@@ -213,14 +213,12 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
 
                 setSelectedMove(null); 
             } else {
-                // 🔥 THE FIX: Stop failing silently! Tell the user the backend broke.
                 console.error("House failed to resolve:", data.error);
                 alert(`Casino Error: The House failed to resolve the game. Error: ${data.error}`);
                 setRounds(prev => prev.slice(0, -1));
             }
 
         } catch (error: any) {
-            // 🔥 THE FIX: Catch blockchain errors properly
             console.error("FATAL ERROR IN PLAYHAND:", error);
             alert(`Blockchain Error: ${error.message || "Simulation failed."}`);
             setRounds(prev => prev.slice(0, -1));
@@ -320,8 +318,15 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
 
                 {rounds.map((round, idx) => {
                     const isSuccess = round.result === 'win';
-                    const displayIdx = round.result === 'win' ? idx : Math.max(0, streak - 1);
-                    const roundMultiplier = MULTIPLIERS[displayIdx];
+                    
+                    // 🔥 THE FIX: Calculate true multiplier strictly by counting wins, ignoring ties
+                    let winsBefore = 0;
+                    for (let i = 0; i < idx; i++) {
+                        if (rounds[i].result === 'win') winsBefore++;
+                    }
+                    
+                    const displayIdx = winsBefore;
+                    const roundMultiplier = MULTIPLIERS[Math.min(displayIdx, MULTIPLIERS.length - 1)];
                     const roundPayoutValue = lockedBet * (roundMultiplier || 0);
 
                     return (

@@ -39,7 +39,6 @@ pub struct PlayHand<'info> {
 pub struct ResolveHand<'info> {
     #[account(mut)]
     pub game_state: Account<'info, RpsGameState>,
-    // 🔥 THE FIX: Removed the hardcoded string that was panicking the contract!
     #[account(mut)]
     pub house_authority: Signer<'info>, 
 }
@@ -74,7 +73,8 @@ pub fn play_hand(ctx: Context<PlayHand>, bet_amount: u64, player_move: u8) -> Re
     require!(player_move >= 1 && player_move <= 3, GameError::InvalidMove);
     require!(!game_state.is_active, GameError::GameAlreadyActive);
     
-    if game_state.current_streak == 0 {
+    // 🔥 THE FIX: Prevent double charging. Only take SOL if there is no locked bet.
+    if game_state.bet_amount == 0 {
         let cpi_context = CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
             Transfer {
