@@ -538,5 +538,8 @@
       "name": "GameIsActive",
       "msg": "Cannot settle while round is active."
     }
-  ]
+  ],
+  "metadata": {
+    "address": "BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz"
+  }
 }
