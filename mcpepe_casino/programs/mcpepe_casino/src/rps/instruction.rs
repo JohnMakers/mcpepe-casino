@@ -6,7 +6,7 @@ use solana_program::hash::hash;
 const MULTIPLIERS: [u64; 6] = [29, 85, 250, 750, 2200, 6500];
 
 #[derive(Accounts)]
-pub struct InitializeRpsGame<'info> { // <--- RENAMED HERE
+pub struct InitializeRpsGame<'info> {
     #[account(
         init,
         payer = player,
@@ -58,7 +58,6 @@ pub struct SettleStreak<'info> {
     pub system_program: Program<'info, System>,
 }
 
-// <--- RENAMED HERE
 pub fn initialize_rps_game(ctx: Context<InitializeRpsGame>) -> Result<()> { 
     let game_state = &mut ctx.accounts.game_state;
     game_state.player = ctx.accounts.player.key();
@@ -73,8 +72,10 @@ pub fn play_hand(ctx: Context<PlayHand>, bet_amount: u64, player_move: u8) -> Re
     
     require!(player_move >= 1 && player_move <= 3, GameError::InvalidMove);
     
+    // 🔥 THE FIX: The game MUST be inactive to place a new bet, whether it's streak 0 or streak 5.
+    require!(!game_state.is_active, GameError::GameAlreadyActive);
+    
     if game_state.current_streak == 0 {
-        require!(!game_state.is_active, GameError::GameAlreadyActive);
         let cpi_context = CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
             Transfer {
@@ -84,8 +85,6 @@ pub fn play_hand(ctx: Context<PlayHand>, bet_amount: u64, player_move: u8) -> Re
         );
         transfer(cpi_context, bet_amount)?;
         game_state.bet_amount = bet_amount;
-    } else {
-        require!(game_state.is_active, GameError::GameNotActive);
     }
 
     game_state.player_move = player_move;
