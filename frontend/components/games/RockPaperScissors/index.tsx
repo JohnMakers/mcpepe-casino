@@ -5,7 +5,6 @@ import { Program, AnchorProvider, web3, BN } from '@coral-xyz/anchor';
 import idl from '../../../idl.json';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 
-// Hardcoded to bypass missing metadata in the new IDL
 const PROGRAM_ID = new PublicKey("9ea7HNWLSgeNfbo9bYN3EcnstJEmjZF7FPECz58RMx57");
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
@@ -32,7 +31,9 @@ export default function RockPaperScissors() {
     const [balance, setBalance] = useState(0);
     
     const [rounds, setRounds] = useState<RoundHistory[]>([]);
-    const [isBetLocked, setIsBetLocked] = useState(false);
+    
+    // NEW UI STATE: Keeps track of the fighter they clicked before starting
+    const [selectedMove, setSelectedMove] = useState<number | null>(null);
 
     useEffect(() => {
         if (publicKey) {
@@ -45,22 +46,17 @@ export default function RockPaperScissors() {
         setBetAmount((current * factor).toFixed(2));
     };
 
-    const handleStartGame = () => {
-        const wager = parseFloat(betAmount);
-        if (isNaN(wager) || wager <= 0) return alert("Enter a valid bet amount.");
-        if (wager > balance) return alert("Insufficient SOL balance.");
-        
-        setIsBetLocked(true);
-    };
-
-    const playHand = async (move: number) => {
-        if (!publicKey || !wallet.signTransaction) {
-            return alert("Connect Phantom wallet first!");
-        }
+    const handlePlaySubmit = async () => {
+        if (!selectedMove) return alert("Select a fighter first!");
+        if (!publicKey || !wallet.signTransaction) return alert("Connect Phantom wallet first!");
 
         const wager = parseFloat(betAmount);
+        if (streak === 0 && (isNaN(wager) || wager <= 0)) return alert("Enter a valid bet amount.");
+        if (streak === 0 && wager > balance) return alert("Insufficient SOL balance.");
+
         setIsProcessing(true);
-        setRounds(prev => [...prev, { player: move, house: null, result: 'pending' }]);
+        const currentMove = selectedMove; // Lock it in for the UI
+        setRounds(prev => [...prev, { player: currentMove, house: null, result: 'pending' }]);
 
         try {
             console.log("1. Initializing Provider...");
@@ -79,62 +75,43 @@ export default function RockPaperScissors() {
                 program.programId
             );
 
-            console.log("2. Fetching state:", gameStatePda.toBase58());
             const accountInfo = await connection.getAccountInfo(gameStatePda);
             const tx = new web3.Transaction();
 
             if (!accountInfo) {
-                console.log("3a. Building Initialize Instruction");
-                try {
-                    const initIx = await program.methods.initializeRpsGame()
-                        .accountsStrict({
-                            gameState: gameStatePda,
-                            player: publicKey,
-                            systemProgram: SystemProgram.programId,
-                        }).instruction();
-                    tx.add(initIx);
-                } catch (err) {
-                    console.error("Failed building init ix.", err);
-                    throw err;
-                }
-            }
-
-            console.log("3b. Building Play Instruction");
-            try {
-                // FIXED: Changed playHand to rpsPlayHand to match the new IDL
-                const playIx = await program.methods.rpsPlayHand(lamports, move)
+                const initIx = await program.methods.initializeRpsGame()
                     .accountsStrict({
                         gameState: gameStatePda,
-                        vault: vaultPda,
                         player: publicKey,
                         systemProgram: SystemProgram.programId,
                     }).instruction();
-                tx.add(playIx);
-            } catch (err) {
-                console.error("Failed building play ix. Check your IDL.", err);
-                throw err;
+                tx.add(initIx);
             }
 
-            console.log("4. Fetching Blockhash...");
+            const playIx = await program.methods.rpsPlayHand(lamports, currentMove)
+                .accountsStrict({
+                    gameState: gameStatePda,
+                    vault: vaultPda,
+                    player: publicKey,
+                    systemProgram: SystemProgram.programId,
+                }).instruction();
+            tx.add(playIx);
+
             const latestBlockhash = await connection.getLatestBlockhash("confirmed");
             tx.recentBlockhash = latestBlockhash.blockhash;
             tx.feePayer = publicKey;
 
-            console.log("5. Requesting Phantom Signature...");
             const signedTx = await wallet.signTransaction(tx);
-            
-            console.log("6. Sending raw transaction...");
             const serializedTx = signedTx.serialize();
             const signature = await connection.sendRawTransaction(serializedTx, { skipPreflight: false });
             
-            console.log("7. Confirming TX:", signature);
             await connection.confirmTransaction({
                 signature,
                 blockhash: latestBlockhash.blockhash,
                 lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
             });
             
-            console.log("8. Move locked! Pinging Backend...");
+            console.log("Move locked! Pinging Backend...");
             const response = await fetch(`${BACKEND_URL}/api/rps/resolve`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -146,12 +123,11 @@ export default function RockPaperScissors() {
 
             const data = await response.json();
             if (data.success) {
-                console.log("9. House resolved!");
                 const state: any = await program.account.rpsGameState.fetch(gameStatePda);
                 
                 let resultStatus: 'win' | 'loss' | 'tie' = 'loss';
                 if (state.currentStreak > streak) resultStatus = 'win';
-                else if (state.currentStreak === streak && data.houseMove === move) resultStatus = 'tie';
+                else if (state.currentStreak === streak && data.houseMove === currentMove) resultStatus = 'tie';
                 
                 setStreak(state.currentStreak);
                 
@@ -165,20 +141,20 @@ export default function RockPaperScissors() {
                 if (state.currentStreak === 0 && resultStatus !== 'tie') {
                     setTimeout(() => {
                         setRounds([]);
-                        setIsBetLocked(false);
+                        setSelectedMove(null); // Reset choice on loss
                     }, 3000);
+                } else {
+                    setSelectedMove(null); // Reset choice so they have to pick again for next streak
                 }
             } else {
                 console.error("House failed to resolve:", data.error);
                 alert("Backend resolution failed.");
                 setRounds(prev => prev.slice(0, -1));
-                setIsBetLocked(false);
             }
 
         } catch (error) {
             console.error("FATAL ERROR IN PLAYHAND:", error);
             setRounds(prev => prev.slice(0, -1));
-            setIsBetLocked(false); 
         } finally {
             setIsProcessing(false);
             connection.getBalance(publicKey).then(b => setBalance(b / web3.LAMPORTS_PER_SOL));
@@ -203,7 +179,6 @@ export default function RockPaperScissors() {
             );
 
             const tx = new web3.Transaction();
-            // FIXED: Changed settleStreak to rpsSettleStreak to match the new IDL
             const settleIx = await program.methods.rpsSettleStreak()
                 .accountsStrict({
                     gameState: gameStatePda,
@@ -225,7 +200,7 @@ export default function RockPaperScissors() {
             
             setStreak(0);
             setRounds([]);
-            setIsBetLocked(false);
+            setSelectedMove(null);
             alert("Winnings claimed successfully! SOL deposited to wallet.");
         } catch (error) {
             console.error("Error claiming:", error);
@@ -249,7 +224,7 @@ export default function RockPaperScissors() {
             <div className="flex flex-col items-center gap-6 mb-8 w-full min-h-[300px] p-6 bg-black/40 rounded-2xl border border-gray-800">
                 {rounds.length === 0 && !isProcessing && (
                     <div className="text-gray-500 font-mono uppercase tracking-widest mt-10">
-                        {isBetLocked ? 'Waiting for your move...' : 'Place your wager to begin'}
+                        Select a fighter to begin
                     </div>
                 )}
 
@@ -307,10 +282,11 @@ export default function RockPaperScissors() {
             {/* CONTROLS */}
             <div className="w-full max-w-md mx-auto space-y-6">
                 
-                {/* Bet Selector - Beside Start Button */}
+                {/* Bet Selector - Only editable if streak is 0 */}
                 {streak === 0 && (
-                    <div className="flex flex-col sm:flex-row gap-3 w-full">
-                        <div className="flex-1 bg-black border-2 border-gray-800 rounded-xl p-1 flex focus-within:border-green-500">
+                    <div className="flex flex-col gap-2 w-full">
+                        <label className="text-gray-400 text-sm font-bold uppercase tracking-widest pl-1">Wager Amount</label>
+                        <div className="flex-1 bg-black border-2 border-gray-800 rounded-xl p-1 flex focus-within:border-green-500 transition-colors">
                             <input 
                                 type="number" 
                                 min="0" step="0.1"
@@ -320,68 +296,65 @@ export default function RockPaperScissors() {
                                     if (val === "") { setBetAmount(""); return; }
                                     setBetAmount(parseFloat(val) < 0 ? "0" : val);
                                 }} 
-                                disabled={isBetLocked}
+                                disabled={isProcessing}
                                 className="w-full bg-transparent p-3 text-2xl font-mono text-white outline-none pl-4 disabled:opacity-50" 
                             />
                             <div className="flex gap-1 pr-2 items-center">
-                                <button onClick={() => multiplyBet(0.5)} disabled={isBetLocked} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded disabled:opacity-50">1/2</button>
-                                <button onClick={() => multiplyBet(2)} disabled={isBetLocked} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded disabled:opacity-50">2x</button>
-                                <button onClick={() => setBetAmount(balance.toFixed(2))} disabled={isBetLocked} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-xs font-bold rounded disabled:opacity-50">MAX</button>
+                                <button onClick={() => multiplyBet(0.5)} disabled={isProcessing} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded disabled:opacity-50 transition-colors">1/2</button>
+                                <button onClick={() => multiplyBet(2)} disabled={isProcessing} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded disabled:opacity-50 transition-colors">2x</button>
+                                <button onClick={() => setBetAmount(balance.toFixed(2))} disabled={isProcessing} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-xs font-bold rounded disabled:opacity-50 transition-colors">MAX</button>
                             </div>
                         </div>
-
-                        {!isBetLocked && (
-                            <button 
-                                onClick={handleStartGame}
-                                className="px-8 bg-green-500 hover:bg-green-400 text-black font-black text-xl uppercase tracking-widest rounded-xl transition-all shadow-[0_0_15px_rgba(34,197,94,0.4)]"
-                            >
-                                Start
-                            </button>
-                        )}
                     </div>
                 )}
 
-                {/* Move Selectors */}
-                <div className="grid grid-cols-3 gap-4 relative">
-                    {!isBetLocked && streak === 0 && (
-                        <div className="absolute inset-0 z-10 bg-black/60 backdrop-blur-[2px] rounded-xl border border-gray-800 flex items-center justify-center">
-                            <span className="text-gray-400 font-bold uppercase tracking-widest text-sm text-center px-4">
-                                Input bet and click START
-                            </span>
-                        </div>
-                    )}
-
-                    {[1, 2, 3].map((move) => (
-                        <button 
-                            key={move}
-                            onClick={() => playHand(move)}
-                            disabled={isProcessing || (!isBetLocked && streak === 0)}
-                            className="flex flex-col items-center p-4 bg-gray-900 border-2 border-gray-800 rounded-xl hover:border-green-500 hover:bg-green-900/20 transition-all disabled:opacity-50 group cursor-pointer"
-                        >
-                            <div className="w-16 h-16 mb-2 rounded overflow-hidden group-hover:scale-110 transition-transform">
-                                <img src={MOVE_MAP[move].img} alt={MOVE_MAP[move].name} className="w-full h-full object-cover" />
-                            </div>
-                            <span className="font-black uppercase tracking-wider text-gray-300 group-hover:text-white">
-                                {MOVE_MAP[move].name}
-                            </span>
-                        </button>
-                    ))}
+                {/* Move Selectors - Click to visually select */}
+                <div className="grid grid-cols-3 gap-4">
+                    {[1, 2, 3].map((move) => {
+                        const isSelected = selectedMove === move;
+                        return (
+                            <button 
+                                key={move}
+                                onClick={() => setSelectedMove(move)}
+                                disabled={isProcessing}
+                                className={`flex flex-col items-center p-4 bg-gray-900 border-2 rounded-xl transition-all disabled:opacity-50 group cursor-pointer ${
+                                    isSelected 
+                                        ? 'border-green-500 bg-green-900/30 scale-105 shadow-[0_0_15px_rgba(34,197,94,0.3)]' 
+                                        : 'border-gray-800 hover:border-gray-500'
+                                }`}
+                            >
+                                <div className="w-16 h-16 mb-2 rounded overflow-hidden">
+                                    <img src={MOVE_MAP[move].img} alt={MOVE_MAP[move].name} className="w-full h-full object-cover" />
+                                </div>
+                                <span className={`font-black uppercase tracking-wider ${isSelected ? 'text-green-400' : 'text-gray-400'}`}>
+                                    {MOVE_MAP[move].name}
+                                </span>
+                            </button>
+                        );
+                    })}
                 </div>
 
-                {/* Animated Subtitle */}
-                {(isBetLocked || streak > 0) && !isProcessing && (
-                    <div className="mt-4 text-center animate-fade-in transition-all duration-500">
-                        <h3 className="text-xl font-black text-yellow-500 uppercase tracking-widest animate-pulse drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]">
-                            Select Your Fighter
-                        </h3>
-                    </div>
-                )}
+                {/* The Master Action Button */}
+                <button 
+                    onClick={handlePlaySubmit}
+                    disabled={!selectedMove || isProcessing}
+                    className={`w-full py-5 text-black font-black text-xl uppercase tracking-widest rounded-xl transition-all ${
+                        !selectedMove || isProcessing 
+                            ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
+                            : 'bg-green-500 hover:bg-green-400 shadow-[0_0_20px_rgba(34,197,94,0.4)] hover:scale-[1.02]'
+                    }`}
+                >
+                    {isProcessing ? 'Processing...' : 
+                     !selectedMove ? 'Select A Fighter First' : 
+                     streak === 0 ? `START BATTLE WITH ${MOVE_MAP[selectedMove].name}` : 
+                     `LET IT RIDE WITH ${MOVE_MAP[selectedMove].name}`}
+                </button>
 
                 {/* Cashout Button */}
                 {streak > 0 && !isProcessing && (
                     <button 
                         onClick={settleStreak} 
-                        className="w-full py-5 mt-4 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-2xl uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all animate-bounce-short"
+                        className="w-full py-5 mt-2 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xl uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all hover:scale-[1.02]"
                     >
                         💰 Cash Out Winnings
                     </button>
