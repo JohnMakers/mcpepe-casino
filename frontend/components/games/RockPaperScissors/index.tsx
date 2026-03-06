@@ -49,12 +49,35 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
 
     const arenaRef = useRef<HTMLDivElement>(null);
 
-    // Determines if we are in the middle of a continuous session (including ties on streak 0)
     const isOngoing = rounds.length > 0 && !isGameOver;
 
+    // 🔥 THE FIX: Sync On-Chain Game State on Load
     useEffect(() => {
-        if (publicKey) {
+        if (publicKey && connection) {
             connection.getBalance(publicKey).then(b => setBalance(b / web3.LAMPORTS_PER_SOL));
+            
+            const provider = new AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
+            const program = new Program(idl as any, PROGRAM_ID, provider);
+            const [gameStatePda] = PublicKey.findProgramAddressSync([Buffer.from("rps_game"), publicKey.toBuffer()], program.programId);
+            
+            program.account.rpsGameState.fetch(gameStatePda).then((state: any) => {
+                const currentOnChainStreak = state.currentStreak;
+                const actualLockedBet = state.betAmount.toNumber() / web3.LAMPORTS_PER_SOL;
+                
+                if (currentOnChainStreak > 0) {
+                    setStreak(currentOnChainStreak);
+                    setLockedBet(actualLockedBet);
+                    setBetAmount(actualLockedBet.toString());
+                    
+                    // Manually build fake history to align UI with contract
+                    const recoveredRounds = Array(currentOnChainStreak).fill({ 
+                        player: 1, house: 3, result: 'win' 
+                    });
+                    setRounds(recoveredRounds);
+                }
+            }).catch(() => {
+                // Ignore: Player hasn't started a game yet.
+            });
         }
     }, [publicKey, connection]);
 
@@ -216,6 +239,7 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
             setIsGameOver(true);
             setStreak(0);
             setSelectedMove(null);
+            setRounds([]); // Clear board on cashout
         } catch (error) {
             console.error("Error claiming:", error);
         } finally {
@@ -326,7 +350,6 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
 
             <div className="w-full max-w-md mx-auto space-y-6">
                 
-                {/* Wager Input disappears when a game is actively ongoing (including tied state) */}
                 {(!isOngoing) && (
                     <div className="flex flex-col gap-2 w-full animate-fade-in">
                         <label className="text-gray-400 text-sm font-bold uppercase tracking-widest pl-1">Wager Amount</label>

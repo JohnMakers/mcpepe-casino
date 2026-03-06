@@ -7,7 +7,6 @@ const anchor = require('@coral-xyz/anchor');
 
 const idl = require('./idl.json'); 
 
-// 🛡️ THE MASTER FIX: Forcefully inject missing properties into the IDL.
 if (!idl.types) idl.types = [];
 
 const PROGRAM_ID_STRING = "BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz";
@@ -16,7 +15,6 @@ idl.address = PROGRAM_ID_STRING;
 if (!idl.metadata) idl.metadata = {};
 idl.metadata.address = PROGRAM_ID_STRING;
 
-// Catch the Silent Assassins
 process.on('uncaughtException', (err) => console.error('FATAL CRASH (Exception):', err));
 process.on('unhandledRejection', (err) => console.error('FATAL CRASH (Rejection):', err));
 
@@ -49,7 +47,7 @@ console.log(`🔌 Connected to RPC: ${RPC_URL.includes("api.devnet") ? "Public (
 const activeWhackdGames = new Map(); 
 
 // ==========================================
-// COINFLIP ENDPOINT (NUCLEAR OPTION)
+// COINFLIP ENDPOINT
 // ==========================================
 app.post('/api/play-coinflip', async (req, res) => {
     try {
@@ -72,7 +70,6 @@ app.post('/api/play-coinflip', async (req, res) => {
             playerPubkeyObj = playIx.keys[1].pubkey;
         }
 
-        // 1. Broadcast Wager
         tx.partialSign(houseKeypair);
         const playSignature = await connection.sendRawTransaction(tx.serialize());
         
@@ -105,21 +102,12 @@ app.post('/api/play-coinflip', async (req, res) => {
 
         if (!accountReady) throw new Error("Network failed to sync the game state in time.");
 
-        // ☢️ THE NUCLEAR OPTION: Raw Binary Instruction Construction
-        // We bypass Anchor entirely and manually build the instruction buffer
-        
-        // 1. Calculate the 8-byte discriminator for "global:resolve_coinflip"
         const sighash = crypto.createHash('sha256').update("global:resolve_coinflip").digest().slice(0, 8);
-        
-        // 2. Encode the unhashedServerSeed argument (String)
         const seedBuffer = Buffer.from(unhashedServerSeed, 'utf8');
         const seedLengthBuffer = Buffer.alloc(4);
         seedLengthBuffer.writeUInt32LE(seedBuffer.length, 0);
-        
-        // 3. Combine them into the instruction data
         const ixData = Buffer.concat([sighash, seedLengthBuffer, seedBuffer]);
 
-        // 4. Construct the raw TransactionInstruction
         const resolveIx = new anchor.web3.TransactionInstruction({
             programId: PROGRAM_ID,
             keys: [
@@ -160,16 +148,11 @@ app.post('/api/play-coinflip', async (req, res) => {
             }
         }
 
-        res.json({ 
-            success: true, 
-            resolveSignature, 
-            houseMove,
-            serverSeedHash: hashedCommitment.toString('hex'),
-            serverSalt: secretSalt.toString('hex') 
-        });
+        // 🔥 THE FIX: Coinflip specific success response
+        res.json({ success: true, resolveSignature });
 
     } catch (error) {
-        console.error("❌ RPS Resolve Error:", error);
+        console.error("❌ Coinflip Resolve Error:", error);
         res.status(500).json({ success: false, error: error.message || JSON.stringify(error) });
     }
 });
@@ -177,7 +160,6 @@ app.post('/api/play-coinflip', async (req, res) => {
 // ==========================================
 // WHACKD! (MINES) ENDPOINTS
 // ==========================================
-
 app.post('/api/whackd/init', (req, res) => {
     try {
         const { playerPubkey, gamePubkey, clientSeed, mineCount, betAmount } = req.body;
@@ -235,7 +217,6 @@ app.post('/api/whackd/click', async (req, res) => {
 
         if (hitBomb) {
             game.status = "busted";
-            // Don't await the blockchain, let it process in the background
             resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, false)
                 .catch(err => console.error("On-chain bust resolution failed:", err));
                 
@@ -245,28 +226,6 @@ app.post('/api/whackd/click', async (req, res) => {
         }
     } catch (error) {
         console.error("❌ Click Error:", error);
-        const safeError = error.message ? error.message : JSON.stringify(error);
-        res.status(500).json({ success: false, error: safeError });
-    }
-});
-
-app.post('/api/whackd/cashout', async (req, res) => {
-    try {
-        const { playerPubkey } = req.body;
-        const game = activeWhackdGames.get(playerPubkey);
-
-        if (!game || game.status === "busted") {
-            return res.status(400).json({ success: false, error: "Invalid cashout." });
-        }
-
-        game.status = "cashed_out";
-        // 🔥 FIRE AND FORGET: Instant UI feedback, blockchain resolves in the background!
-        resolveWhackdOnChain(playerPubkey, game.serverSeed, game.revealedMask, true)
-            .catch(err => console.error("On-chain cashout resolution failed:", err));
-        
-        res.json({ success: true, serverSeed: game.serverSeed });
-    } catch (error) {
-        console.error("❌ Cashout Error:", error);
         const safeError = error.message ? error.message : JSON.stringify(error);
         res.status(500).json({ success: false, error: safeError });
     }
@@ -292,9 +251,7 @@ app.post('/api/whackd/cashout', async (req, res) => {
     }
 });
 
-// The House signs the transaction on Devnet
-// The House signs the transaction on Devnet
-    async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, revealedMask, isCashout) {
+async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, revealedMask, isCashout) {
     try {
         console.log(`[HOUSE] Resolving Whackd for ${playerPubkeyStr} on-chain...`);
         
@@ -309,8 +266,6 @@ app.post('/api/whackd/cashout', async (req, res) => {
             PROGRAM_ID 
         );
 
-        // ☢️ THE NUCLEAR OPTION: Raw Binary Instruction Construction
-        // Bypassing Anchor's AccountResolver to prevent 500 crashes
         const sighash = crypto.createHash('sha256').update("global:resolve_whackd").digest().slice(0, 8);
         
         const seedBuffer = Buffer.from(unhashedServerSeed, 'utf8');
@@ -387,19 +342,14 @@ app.post('/api/rps/resolve', async (req, res) => {
         const playerPubkey = new anchor.web3.PublicKey(playerPubkeyStr);
         const gameStatePubkey = new anchor.web3.PublicKey(gameStatePubkeyStr);
 
-        // 1. Generate House Cryptography
-        // 1: Rock, 2: Paper, 3: Scissors
         const houseMove = Math.floor(Math.random() * 3) + 1; 
         const secretSalt = crypto.randomBytes(16);
         
-        // Create Commitment Hash: sha256(house_move + salt)
         const preimage = Buffer.concat([Buffer.from([houseMove]), secretSalt]);
         const hashedCommitment = crypto.createHash('sha256').update(preimage).digest();
 
-        // 2. Prepare Transaction using the Nuclear Option (Binary Bypass)
         const sighash = crypto.createHash('sha256').update("global:rps_resolve_hand").digest().slice(0, 8);
         
-        // Encode arguments: house_move (u8), secret_salt ([u8; 16]), hashed_commitment ([u8; 32])
         const moveBuffer = Buffer.from([houseMove]);
         const ixData = Buffer.concat([sighash, moveBuffer, secretSalt, hashedCommitment]);
 
@@ -442,7 +392,14 @@ app.post('/api/rps/resolve', async (req, res) => {
             }
         }
 
-        res.json({ success: true, resolveSignature, houseMove });
+        // 🔥 THE FIX: Added RPS provably fair properties back here
+        res.json({ 
+            success: true, 
+            resolveSignature, 
+            houseMove,
+            serverSeedHash: hashedCommitment.toString('hex'),
+            serverSalt: secretSalt.toString('hex') 
+        });
 
     } catch (error) {
         console.error("❌ RPS Resolve Error:", error);
@@ -450,9 +407,6 @@ app.post('/api/rps/resolve', async (req, res) => {
     }
 });
 
-// ==========================================
-// SERVER INITIALIZATION
-// ==========================================
 setInterval(() => {}, 1000 * 60 * 60);
 
 const PORT = process.env.PORT || 3005;
