@@ -18,4 +18,6 @@ pub enum CustomError {
     MathOverflow,
     #[msg("Resolution state must be either a cashout or a bust.")]
     InvalidResolutionState,
+    #[msg("The total wager does not match the sum of the individual bets.")]
+    WagerMismatch,
 }

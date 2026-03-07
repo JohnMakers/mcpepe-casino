@@ -4,10 +4,12 @@ pub mod errors;
 pub mod coinflip;
 pub mod whackd; 
 pub mod rps;
+pub mod roulette;
 
 use coinflip::*;
 use whackd::*;  
 use rps::*;
+use roulette::*;
 
 declare_id!("BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz");
 
@@ -60,5 +62,24 @@ pub mod mcpepe_casino {
 
     pub fn rps_settle_streak(ctx: Context<SettleStreak>) -> Result<()> {
         rps::settle_streak(ctx)
+    }
+
+    // --- ROULETTE ROUTES ---
+    pub fn start_roulette(
+        ctx: Context<StartRoulette>, 
+        server_seed_hash: [u8; 32], 
+        client_seed: String, 
+        nonce: u64, 
+        bets: Vec<RouletteBet>, 
+        total_wager: u64
+    ) -> Result<()> {
+        roulette::start_roulette(ctx, server_seed_hash, client_seed, nonce, bets, total_wager)
+    }
+
+    pub fn resolve_roulette(
+        ctx: Context<ResolveRoulette>, 
+        unhashed_server_seed: String
+    ) -> Result<()> {
+        roulette::resolve_roulette(ctx, unhashed_server_seed)
     }
 }

@@ -407,6 +407,100 @@ app.post('/api/rps/resolve', async (req, res) => {
     }
 });
 
+// ==========================================
+// ROULETTE ENDPOINTS
+// ==========================================
+app.post('/api/roulette/seed', (req, res) => {
+    try {
+        const serverSeed = crypto.randomBytes(32).toString('hex');
+        const serverSeedHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
+        
+        // For Devnet testing we return the unhashed seed to the client so it can be verified.
+        // In Mainnet, store serverSeed in a DB and ONLY return the Hash!
+        res.json({ 
+            success: true,
+            serverSeedHash, 
+            serverSeed 
+        });
+    } catch (error) {
+        console.error("❌ Roulette Seed Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/roulette/resolve', async (req, res) => {
+    try {
+        const { playerPublicKey, serverSeed, gamePda } = req.body;
+        
+        if (!playerPublicKey || !serverSeed || !gamePda) {
+            return res.status(400).json({ success: false, error: "Missing required parameters" });
+        }
+
+        const playerPubkeyObj = new anchor.web3.PublicKey(playerPublicKey);
+        const gameStatePubkeyObj = new anchor.web3.PublicKey(gamePda);
+        const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("vault")], 
+            PROGRAM_ID 
+        );
+
+        // Build the raw instruction data exactly like Coinflip to ensure RPC compatibility
+        const sighash = crypto.createHash('sha256').update("global:resolve_roulette").digest().slice(0, 8);
+        const seedBuffer = Buffer.from(serverSeed, 'utf8');
+        const seedLengthBuffer = Buffer.alloc(4);
+        seedLengthBuffer.writeUInt32LE(seedBuffer.length, 0);
+        const ixData = Buffer.concat([sighash, seedLengthBuffer, seedBuffer]);
+
+        const resolveIx = new anchor.web3.TransactionInstruction({
+            programId: PROGRAM_ID,
+            keys: [
+                { pubkey: gameStatePubkeyObj, isSigner: false, isWritable: true },
+                { pubkey: playerPubkeyObj, isSigner: false, isWritable: true },
+                { pubkey: vaultPDA, isSigner: false, isWritable: true },
+                { pubkey: houseKeypair.publicKey, isSigner: true, isWritable: true },
+                { pubkey: anchor.web3.SystemProgram.programId, isSigner: false, isWritable: false },
+            ],
+            data: ixData
+        });
+
+        console.log(`[HOUSE] Resolving Roulette for ${playerPublicKey.substring(0,8)}...`);
+
+        let resolveSignature;
+        let retries = 10;
+        
+        while (retries > 0) {
+            try {
+                const resolveTx = new anchor.web3.Transaction().add(resolveIx);
+                const freshBlockhash = await connection.getLatestBlockhash("confirmed");
+                resolveTx.recentBlockhash = freshBlockhash.blockhash;
+                resolveTx.feePayer = houseKeypair.publicKey;
+                resolveTx.sign(houseKeypair);
+
+                resolveSignature = await connection.sendRawTransaction(resolveTx.serialize(), { skipPreflight: true });
+                
+                await connection.confirmTransaction({
+                    signature: resolveSignature,
+                    blockhash: freshBlockhash.blockhash,
+                    lastValidBlockHeight: freshBlockhash.lastValidBlockHeight
+                }, "confirmed");
+
+                break; 
+            } catch (err) {
+                console.log(`⚠️ Network retry... (${retries} left). Error: ${err.message}`);
+                await new Promise(r => setTimeout(r, 2000));
+                retries--;
+                if (retries === 0) throw new Error("Resolution completely failed after 10 forced attempts.");
+            }
+        }
+
+        console.log(`✅ [HOUSE] Roulette Resolved successfully! TX: ${resolveSignature}`);
+        res.json({ success: true, txSignature: resolveSignature });
+
+    } catch (error) {
+        console.error("❌ Roulette Resolve Error:", error);
+        res.status(500).json({ success: false, error: error.message || JSON.stringify(error) });
+    }
+});
+
 setInterval(() => {}, 1000 * 60 * 60);
 
 const PORT = process.env.PORT || 3005;
