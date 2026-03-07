@@ -63,7 +63,6 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                 const currentOnChainStreak = state.currentStreak;
                 const actualLockedBet = state.betAmount.toNumber() / web3.LAMPORTS_PER_SOL;
                 
-                // 🔥 THE FIX: Recover state if there is ANY locked bet, catching Ties at streak 0
                 if (actualLockedBet > 0) {
                     setStreak(currentOnChainStreak);
                     setLockedBet(actualLockedBet);
@@ -76,7 +75,6 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                     if (state.isActive) {
                         recoveredRounds.push({ player: state.playerMove, house: null, result: 'pending' });
                     } else if (currentOnChainStreak === 0) {
-                        // Insert a visual tie so the UI knows we are in a Free Replay state
                         recoveredRounds.push({ player: 1, house: 1, result: 'tie' });
                     }
                     
@@ -113,7 +111,8 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
 
     const multiplyBet = (factor: number) => {
         const current = parseFloat(betAmount) || 0;
-        setBetAmount((current * factor).toFixed(2));
+        // 🔥 THE FIX: Allow up to 3 decimals on multiplier logic
+        setBetAmount(parseFloat((current * factor).toFixed(3)).toString());
     };
 
     const handlePlaySubmit = async () => {
@@ -194,8 +193,9 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                     resultStatus = 'loss';
                     setIsGameOver(true);
                     
+                    // 🔥 THE FIX: Log true TX hash and real player move on Loss
                     if (logWager) {
-                        logWager('Rock Paper Scissors', actualLockedBet || wager, false, 0, data.serverSeedHash, "player_seed");
+                        logWager('Rock Paper Scissors', actualLockedBet || wager, false, 0, data.resolveSignature, MOVE_MAP[currentMove].name);
                     }
                 }
                 
@@ -262,8 +262,9 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                 colors: ['#22c55e', '#eab308', '#ffffff']
             });
 
+            // 🔥 THE FIX: Log true TX hash and real streak context on Cashout
             if (logWager) {
-                logWager('Rock Paper Scissors', lockedBet, true, lockedBet * MULTIPLIERS[streak - 1], currentPfData?.hash || "unknown", "player_seed");
+                logWager('Rock Paper Scissors', lockedBet, true, lockedBet * MULTIPLIERS[streak - 1], signature, `Streak x${streak}`);
             }
             
             setIsGameOver(true);
@@ -319,7 +320,6 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                 {rounds.map((round, idx) => {
                     const isSuccess = round.result === 'win';
                     
-                    // 🔥 THE FIX: Calculate true multiplier strictly by counting wins, ignoring ties
                     let winsBefore = 0;
                     for (let i = 0; i < idx; i++) {
                         if (rounds[i].result === 'win') winsBefore++;
@@ -359,9 +359,10 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                                             {round.result === 'win' ? 'VICTORY' : round.result === 'loss' ? 'REKT' : 'TIE (FREE REPLAY)'}
                                         </div>
                                         
+                                        {/* 🔥 THE FIX: Showing 3 decimal payout correctly */}
                                         {isSuccess && (
                                             <div className="mt-2 px-3 py-1 bg-black/50 rounded-lg text-green-400 font-mono text-sm font-bold border border-green-500/30">
-                                                {roundMultiplier}x (+{roundPayoutValue.toFixed(2)} SOL)
+                                                {roundMultiplier}x (+{parseFloat(roundPayoutValue.toFixed(3)).toString()} SOL)
                                             </div>
                                         )}
                                     </div>
@@ -394,7 +395,7 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                         <div className="flex-1 bg-black border-2 border-gray-800 rounded-xl p-1 flex focus-within:border-green-500 transition-colors">
                             <input 
                                 type="number" 
-                                min="0" step="0.1"
+                                min="0" step="0.001" // 🔥 THE FIX: Updated HTML Step Input
                                 value={betAmount} 
                                 onChange={(e) => {
                                     const val = e.target.value;
@@ -407,7 +408,8 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                             <div className="flex gap-1 pr-2 items-center">
                                 <button onClick={() => multiplyBet(0.5)} disabled={isProcessing} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded disabled:opacity-50 transition-colors">1/2</button>
                                 <button onClick={() => multiplyBet(2)} disabled={isProcessing} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-gray-400 text-xs font-bold rounded disabled:opacity-50 transition-colors">2x</button>
-                                <button onClick={() => setBetAmount(balance.toFixed(2))} disabled={isProcessing} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-xs font-bold rounded disabled:opacity-50 transition-colors">MAX</button>
+                                {/* 🔥 THE FIX: Max button allows 3 decimals */}
+                                <button onClick={() => setBetAmount(parseFloat(balance.toFixed(3)).toString())} disabled={isProcessing} className="px-3 py-2 bg-[#111a14] hover:bg-[#16221a] text-green-500 text-xs font-bold rounded disabled:opacity-50 transition-colors">MAX</button>
                             </div>
                         </div>
                     </div>
@@ -460,8 +462,9 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                         className="w-full py-5 mt-2 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xl uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all hover:scale-[1.02] flex flex-col items-center justify-center leading-tight"
                     >
                         <span>💰 Cash Out Winnings</span>
+                        {/* 🔥 THE FIX: Cashout total to 3 decimals */}
                         <span className="text-sm font-bold opacity-80 mt-1">
-                            TOTAL: {currentTotalValue.toFixed(2)} SOL
+                            TOTAL: {parseFloat(currentTotalValue.toFixed(3)).toString()} SOL
                         </span>
                     </button>
                 )}
