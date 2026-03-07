@@ -195,10 +195,9 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                     
                     // 🔥 THE FIX: Log true TX hash and real player move on Loss
                     if (logWager) {
-                        logWager('Rock Paper Scissors', actualLockedBet || wager, false, 0, data.resolveSignature, MOVE_MAP[currentMove].name);
+                        logWager('Rock Paper Scissors', actualLockedBet || wager, false, 0, data.resolveSignature, `${MOVE_MAP[currentMove].name} (Salt: ${data.serverSalt.substring(0, 8)})`);
+                        }
                     }
-                }
-                
                 setStreak(state.currentStreak);
                 
                 const pfObj = { hash: data.serverSeedHash, salt: data.serverSalt };
@@ -264,7 +263,7 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
 
             // 🔥 THE FIX: Log true TX hash and real streak context on Cashout
             if (logWager) {
-                logWager('Rock Paper Scissors', lockedBet, true, lockedBet * MULTIPLIERS[streak - 1], signature, `Streak x${streak}`);
+                logWager('Rock Paper Scissors', lockedBet, true, lockedBet * MULTIPLIERS[streak - 1], signature, `x${streak} Cashout (Salt: ${currentPfData?.salt?.substring(0, 8) || "N/A"})`);
             }
             
             setIsGameOver(true);
