@@ -726,38 +726,48 @@
   "errors": [
     {
       "code": 6000,
-      "name": "InvalidMove",
-      "msg": "Invalid move selected."
+      "name": "GameNotActive",
+      "msg": "The game is currently inactive."
     },
     {
       "code": 6001,
-      "name": "GameAlreadyActive",
-      "msg": "Game is already active. Awaiting house resolution."
+      "name": "InvalidGuess",
+      "msg": "Guess must be 0 (Heads) or 1 (Tails)."
     },
     {
       "code": 6002,
-      "name": "GameNotActive",
-      "msg": "Game is not active."
+      "name": "SeedMismatch",
+      "msg": "Server seed hash does not match the commitment. The House tried to cheat!"
     },
     {
       "code": 6003,
-      "name": "InvalidHash",
-      "msg": "House commitment hash mismatch."
+      "name": "InvalidMineCount",
+      "msg": "Mine count must be between 1 and 24."
     },
     {
       "code": 6004,
-      "name": "NoWinnings",
-      "msg": "No winnings to claim."
+      "name": "InvalidBetAmount",
+      "msg": "Bet amount must be greater than 0."
     },
     {
       "code": 6005,
-      "name": "GameIsActive",
-      "msg": "Cannot settle while round is active."
+      "name": "GameAlreadyResolved",
+      "msg": "Game has already been resolved or closed."
     },
     {
       "code": 6006,
-      "name": "InvalidAuthority",
-      "msg": "Invalid House Authority signer."
+      "name": "MathOverflow",
+      "msg": "Math logic overflowed during calculation."
+    },
+    {
+      "code": 6007,
+      "name": "InvalidResolutionState",
+      "msg": "Resolution state must be either a cashout or a bust."
+    },
+    {
+      "code": 6008,
+      "name": "WagerMismatch",
+      "msg": "The total wager does not match the sum of the individual bets."
     }
   ],
   "metadata": {

@@ -12,11 +12,9 @@ pub fn start_roulette(
 ) -> Result<()> {
     let game_state = &mut ctx.accounts.game_state;
     
-    // Validate total wager matches sum of bets
     let calculated_wager: u64 = bets.iter().map(|b| b.amount).sum();
     require!(calculated_wager == total_wager, CustomError::WagerMismatch); 
     
-    // Transfer SOL to Vault
     let cpi_context = CpiContext::new(
         ctx.accounts.system_program.to_account_info(),
         anchor_lang::system_program::Transfer {
@@ -42,29 +40,24 @@ pub fn resolve_roulette(ctx: Context<ResolveRoulette>, unhashed_server_seed: Str
     let game_state = &mut ctx.accounts.game_state;
     require!(game_state.is_active, CustomError::GameNotActive);
 
-    // Verify Provably Fair Hash
     let revealed_hash = anchor_lang::solana_program::hash::hash(unhashed_server_seed.as_bytes());
     require!(
         game_state.server_seed_hash == revealed_hash.to_bytes(),
         CustomError::SeedMismatch
     );
 
-    // Generate outcome (0-36)
     let mut combined_data = String::new();
     combined_data.push_str(&unhashed_server_seed);
     combined_data.push_str(&game_state.client_seed);
     combined_data.push_str(&game_state.nonce.to_string());
     
     let outcome_hash = anchor_lang::solana_program::hash::hash(combined_data.as_bytes());
-    
-    // Turn first bytes into a number between 0 and 36
     let hash_bytes = outcome_hash.to_bytes();
     let raw_number = u32::from_le_bytes([hash_bytes[0], hash_bytes[1], hash_bytes[2], hash_bytes[3]]);
     let winning_number = (raw_number % 37) as u8;
 
     let mut total_payout: u64 = 0;
 
-    // Calculate payouts for all bets
     for bet in &game_state.bets {
         if is_winning_bet(bet, winning_number) {
             let multiplier = get_multiplier(&bet.bet_type);
@@ -72,21 +65,10 @@ pub fn resolve_roulette(ctx: Context<ResolveRoulette>, unhashed_server_seed: Str
         }
     }
 
-    // Payout if user won
     if total_payout > 0 {
-        let bump = ctx.bumps.vault;
-        let seeds = &[b"vault".as_ref(), &[bump]];
-        let signer = &[&seeds[..]];
-
-        let cpi_context = CpiContext::new_with_signer(
-            ctx.accounts.system_program.to_account_info(),
-            anchor_lang::system_program::Transfer {
-                from: ctx.accounts.vault.to_account_info(),
-                to: ctx.accounts.player.to_account_info(),
-            },
-            signer,
-        );
-        anchor_lang::system_program::transfer(cpi_context, total_payout)?;
+        // Direct lamport mutation prevents silent CPI reverting failures
+        **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? = ctx.accounts.vault.to_account_info().lamports().checked_sub(total_payout).unwrap();
+        **ctx.accounts.player.to_account_info().try_borrow_mut_lamports()? = ctx.accounts.player.to_account_info().lamports().checked_add(total_payout).unwrap();
     }
 
     game_state.is_active = false;
@@ -102,7 +84,7 @@ fn is_winning_bet(bet: &RouletteBet, winning_number: u8) -> bool {
         BetType::Street => bet.data[0] == winning_number || bet.data[1] == winning_number || bet.data[2] == winning_number,
         BetType::Corner => bet.data.contains(&winning_number),
         BetType::Line => winning_number >= bet.data[0] && winning_number <= bet.data[0] + 5 && winning_number != 0,
-        BetType::Basket => winning_number <= 3, // 0, 1, 2, 3
+        BetType::Basket => winning_number <= 3, 
         BetType::Column => {
             if winning_number == 0 { false }
             else if bet.data[0] == 1 { winning_number % 3 == 1 } 
@@ -136,7 +118,7 @@ fn is_winning_bet(bet: &RouletteBet, winning_number: u8) -> bool {
 
 fn get_multiplier(bet_type: &BetType) -> u64 {
     match bet_type {
-        BetType::StraightUp => 36, // Pays 35:1 + original bet = 36x
+        BetType::StraightUp => 36, 
         BetType::Split => 18,
         BetType::Street => 12,
         BetType::Corner => 9,
@@ -153,12 +135,10 @@ fn get_multiplier(bet_type: &BetType) -> u64 {
 #[derive(Accounts)]
 #[instruction(server_seed_hash: [u8; 32], client_seed: String, nonce: u64, bets: Vec<RouletteBet>)]
 pub struct StartRoulette<'info> {
-    // THE FIX: Replaced math with a raw literal 1024. This stops the macro from crashing.
     #[account(init, payer = player, space = 1024)] 
     pub game_state: Box<Account<'info, RouletteGameState>>,
     #[account(mut)]
     pub player: Signer<'info>,
-    // THE FIX: SystemAccount has no underlying data structure to bloat the stack, so boxing it confuses the macro.
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: SystemAccount<'info>,
     /// CHECK: Master Authority
@@ -168,7 +148,6 @@ pub struct StartRoulette<'info> {
 
 #[derive(Accounts)]
 pub struct ResolveRoulette<'info> {
-    // THE FIX: We also want to refund the SOL rent to the player when the game_state closes.
     #[account(mut, has_one = authority, has_one = player, close = player)]
     pub game_state: Box<Account<'info, RouletteGameState>>,
     #[account(mut)]
