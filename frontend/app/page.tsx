@@ -11,7 +11,9 @@ import ProvablyFairModal from "../components/modals/ProvablyFairModal";
 import ReceiptModal from "../components/modals/ReceiptModal";
 import CoinflipGame from "../components/games/Coinflip";
 import WhackdGame from "../components/games/Whackd"; 
-import RockPaperScissorsGame from "../components/games/RockPaperScissors"; 
+import RockPaperScissorsGame from "../components/games/RockPaperScissors";
+// ADDED IMPORT
+import RouletteGame from "../components/games/Roulette"; 
 
 const INITIAL_BETS = [
   { id: "tx1", player: "8xTq...3pZx", game: "Coinflip", amount: 2.5, win: true, hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", clientSeed: "degen_1" },
@@ -59,7 +61,7 @@ export default function Dashboard() {
     const newBet = {
       id: Math.random().toString(36).substring(2, 10), 
       player: publicKey ? publicKey.toBase58().substring(0, 4) + "..." + publicKey.toBase58().slice(-4) : "Anon",
-      game, amount: win ? payout : wager, win, wager, payout, hash, clientSeed: seed // Safely appended wager and payout to map to RightSidebar
+      game, amount: win ? payout : wager, win, wager, payout, hash, clientSeed: seed
     };
     setRecentBets(prev => [newBet, ...prev].slice(0, 20));
   };
@@ -94,6 +96,8 @@ export default function Dashboard() {
                   <button onClick={() => setActiveGame('coinflip')} className="bg-transparent border border-green-500 text-green-500 hover:bg-green-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Coinflip</button>
                   <button onClick={() => setActiveGame('whackd')} className="bg-green-500 hover:bg-green-400 text-black px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4 shadow-[0_0_15px_rgba(34,197,94,0.2)]">Play Whackd!</button>
                   <button onClick={() => setActiveGame('rps')} className="bg-transparent border border-yellow-500 text-yellow-500 hover:bg-yellow-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Play RPS</button>
+                  {/* ADDED ROULETTE BUTTON */}
+                  <button onClick={() => setActiveGame('roulette')} className="bg-transparent border border-blue-500 text-blue-500 hover:bg-blue-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Pepe Roulette</button>
               </div>
             </div>
           )}
@@ -114,6 +118,14 @@ export default function Dashboard() {
 
           {activeGame === 'rps' && (
              <RockPaperScissorsGame logWager={logWager} />
+          )}
+
+          {/* ADDED ROULETTE COMPONENT RENDER BLOCK */}
+          {activeGame === 'roulette' && (
+             <RouletteGame 
+               balance={balance} setBalance={setBalance} logWager={logWager} 
+               setShowProvablyFair={setShowProvablyFair} 
+             />
           )}
         </main>
 
