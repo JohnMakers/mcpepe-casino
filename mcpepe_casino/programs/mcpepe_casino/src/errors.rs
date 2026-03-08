@@ -20,4 +20,6 @@ pub enum CustomError {
     InvalidResolutionState,
     #[msg("The total wager does not match the sum of the individual bets.")]
     WagerMismatch,
+    #[msg("The vault does not have enough funds to pay out the winnings.")]
+    InsufficientVaultFunds,
 }

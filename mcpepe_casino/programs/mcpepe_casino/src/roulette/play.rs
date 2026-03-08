@@ -65,10 +65,25 @@ pub fn resolve_roulette(ctx: Context<ResolveRoulette>, unhashed_server_seed: Str
         }
     }
 
+    msg!("Roulette Result: {}, Total Payout: {}", winning_number, total_payout);
+
     if total_payout > 0 {
-        // Direct lamport mutation prevents silent CPI reverting failures
-        **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? = ctx.accounts.vault.to_account_info().lamports().checked_sub(total_payout).unwrap();
-        **ctx.accounts.player.to_account_info().try_borrow_mut_lamports()? = ctx.accounts.player.to_account_info().lamports().checked_add(total_payout).unwrap();
+        let vault_balance = ctx.accounts.vault.lamports();
+        require!(vault_balance >= total_payout, CustomError::InsufficientVaultFunds);
+
+        let bump = ctx.bumps.vault;
+        let seeds = &[b"vault".as_ref(), &[bump]];
+        let signer = &[&seeds[..]];
+
+        let cpi_context = CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: ctx.accounts.vault.to_account_info(),
+                to: ctx.accounts.player.to_account_info(),
+            },
+            signer,
+        );
+        anchor_lang::system_program::transfer(cpi_context, total_payout)?;
     }
 
     game_state.is_active = false;
@@ -76,7 +91,6 @@ pub fn resolve_roulette(ctx: Context<ResolveRoulette>, unhashed_server_seed: Str
 }
 
 // --- HELPER FUNCTIONS ---
-
 fn is_winning_bet(bet: &RouletteBet, winning_number: u8) -> bool {
     match bet.bet_type {
         BetType::StraightUp => bet.data[0] == winning_number,
@@ -131,7 +145,6 @@ fn get_multiplier(bet_type: &BetType) -> u64 {
 }
 
 // --- ACCOUNTS ---
-
 #[derive(Accounts)]
 #[instruction(server_seed_hash: [u8; 32], client_seed: String, nonce: u64, bets: Vec<RouletteBet>)]
 pub struct StartRoulette<'info> {

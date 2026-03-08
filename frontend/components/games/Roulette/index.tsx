@@ -27,7 +27,6 @@ interface Props {
   setShowProvablyFair: (val: boolean) => void;
 }
 
-// Replicate contract logic for immediate UI feedback
 const getMultiplier = (betType: BetType) => {
     switch(betType) {
         case BetType.StraightUp: return 36; case BetType.Split: return 18; case BetType.Street: return 12;
@@ -70,12 +69,10 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
     const [winningNumber, setWinningNumber] = useState<number | null>(null);
     const [localPayout, setLocalPayout] = useState<number | null>(null);
     
-    // Background seeds
     const clientSeedRef = useRef("pepe-" + Math.random().toString(36).substring(7));
     const [serverSeedHash, setServerSeedHash] = useState<string>(''); 
     const [unhashedServerSeed, setUnhashedServerSeed] = useState<string>('');
     
-    // Animation States
     const [wheelRotation, setWheelRotation] = useState(0);
     const [ballRotation, setBallRotation] = useState(0);
 
@@ -111,7 +108,13 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
     const handleSpin = async () => {
         if (!publicKey || !wallet.signTransaction) return alert("Connect your wallet.");
         if (currentBets.length === 0) return;
-        if (totalWager > balance) return alert("Insufficient funds.");
+        
+        // BUFFER CHECK: Prevents 0x1 Simulation Rent Errors
+        if (totalWager + 0.01 > balance) {
+            return alert("Simulation Error: Insufficient funds. Please leave at least ~0.01 SOL in your wallet to cover Solana network account creation rent.");
+        }
+
+        if (!unhashedServerSeed) return alert("Security Error: Server seed not loaded. Ensure Render backend is live.");
 
         setIsSpinning(true);
         setBalance(prev => prev - totalWager);
@@ -161,25 +164,19 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
             const backendData = await backendResponse.json();
             if (!backendData.success) throw new Error(backendData.error);
 
-            // Replicate Outcome
             const combinedData = unhashedServerSeed + clientSeedRef.current + nonce.toString();
             const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(combinedData) as any);
             const outcomeHashBytes = new Uint8Array(hashBuffer);
             const winningNum = new DataView(outcomeHashBytes.buffer).getUint32(0, true) % 37;
             
-            // Calculate payout
             let calculatedPayout = 0;
             currentBets.forEach(bet => {
-                if (isWinningBet(bet, winningNum)) {
-                    calculatedPayout += bet.amount * getMultiplier(bet.betType);
-                }
+                if (isWinningBet(bet, winningNum)) calculatedPayout += bet.amount * getMultiplier(bet.betType);
             });
             
-            // Wheel Physics
             const targetIndex = WHEEL_NUMBERS.indexOf(winningNum);
             const baseSpins = 360 * 5; 
             const targetWheelRot = baseSpins + (360 - (targetIndex * (360 / 37))); 
-            // The ball spins counter-clockwise and lands EXACTLY at 0 degrees relative to the viewport (the pointer)
             const targetBallRot = -(360 * 15);
 
             setWheelRotation(prev => prev + targetWheelRot + (prev % 360 !== 0 ? 360 - (prev % 360) : 0));
@@ -197,11 +194,10 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
 
                 logWager("Roulette", totalWager, calculatedPayout > 0, calculatedPayout, backendData.txSignature, clientSeedRef.current);
                 
-                // Refresh client seed silently
                 clientSeedRef.current = "pepe-" + Math.random().toString(36).substring(7);
                 fetchNewSeed();
                 setCurrentBets([]);
-            }, 6000); // Wait for the 6-second physics CSS spin
+            }, 6000); 
 
         } catch (error) {
             console.error(error);
@@ -247,11 +243,12 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                 <div className="space-y-6">
                     <div className="bg-black border border-gray-800 p-4 rounded-xl flex justify-between items-center shadow-inner">
                         <span className="text-gray-400 font-bold uppercase text-sm tracking-wider">Total Wager:</span>
-                        <span className="text-2xl font-mono font-black text-yellow-400">{totalWager.toFixed(2)}</span>
+                        <span className="text-2xl font-mono font-black text-yellow-400">{totalWager.toFixed(2)} SOL</span>
                     </div>
 
                     <div className="flex flex-wrap gap-2 justify-center w-full bg-black/50 p-4 rounded-xl border border-gray-800">
-                        {[0.05, 0.1, 0.25, 0.5, 1].map((chipValue) => (
+                        {/* CHIPS ADDED: 0.01, 5, 10 */}
+                        {[0.01, 0.05, 0.1, 0.5, 1, 5, 10].map((chipValue) => (
                             <button
                                 key={chipValue} onClick={() => setSelectedChipValue(chipValue)} disabled={isSpinning}
                                 className={`w-12 h-12 rounded-full font-black flex items-center justify-center border-4 transition-all shadow-lg font-mono text-xs disabled:opacity-50 ${
@@ -283,7 +280,6 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                 {/* ADVANCED WHEEL ANIMATION */}
                 <div className="relative w-[340px] h-[340px] md:w-[420px] md:h-[420px] rounded-full bg-[#111] shadow-[0_20px_60px_rgba(0,0,0,0.9)] flex items-center justify-center p-3 ring-8 ring-[#2a1a08] border-8 border-[#1a1a1a]">
                     
-                    {/* The Wheel */}
                     <div className="w-full h-full rounded-full relative overflow-hidden ring-4 ring-[#d4af37]"
                          style={{ transform: `rotate(${wheelRotation}deg)`, transition: isSpinning ? 'transform 6000ms cubic-bezier(0.15, 0.85, 0.15, 1)' : 'none' }}>
                         {WHEEL_NUMBERS.map((num, i) => {
@@ -301,17 +297,13 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                         </div>
                     </div>
 
-                    {/* Counter-Rotating Ball Track */}
                     <div className="absolute inset-2 rounded-full border-[20px] border-transparent z-20 pointer-events-none"
                          style={{ transform: `rotate(${ballRotation}deg)`, transition: isSpinning ? 'transform 6000ms cubic-bezier(0.2, 0.8, 0.1, 1)' : 'none' }}>
-                         {/* The Ball */}
                          <div className="absolute -top-[10px] left-1/2 w-4 h-4 bg-white rounded-full shadow-[0_0_15px_#fff] transform -translate-x-1/2" />
                     </div>
 
-                    {/* Static Pointer */}
                     <div className="absolute -top-3 w-6 h-10 bg-yellow-500 z-30 shadow-xl border-b-4 border-yellow-700" style={{ clipPath: 'polygon(50% 100%, 0 0, 100% 0)' }} />
                     
-                    {/* Win/Loss Overlay Popup */}
                     {winningNumber !== null && !isSpinning && (
                         <div className={`absolute inset-0 m-auto w-48 h-48 bg-black/95 rounded-full flex flex-col items-center justify-center border-4 animate-bounce z-40 ${localPayout! > 0 ? 'border-green-500 shadow-[0_0_50px_rgba(34,197,94,0.6)]' : 'border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.6)]'}`}>
                             <span className="text-gray-400 text-xs font-black uppercase tracking-widest mb-1">Result</span>
@@ -335,11 +327,8 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                             </div>
                             
                             <div className="flex-1 grid grid-cols-12 grid-rows-3 text-center">
-                                {/* Top Row */}
                                 {renderNumberCell(3, 'red')} {renderNumberCell(6, 'black')} {renderNumberCell(9, 'red')} {renderNumberCell(12, 'red')} {renderNumberCell(15, 'black')} {renderNumberCell(18, 'red')} {renderNumberCell(21, 'red')} {renderNumberCell(24, 'black')} {renderNumberCell(27, 'red')} {renderNumberCell(30, 'red')} {renderNumberCell(33, 'black')} {renderNumberCell(36, 'red')}
-                                {/* Middle Row */}
                                 {renderNumberCell(2, 'black')} {renderNumberCell(5, 'red')} {renderNumberCell(8, 'black')} {renderNumberCell(11, 'black')} {renderNumberCell(14, 'red')} {renderNumberCell(17, 'black')} {renderNumberCell(20, 'black')} {renderNumberCell(23, 'red')} {renderNumberCell(26, 'black')} {renderNumberCell(29, 'black')} {renderNumberCell(32, 'red')} {renderNumberCell(35, 'black')}
-                                {/* Bottom Row */}
                                 {renderNumberCell(1, 'red')} {renderNumberCell(4, 'black')} {renderNumberCell(7, 'red')} {renderNumberCell(10, 'black')} {renderNumberCell(13, 'black')} {renderNumberCell(16, 'red')} {renderNumberCell(19, 'red')} {renderNumberCell(22, 'black')} {renderNumberCell(25, 'red')} {renderNumberCell(28, 'black')} {renderNumberCell(31, 'black')} {renderNumberCell(34, 'red')}
                             </div>
 
