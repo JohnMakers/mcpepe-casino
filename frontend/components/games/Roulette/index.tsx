@@ -172,7 +172,8 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
 
             // 3. Replicate the Provably Fair Hash locally to determine where to stop the wheel animation
             const combinedData = unhashedServerSeed + clientSeed + nonce.toString();
-            const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(combinedData));
+            // THE FIX: Type cast the encoded data `as any` to bypass the ArrayBufferLike Web Crypto typings clash
+            const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(combinedData) as any);
             const outcomeHashBytes = new Uint8Array(hashBuffer);
             
             const dataView = new DataView(outcomeHashBytes.buffer);
