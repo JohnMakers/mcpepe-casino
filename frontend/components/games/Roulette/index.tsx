@@ -60,6 +60,17 @@ const isWinningBet = (bet: ClientBet, winningNum: number) => {
     }
 };
 
+// --- CHIP UPGRADE: Solid Casino Themes ---
+const getChipStyles = (val: number) => {
+    if (val >= 10) return 'bg-[#e67e22] text-black border-[#d35400]'; // Orange
+    if (val >= 5) return 'bg-[#8e44ad] text-white border-[#9b59b6]'; // Purple
+    if (val >= 1) return 'bg-[#2c3e50] text-white border-[#34495e]'; // Black/Navy
+    if (val >= 0.5) return 'bg-[#27ae60] text-white border-[#2ecc71]'; // Green
+    if (val >= 0.1) return 'bg-[#2980b9] text-white border-[#3498db]'; // Blue
+    if (val >= 0.05) return 'bg-[#c0392b] text-white border-[#e74c3c]'; // Red
+    return 'bg-[#ecf0f1] text-black border-[#bdc3c7]'; // White/Gray
+};
+
 export default function RouletteGame({ balance, setBalance, logWager, setShowProvablyFair }: Props) {
     const { connection } = useConnection();
     const wallet = useWallet();
@@ -69,6 +80,9 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
     const [winningNumber, setWinningNumber] = useState<number | null>(null);
     const [localPayout, setLocalPayout] = useState<number | null>(null);
     const [recentOutcomes, setRecentOutcomes] = useState<number[]>([]); 
+    
+    // --- OVERLAY UPGRADE ---
+    const [showOverlay, setShowOverlay] = useState(false);
     
     const clientSeedRef = useRef("pepe-" + Math.random().toString(36).substring(7));
     const [serverSeedHash, setServerSeedHash] = useState<string>(''); 
@@ -95,6 +109,10 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
 
     const handlePlaceChip = (betType: BetType, data: number[]) => {
         if (isSpinning) return;
+        
+        // Hide overlay instantly if the user starts placing bets
+        if (showOverlay) setShowOverlay(false);
+
         setCurrentBets((prev) => {
             const idx = prev.findIndex(b => b.betType === betType && JSON.stringify(b.data) === JSON.stringify(data));
             if (idx >= 0) {
@@ -104,6 +122,12 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
             }
             return [...prev, { betType, data, amount: selectedChipValue }];
         });
+    };
+
+    const handleClearBets = () => {
+        if (isSpinning) return;
+        setCurrentBets([]);
+        if (showOverlay) setShowOverlay(false);
     };
 
     const handleSpin = async () => {
@@ -117,6 +141,7 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
         if (!unhashedServerSeed) return alert("Security Guard: Provably Fair seeds not loaded from backend yet. Please wait a moment.");
 
         setIsSpinning(true);
+        setShowOverlay(false); // Hide any existing overlay during spin
         setBalance(prev => prev - totalWager);
         setWinningNumber(null);
         setLocalPayout(null);
@@ -192,6 +217,12 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                 setRecentOutcomes(prev => [winningNum, ...prev].slice(0, 8)); 
                 setIsSpinning(false);
                 
+                // Show the result overlay
+                setShowOverlay(true);
+
+                // Auto-hide the overlay after 4 seconds
+                setTimeout(() => setShowOverlay(false), 4000);
+                
                 try {
                     const exactBalance = await connection.getBalance(publicKey);
                     setBalance(exactBalance / LAMPORTS_PER_SOL);
@@ -215,8 +246,11 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
     const renderChip = (targetBetType: BetType, targetData: number[]) => {
         const bet = currentBets.find(b => b.betType === targetBetType && JSON.stringify(b.data) === JSON.stringify(targetData));
         if (!bet) return null;
+        
+        const chipStyle = getChipStyles(bet.amount);
+        
         return (
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[100] w-7 h-7 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-400 to-blue-800 rounded-full border-[2px] border-dotted border-white/80 shadow-[0_4px_15px_rgba(0,0,0,0.9)] flex items-center justify-center text-[10px] font-black pointer-events-none text-white transition-all duration-200">
+            <div className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[100] w-8 h-8 rounded-full border-[3px] border-dashed shadow-[0_5px_15px_rgba(0,0,0,0.9)] flex items-center justify-center text-[10px] font-black pointer-events-none transition-all duration-200 opacity-100 ${chipStyle}`}>
                 {bet.amount}
             </div>
         );
@@ -253,19 +287,22 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                     </div>
 
                     <div className="flex flex-wrap gap-2 justify-center w-full bg-[#111] p-4 rounded-2xl border-2 border-gray-900">
-                        {[0.01, 0.05, 0.1, 0.5, 1, 5, 10].map((chipValue) => (
-                            <button
-                                key={chipValue} onClick={() => setSelectedChipValue(chipValue)} disabled={isSpinning}
-                                className={`w-10 h-10 rounded-full font-black flex items-center justify-center border-[2px] transition-all shadow-xl font-mono text-[9px] disabled:opacity-50 ${
-                                    selectedChipValue === chipValue 
-                                    ? 'border-yellow-400 scale-110 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-400 to-blue-700 text-white shadow-[0_0_20px_rgba(59,130,246,0.6)]' 
-                                    : 'border-gray-700 bg-[#1a1a1a] text-gray-400 hover:border-gray-500'
-                                }`}
-                            >
-                                {chipValue}
-                            </button>
-                        ))}
-                        <button onClick={() => setCurrentBets([])} disabled={isSpinning} className="w-full mt-2 text-red-500/70 hover:text-red-400 font-black uppercase tracking-widest text-[10px] px-6 py-2 rounded-xl border-2 border-gray-800 hover:border-red-900/50 hover:bg-red-900/10 transition-colors">
+                        {[0.01, 0.05, 0.1, 0.5, 1, 5, 10].map((chipValue) => {
+                            const style = getChipStyles(chipValue);
+                            return (
+                                <button
+                                    key={chipValue} onClick={() => setSelectedChipValue(chipValue)} disabled={isSpinning}
+                                    className={`w-10 h-10 rounded-full font-black flex items-center justify-center border-[3px] border-dashed transition-all shadow-xl font-mono text-[9px] disabled:opacity-50 ${
+                                        selectedChipValue === chipValue 
+                                        ? `scale-110 shadow-[0_0_20px_rgba(255,255,255,0.4)] ring-2 ring-yellow-400 ${style}` 
+                                        : `opacity-80 hover:opacity-100 hover:scale-105 ${style}`
+                                    }`}
+                                >
+                                    {chipValue}
+                                </button>
+                            );
+                        })}
+                        <button onClick={handleClearBets} disabled={isSpinning} className="w-full mt-2 text-red-500/70 hover:text-red-400 font-black uppercase tracking-widest text-[10px] px-6 py-2 rounded-xl border-2 border-gray-800 hover:border-red-900/50 hover:bg-red-900/10 transition-colors">
                             Clear Table
                         </button>
                     </div>
@@ -279,7 +316,7 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                 </div>
             </div>
 
-            {/* RIGHT PANEL: COMPACT BOARD & WHEEL (Fits on screen) */}
+            {/* RIGHT PANEL: COMPACT BOARD */}
             <div className="flex flex-col items-center gap-6 w-full xl:flex-1 mt-0">
                 
                 {/* Recent Outcomes Bar */}
@@ -295,24 +332,22 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                     })}
                 </div>
 
-                {/* --- GRAPHICS UPGRADE: IMAGE-BASED WHEEL PLATFORM --- */}
+                {/* 3D PERSPECTIVE CONTAINER & CENTERED POPUP */}
                 <div className="relative flex justify-center w-full">
                     
                     <div style={{ perspective: '1200px' }} className="flex justify-center w-full">
                         <div className="relative w-[300px] h-[300px] md:w-[340px] md:h-[340px] rounded-full flex items-center justify-center"
                              style={{ transform: 'rotateX(35deg) translateY(-10px)', transformStyle: 'preserve-3d' }}>
                             
-                            {/* NEW LAYER 1: The Static Rim Image */}
                             <img 
-                                src="/roulette-rim.png" 
+                                src="/images/roulette-rim.png" 
                                 alt="Roulette Rim"
                                 className="absolute inset-0 w-full h-full z-0 object-contain pointer-events-none"
                                 style={{ transform: 'translateZ(-2px)' }}
                             />
 
-                            {/* NEW LAYER 2: The Spinning Inner Wheel Image */}
                             <img 
-                                src="/roulette-wheel.png" 
+                                src="/images/roulette-wheel.png" 
                                 alt="Roulette Wheel"
                                 className="absolute w-[86%] h-[86%] z-10 object-contain pointer-events-none shadow-[0_0_20px_rgba(0,0,0,0.9)]"
                                 style={{ 
@@ -321,20 +356,21 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                                 }}
                             />
 
-                            {/* THE BALL TRACK: Invisible track for the ball DOM element */}
                             <div className="absolute inset-4 rounded-full border-[15px] border-transparent z-20 pointer-events-none"
                                  style={{ transform: `rotate(${ballRotation}deg)`, transition: isSpinning ? 'transform 6000ms cubic-bezier(0.2, 0.8, 0.1, 1)' : 'none' }}>
                                  <div className="absolute -top-[14px] left-1/2 w-4 h-4 bg-[radial-gradient(circle_at_30%_30%,_#fff,_#ccc,_#555)] rounded-full shadow-[0_10px_20px_rgba(0,0,0,0.9)] transform -translate-x-1/2" />
                             </div>
 
-                            {/* Top Pointer */}
                             <div className="absolute -top-6 w-6 h-10 bg-gradient-to-b from-yellow-300 to-yellow-600 z-30 shadow-[0_15px_30px_rgba(0,0,0,1)] border-b-8 border-yellow-800" style={{ clipPath: 'polygon(50% 100%, 0 0, 100% 0)' }} />
                         </div>
                     </div>
 
-                    {/* Win/Loss Overlay Popup - PERFECTLY CENTERED OVER THE WHEEL */}
-                    {winningNumber !== null && !isSpinning && (
-                        <div className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-56 h-56 bg-[#050806]/80 backdrop-blur-md rounded-full flex flex-col items-center justify-center border-2 animate-bounce-short z-50 ${localPayout! > 0 ? 'border-green-400 shadow-[0_0_100px_rgba(34,197,94,0.8)]' : 'border-red-500/50 shadow-[0_0_100px_rgba(239,68,68,0.6)]'}`}>
+                    {/* OVERLAY FIX: Temporary, Clickable, Auto-Dismissing */}
+                    {showOverlay && winningNumber !== null && !isSpinning && (
+                        <div 
+                            onClick={() => setShowOverlay(false)}
+                            className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-56 h-56 bg-[#050806]/90 backdrop-blur-md rounded-full flex flex-col items-center justify-center border-4 animate-bounce-short z-[200] cursor-pointer ${localPayout! > 0 ? 'border-green-400 shadow-[0_0_100px_rgba(34,197,94,0.8)]' : 'border-red-500/80 shadow-[0_0_100px_rgba(239,68,68,0.6)]'}`}
+                        >
                             <span className="text-gray-300 text-[10px] font-black uppercase tracking-widest mb-1">Outcome</span>
                             <span className="text-7xl font-black text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">{winningNumber}</span>
                             {localPayout! > 0 ? (
@@ -342,12 +378,13 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                             ) : (
                                 <span className="text-red-400 font-black mt-2 text-sm uppercase tracking-widest">Bust</span>
                             )}
+                            <span className="text-gray-500 text-[8px] absolute bottom-4 uppercase tracking-widest opacity-50">Tap to close</span>
                         </div>
                     )}
 
                 </div>
 
-                {/* PREMIUM FELT TABLE - (Compressed Heights) */}
+                {/* PREMIUM FELT TABLE */}
                 <div className={`w-full max-w-5xl overflow-x-auto pb-4 transition-opacity duration-500 ${isSpinning ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                     <div className="min-w-[800px] bg-[#0c4a25] border-[12px] border-[#072411] text-white flex flex-col cursor-pointer select-none shadow-[0_20px_50px_rgba(0,0,0,0.8)] rounded-3xl p-3 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] relative">
                         
