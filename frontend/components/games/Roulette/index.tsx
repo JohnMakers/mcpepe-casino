@@ -340,14 +340,14 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                              style={{ transform: 'rotateX(35deg) translateY(-10px)', transformStyle: 'preserve-3d' }}>
                             
                             <img 
-                                src="/images/roulette-rim.png" 
+                                src="/roulette-rim.png" 
                                 alt="Roulette Rim"
                                 className="absolute inset-0 w-full h-full z-0 object-contain pointer-events-none"
                                 style={{ transform: 'translateZ(-2px)' }}
                             />
 
                             <img 
-                                src="/images/roulette-wheel.png" 
+                                src="/roulette-wheel.png" 
                                 alt="Roulette Wheel"
                                 className="absolute w-[86%] h-[86%] z-10 object-contain pointer-events-none shadow-[0_0_20px_rgba(0,0,0,0.9)]"
                                 style={{ 
