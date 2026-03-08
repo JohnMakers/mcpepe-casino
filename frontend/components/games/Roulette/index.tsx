@@ -212,8 +212,6 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
         }
     };
 
-    // UI FIX 3: Added `absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100]`
-    // This perfectly centers the chip inside its relative parent and forces it ABOVE any text.
     const renderChip = (targetBetType: BetType, targetData: number[]) => {
         const bet = currentBets.find(b => b.betType === targetBetType && JSON.stringify(b.data) === JSON.stringify(targetData));
         if (!bet) return null;
@@ -281,7 +279,7 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                 </div>
             </div>
 
-            {/* RIGHT PANEL: COMPACT BOARD (UI FIX 1: Reduced gap to fit on screen) */}
+            {/* RIGHT PANEL: COMPACT BOARD & WHEEL (Fits on screen) */}
             <div className="flex flex-col items-center gap-6 w-full xl:flex-1 mt-0">
                 
                 {/* Recent Outcomes Bar */}
@@ -297,41 +295,44 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                     })}
                 </div>
 
-                {/* 3D PERSPECTIVE CONTAINER & CENTERED POPUP */}
+                {/* --- GRAPHICS UPGRADE: IMAGE-BASED WHEEL PLATFORM --- */}
                 <div className="relative flex justify-center w-full">
                     
                     <div style={{ perspective: '1200px' }} className="flex justify-center w-full">
-                        {/* Shrank Wheel Size slightly to prevent vertical scrolling */}
-                        <div className="relative w-[300px] h-[300px] md:w-[380px] md:h-[380px] rounded-full bg-[#0a0a0a] flex items-center justify-center p-3 ring-[10px] ring-[#111]"
-                             style={{ transform: 'rotateX(35deg) translateY(-10px)', transformStyle: 'preserve-3d', boxShadow: '0px 30px 50px rgba(0,0,0,0.9), inset 0px 10px 20px rgba(0,0,0,0.8)', border: '12px solid #1a1107' }}>
+                        <div className="relative w-[300px] h-[300px] md:w-[340px] md:h-[340px] rounded-full flex items-center justify-center"
+                             style={{ transform: 'rotateX(35deg) translateY(-10px)', transformStyle: 'preserve-3d' }}>
                             
-                            <div className="w-full h-full rounded-full relative overflow-hidden shadow-[inset_0_0_60px_rgba(0,0,0,1)] ring-4 ring-[#8a6820]"
-                                 style={{ transform: `rotate(${wheelRotation}deg)`, transition: isSpinning ? 'transform 6000ms cubic-bezier(0.15, 0.85, 0.15, 1)' : 'none' }}>
-                                {WHEEL_NUMBERS.map((num, i) => {
-                                    const rotation = i * (360 / 37);
-                                    const isRed = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(num);
-                                    return (
-                                        <div key={num} className={`absolute top-0 left-[35%] w-[30%] h-[50%] origin-bottom ${num === 0 ? 'bg-[#1b5e20]' : isRed ? 'bg-[#a31616]' : 'bg-[#0f0f0f]'} flex justify-center pt-2`}
-                                             style={{ transform: `rotate(${rotation}deg)`, clipPath: 'polygon(50% 100%, 15% 0, 85% 0)' }}>
-                                            <span className="text-white/90 font-black text-xs md:text-sm transform -rotate-90 mt-4 drop-shadow-md">{num}</span>
-                                        </div>
-                                    )
-                                })}
-                                <div className="absolute top-[35%] left-[35%] w-[30%] h-[30%] bg-[#111] rounded-full border-[8px] border-[#d4af37]/40 shadow-2xl z-10 flex items-center justify-center">
-                                    <span className="text-3xl drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" style={{ transform: "rotateX(-35deg)" }}>🐸</span>
-                                </div>
-                            </div>
+                            {/* NEW LAYER 1: The Static Rim Image */}
+                            <img 
+                                src="/roulette-rim.png" 
+                                alt="Roulette Rim"
+                                className="absolute inset-0 w-full h-full z-0 object-contain pointer-events-none"
+                                style={{ transform: 'translateZ(-2px)' }}
+                            />
 
+                            {/* NEW LAYER 2: The Spinning Inner Wheel Image */}
+                            <img 
+                                src="/roulette-wheel.png" 
+                                alt="Roulette Wheel"
+                                className="absolute w-[86%] h-[86%] z-10 object-contain pointer-events-none shadow-[0_0_20px_rgba(0,0,0,0.9)]"
+                                style={{ 
+                                    transform: `translateZ(0px) rotate(${wheelRotation}deg)`, 
+                                    transition: isSpinning ? 'transform 6000ms cubic-bezier(0.15, 0.85, 0.15, 1)' : 'none' 
+                                }}
+                            />
+
+                            {/* THE BALL TRACK: Invisible track for the ball DOM element */}
                             <div className="absolute inset-4 rounded-full border-[15px] border-transparent z-20 pointer-events-none"
                                  style={{ transform: `rotate(${ballRotation}deg)`, transition: isSpinning ? 'transform 6000ms cubic-bezier(0.2, 0.8, 0.1, 1)' : 'none' }}>
                                  <div className="absolute -top-[14px] left-1/2 w-4 h-4 bg-[radial-gradient(circle_at_30%_30%,_#fff,_#ccc,_#555)] rounded-full shadow-[0_10px_20px_rgba(0,0,0,0.9)] transform -translate-x-1/2" />
                             </div>
 
+                            {/* Top Pointer */}
                             <div className="absolute -top-6 w-6 h-10 bg-gradient-to-b from-yellow-300 to-yellow-600 z-30 shadow-[0_15px_30px_rgba(0,0,0,1)] border-b-8 border-yellow-800" style={{ clipPath: 'polygon(50% 100%, 0 0, 100% 0)' }} />
                         </div>
                     </div>
 
-                    {/* UI FIX 2: Win/Loss Overlay Popup - PERFECTLY CENTERED OVER THE WHEEL */}
+                    {/* Win/Loss Overlay Popup - PERFECTLY CENTERED OVER THE WHEEL */}
                     {winningNumber !== null && !isSpinning && (
                         <div className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-56 h-56 bg-[#050806]/80 backdrop-blur-md rounded-full flex flex-col items-center justify-center border-2 animate-bounce-short z-50 ${localPayout! > 0 ? 'border-green-400 shadow-[0_0_100px_rgba(34,197,94,0.8)]' : 'border-red-500/50 shadow-[0_0_100px_rgba(239,68,68,0.6)]'}`}>
                             <span className="text-gray-300 text-[10px] font-black uppercase tracking-widest mb-1">Outcome</span>
