@@ -60,15 +60,14 @@ const isWinningBet = (bet: ClientBet, winningNum: number) => {
     }
 };
 
-// --- CHIP UPGRADE: Solid Casino Themes ---
 const getChipStyles = (val: number) => {
-    if (val >= 10) return 'bg-[#e67e22] text-black border-[#d35400]'; // Orange
-    if (val >= 5) return 'bg-[#8e44ad] text-white border-[#9b59b6]'; // Purple
-    if (val >= 1) return 'bg-[#2c3e50] text-white border-[#34495e]'; // Black/Navy
-    if (val >= 0.5) return 'bg-[#27ae60] text-white border-[#2ecc71]'; // Green
-    if (val >= 0.1) return 'bg-[#2980b9] text-white border-[#3498db]'; // Blue
-    if (val >= 0.05) return 'bg-[#c0392b] text-white border-[#e74c3c]'; // Red
-    return 'bg-[#ecf0f1] text-black border-[#bdc3c7]'; // White/Gray
+    if (val >= 10) return 'bg-[#e67e22] text-black border-[#d35400]'; 
+    if (val >= 5) return 'bg-[#8e44ad] text-white border-[#9b59b6]'; 
+    if (val >= 1) return 'bg-[#2c3e50] text-white border-[#34495e]'; 
+    if (val >= 0.5) return 'bg-[#27ae60] text-white border-[#2ecc71]'; 
+    if (val >= 0.1) return 'bg-[#2980b9] text-white border-[#3498db]'; 
+    if (val >= 0.05) return 'bg-[#c0392b] text-white border-[#e74c3c]'; 
+    return 'bg-[#ecf0f1] text-black border-[#bdc3c7]'; 
 };
 
 export default function RouletteGame({ balance, setBalance, logWager, setShowProvablyFair }: Props) {
@@ -81,7 +80,6 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
     const [localPayout, setLocalPayout] = useState<number | null>(null);
     const [recentOutcomes, setRecentOutcomes] = useState<number[]>([]); 
     
-    // --- OVERLAY UPGRADE ---
     const [showOverlay, setShowOverlay] = useState(false);
     
     const clientSeedRef = useRef("pepe-" + Math.random().toString(36).substring(7));
@@ -110,7 +108,6 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
     const handlePlaceChip = (betType: BetType, data: number[]) => {
         if (isSpinning) return;
         
-        // Hide overlay instantly if the user starts placing bets
         if (showOverlay) setShowOverlay(false);
 
         setCurrentBets((prev) => {
@@ -141,7 +138,7 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
         if (!unhashedServerSeed) return alert("Security Guard: Provably Fair seeds not loaded from backend yet. Please wait a moment.");
 
         setIsSpinning(true);
-        setShowOverlay(false); // Hide any existing overlay during spin
+        setShowOverlay(false); 
         setBalance(prev => prev - totalWager);
         setWinningNumber(null);
         setLocalPayout(null);
@@ -217,10 +214,7 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                 setRecentOutcomes(prev => [winningNum, ...prev].slice(0, 8)); 
                 setIsSpinning(false);
                 
-                // Show the result overlay
                 setShowOverlay(true);
-
-                // Auto-hide the overlay after 4 seconds
                 setTimeout(() => setShowOverlay(false), 4000);
                 
                 try {
@@ -332,7 +326,6 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                     })}
                 </div>
 
-                {/* 3D PERSPECTIVE CONTAINER & CENTERED POPUP */}
                 <div className="relative flex justify-center w-full">
                     
                     <div style={{ perspective: '1200px' }} className="flex justify-center w-full">
@@ -346,10 +339,11 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                                 style={{ transform: 'translateZ(-2px)' }}
                             />
 
+                            {/* FIX: Replaced `shadow-` with `drop-shadow-` so the transparent PNG pixels dictate the shape, removing the square bug entirely. */}
                             <img 
                                 src="/roulette-wheel.png" 
                                 alt="Roulette Wheel"
-                                className="absolute w-[86%] h-[86%] z-10 object-contain pointer-events-none shadow-[0_0_20px_rgba(0,0,0,0.9)]"
+                                className="absolute w-[86%] h-[86%] z-10 object-contain pointer-events-none drop-shadow-[0_0_20px_rgba(0,0,0,0.9)]"
                                 style={{ 
                                     transform: `translateZ(0px) rotate(${wheelRotation}deg)`, 
                                     transition: isSpinning ? 'transform 6000ms cubic-bezier(0.15, 0.85, 0.15, 1)' : 'none' 
@@ -365,7 +359,6 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                         </div>
                     </div>
 
-                    {/* OVERLAY FIX: Temporary, Clickable, Auto-Dismissing */}
                     {showOverlay && winningNumber !== null && !isSpinning && (
                         <div 
                             onClick={() => setShowOverlay(false)}
@@ -384,7 +377,6 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
 
                 </div>
 
-                {/* PREMIUM FELT TABLE */}
                 <div className={`w-full max-w-5xl overflow-x-auto pb-4 transition-opacity duration-500 ${isSpinning ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                     <div className="min-w-[800px] bg-[#0c4a25] border-[12px] border-[#072411] text-white flex flex-col cursor-pointer select-none shadow-[0_20px_50px_rgba(0,0,0,0.8)] rounded-3xl p-3 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] relative">
                         
