@@ -68,8 +68,8 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
     const [isSpinning, setIsSpinning] = useState(false);
     const [winningNumber, setWinningNumber] = useState<number | null>(null);
     const [localPayout, setLocalPayout] = useState<number | null>(null);
+    const [recentOutcomes, setRecentOutcomes] = useState<number[]>([]); // Tracking History
     
-    // Background seeds (Hidden from UI entirely)
     const clientSeedRef = useRef("pepe-" + Math.random().toString(36).substring(7));
     const [serverSeedHash, setServerSeedHash] = useState<string>(''); 
     const [unhashedServerSeed, setUnhashedServerSeed] = useState<string>('');
@@ -110,7 +110,6 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
         if (!publicKey || !wallet.signTransaction) return alert("Connect your wallet.");
         if (currentBets.length === 0) return;
         
-        // BUFFER CHECK: Stop the 0x1 Rent error entirely
         if (totalWager + 0.01 > balance) {
             return alert("Simulation Guard: Insufficient funds. You must leave at least ~0.01 SOL to cover Solana network account creation rent.");
         }
@@ -134,7 +133,13 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                 const betTypeKeys = ["straightUp", "split", "street", "corner", "line", "basket", "column", "dozen", "redBlack", "oddEven", "highLow"];
                 const anchorBetType: any = {};
                 anchorBetType[betTypeKeys[bet.betType]] = {}; 
-                return { betType: anchorBetType, data: bet.data, amount: new anchor.BN(Math.round(bet.amount * LAMPORTS_PER_SOL)) };
+                
+                return { 
+                    betType: anchorBetType, 
+                    // FIX: Strictly map to exactly 4 numeric elements to guarantee Anchor translates it to Rust [u8; 4] cleanly
+                    data: [bet.data[0] || 0, bet.data[1] || 0, bet.data[2] || 0, bet.data[3] || 0], 
+                    amount: new anchor.BN(Math.round(bet.amount * LAMPORTS_PER_SOL)) 
+                };
             });
 
             const serverSeedHashBytes = Array.from(Buffer.from(serverSeedHash, 'hex'));
@@ -165,7 +170,6 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
             const backendData = await backendResponse.json();
             if (!backendData.success) throw new Error(backendData.error);
 
-            // Replicate Outcome for 100% Provably Fair Validation
             const combinedData = unhashedServerSeed + clientSeedRef.current + nonce.toString();
             const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(combinedData) as any);
             const outcomeHashBytes = new Uint8Array(hashBuffer);
@@ -187,6 +191,7 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
             setTimeout(async () => {
                 setWinningNumber(winningNum);
                 setLocalPayout(calculatedPayout);
+                setRecentOutcomes(prev => [winningNum, ...prev].slice(0, 8)); // Update history
                 setIsSpinning(false);
                 
                 try {
@@ -194,10 +199,8 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                     setBalance(exactBalance / LAMPORTS_PER_SOL);
                 } catch (err) {}
 
-                // Send the exact seeds used to the log so the user can verify it safely later!
                 logWager("Roulette", totalWager, calculatedPayout > 0, calculatedPayout, backendData.txSignature, clientSeedRef.current);
                 
-                // Refresh client seed silently
                 clientSeedRef.current = "pepe-" + Math.random().toString(36).substring(7);
                 fetchNewSeed();
                 setCurrentBets([]);
@@ -205,7 +208,7 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
 
         } catch (error) {
             console.error(error);
-            alert("Transaction failed.");
+            alert("Transaction failed or was rejected.");
             setBalance(prev => prev + totalWager); 
             setIsSpinning(false);
         }
@@ -215,7 +218,7 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
         const bet = currentBets.find(b => b.betType === targetBetType && JSON.stringify(b.data) === JSON.stringify(targetData));
         if (!bet) return null;
         return (
-            <div className="absolute z-10 w-8 h-8 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-400 to-blue-800 rounded-full border-[3px] border-dotted border-white/70 shadow-[0_4px_15px_rgba(0,0,0,0.9)] flex items-center justify-center text-[10px] font-black pointer-events-none text-white transform scale-95 transition-transform duration-200">
+            <div className="absolute z-10 w-7 h-7 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-400 to-blue-800 rounded-full border-[2px] border-dotted border-white/80 shadow-[0_4px_15px_rgba(0,0,0,0.9)] flex items-center justify-center text-[10px] font-black pointer-events-none text-white transform transition-transform duration-200">
                 {bet.amount}
             </div>
         );
@@ -224,9 +227,9 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
     const renderNumberCell = (num: number, color: 'red' | 'black') => (
         <div 
             key={num} onClick={() => handlePlaceChip(BetType.StraightUp, [num, 0, 0, 0])} 
-            className={`relative border border-white/10 flex items-center justify-center transition-all duration-200 py-3 hover:bg-white/10 group cursor-pointer`}
+            className={`relative border border-white/5 flex items-center justify-center transition-all duration-200 py-3 hover:bg-white/10 group cursor-pointer`}
         >
-            <span className={`font-black w-10 h-10 rounded flex items-center justify-center shadow-[inset_0_-2px_10px_rgba(0,0,0,0.5)] font-mono text-xl group-hover:scale-110 transition-transform ${color === 'red' ? 'bg-[#c22020] text-white' : 'bg-[#111] text-white'}`}>
+            <span className={`font-black w-10 h-10 rounded-full flex items-center justify-center shadow-[inset_0_-3px_8px_rgba(0,0,0,0.6)] font-mono text-xl group-hover:scale-110 transition-transform ${color === 'red' ? 'bg-[#c22020] text-white' : 'bg-[#111] text-white'}`}>
                 {num}
             </span>
             {renderChip(BetType.StraightUp, [num, 0, 0, 0])}
@@ -237,7 +240,7 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
         <div className="flex flex-col xl:flex-row gap-8 w-full max-w-7xl mx-auto p-4 animate-fade-in relative">
             
             {/* COMPACT CLEAN BET SLIP */}
-            <div className="flex flex-col w-full xl:w-[350px] bg-[#0a0f0c] p-6 rounded-2xl border border-green-500/20 shadow-2xl relative z-10 h-fit shrink-0">
+            <div className="flex flex-col w-full xl:w-[350px] bg-[#0a0f0c] p-6 rounded-2xl border border-green-500/20 shadow-[0_0_50px_rgba(0,0,0,0.8)] relative z-10 h-fit shrink-0">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Bet Slip</h2>
                     <button onClick={() => setShowProvablyFair(true)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-green-500/50 hover:text-green-400 bg-green-900/20 px-3 py-1.5 rounded-full border border-green-900/50 transition-colors">
@@ -252,7 +255,6 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                     </div>
 
                     <div className="flex flex-wrap gap-3 justify-center w-full bg-[#111] p-5 rounded-2xl border-2 border-gray-900">
-                        {/* THE NEW CHIPS REQUESTED */}
                         {[0.01, 0.05, 0.1, 0.5, 1, 5, 10].map((chipValue) => (
                             <button
                                 key={chipValue} onClick={() => setSelectedChipValue(chipValue)} disabled={isSpinning}
@@ -280,51 +282,56 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
             </div>
 
             {/* 3D ROULETTE BOARD */}
-            <div className="flex flex-col items-center gap-16 w-full xl:flex-1 mt-4">
+            <div className="flex flex-col items-center gap-8 w-full xl:flex-1 mt-4">
                 
+                {/* Recent Outcomes Bar */}
+                <div className="flex gap-2 bg-[#111] p-3 rounded-xl border-2 border-gray-800 w-full max-w-2xl overflow-x-auto shadow-inner">
+                    <span className="text-gray-500 font-bold uppercase tracking-widest text-xs flex items-center px-4 border-r border-gray-800">History</span>
+                    {recentOutcomes.map((num, idx) => {
+                        const isRed = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(num);
+                        return (
+                            <div key={idx} className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm text-white shrink-0 shadow-lg ${num === 0 ? 'bg-green-500' : isRed ? 'bg-[#c22020]' : 'bg-[#222]'}`}>
+                                {num}
+                            </div>
+                        )
+                    })}
+                </div>
+
                 {/* 3D PERSPECTIVE CONTAINER */}
                 <div style={{ perspective: '1200px' }} className="flex justify-center w-full">
                     
                     {/* The 3D Rotated Wheel Platform */}
-                    <div className="relative w-[340px] h-[340px] md:w-[480px] md:h-[480px] rounded-full bg-[#111] flex items-center justify-center p-4"
-                         style={{ transform: 'rotateX(40deg) translateY(-20px)', transformStyle: 'preserve-3d', boxShadow: '0px 40px 60px rgba(0,0,0,0.9), inset 0px 10px 20px rgba(0,0,0,0.7)', border: '24px solid #1a1107' }}>
+                    <div className="relative w-[340px] h-[340px] md:w-[460px] md:h-[460px] rounded-full bg-[#0a0a0a] flex items-center justify-center p-4 ring-[12px] ring-[#111]"
+                         style={{ transform: 'rotateX(35deg) translateY(-20px)', transformStyle: 'preserve-3d', boxShadow: '0px 50px 80px rgba(0,0,0,0.9), inset 0px 10px 30px rgba(0,0,0,0.8)', border: '16px solid #1a1107' }}>
                         
-                        {/* Inner gold rim */}
-                        <div className="absolute inset-0 rounded-full border-4 border-[#d4af37]/30 pointer-events-none" />
-
-                        {/* The Actual Spinning Wheel */}
-                        <div className="w-full h-full rounded-full relative overflow-hidden shadow-[inset_0_0_40px_rgba(0,0,0,1)] ring-4 ring-[#8a6820]"
+                        <div className="w-full h-full rounded-full relative overflow-hidden shadow-[inset_0_0_60px_rgba(0,0,0,1)] ring-4 ring-[#8a6820]"
                              style={{ transform: `rotate(${wheelRotation}deg)`, transition: isSpinning ? 'transform 6000ms cubic-bezier(0.15, 0.85, 0.15, 1)' : 'none' }}>
                             {WHEEL_NUMBERS.map((num, i) => {
                                 const rotation = i * (360 / 37);
                                 const isRed = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(num);
                                 return (
-                                    <div key={num} className={`absolute top-0 left-[35%] w-[30%] h-[50%] origin-bottom ${num === 0 ? 'bg-[#1b5e20]' : isRed ? 'bg-[#a31616]' : 'bg-[#0a0a0a]'} flex justify-center pt-2`}
+                                    <div key={num} className={`absolute top-0 left-[35%] w-[30%] h-[50%] origin-bottom ${num === 0 ? 'bg-[#1b5e20]' : isRed ? 'bg-[#a31616]' : 'bg-[#0f0f0f]'} flex justify-center pt-2`}
                                          style={{ transform: `rotate(${rotation}deg)`, clipPath: 'polygon(50% 100%, 15% 0, 85% 0)' }}>
                                         <span className="text-white/90 font-black text-xs md:text-sm transform -rotate-90 mt-5 drop-shadow-md">{num}</span>
                                     </div>
                                 )
                             })}
                             <div className="absolute top-[35%] left-[35%] w-[30%] h-[30%] bg-[#111] rounded-full border-[8px] border-[#d4af37]/40 shadow-2xl z-10 flex items-center justify-center">
-                                <span className="text-4xl drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] transform -rotate-x-40" style={{ transform: "rotateX(-40deg)" }}>🐸</span>
+                                <span className="text-4xl drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" style={{ transform: "rotateX(-35deg)" }}>🐸</span>
                             </div>
                         </div>
 
-                        {/* Counter-Rotating Ball Track */}
-                        <div className="absolute inset-6 rounded-full border-[15px] border-transparent z-20 pointer-events-none"
+                        <div className="absolute inset-5 rounded-full border-[15px] border-transparent z-20 pointer-events-none"
                              style={{ transform: `rotate(${ballRotation}deg)`, transition: isSpinning ? 'transform 6000ms cubic-bezier(0.2, 0.8, 0.1, 1)' : 'none' }}>
-                             <div className="absolute -top-[14px] left-1/2 w-6 h-6 bg-[radial-gradient(circle_at_30%_30%,_#fff,_#aaa,_#222)] rounded-full shadow-[0_10px_20px_rgba(0,0,0,0.9)] transform -translate-x-1/2" />
+                             <div className="absolute -top-[14px] left-1/2 w-5 h-5 bg-[radial-gradient(circle_at_30%_30%,_#fff,_#ccc,_#555)] rounded-full shadow-[0_10px_20px_rgba(0,0,0,0.9)] transform -translate-x-1/2" />
                         </div>
 
-                        {/* Top Pointer */}
-                        <div className="absolute -top-6 w-8 h-12 bg-gradient-to-b from-yellow-300 to-yellow-600 z-30 shadow-[0_10px_20px_rgba(0,0,0,0.9)] border-b-8 border-yellow-800" style={{ clipPath: 'polygon(50% 100%, 0 0, 100% 0)' }} />
-                        
+                        <div className="absolute -top-6 w-8 h-12 bg-gradient-to-b from-yellow-300 to-yellow-600 z-30 shadow-[0_15px_30px_rgba(0,0,0,1)] border-b-8 border-yellow-800" style={{ clipPath: 'polygon(50% 100%, 0 0, 100% 0)' }} />
                     </div>
                 </div>
 
-                {/* Win/Loss Overlay Popup - Positioned absolutely in the center of the screen above the 3D wheel */}
                 {winningNumber !== null && !isSpinning && (
-                    <div className={`absolute top-[20%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-[#050806]/95 rounded-full flex flex-col items-center justify-center border-4 animate-bounce-short z-50 shadow-2xl backdrop-blur-sm ${localPayout! > 0 ? 'border-green-500 shadow-[0_0_80px_rgba(34,197,94,0.4)]' : 'border-red-500 shadow-[0_0_80px_rgba(239,68,68,0.4)]'}`}>
+                    <div className={`absolute top-[30%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-[#050806]/95 rounded-full flex flex-col items-center justify-center border-4 animate-bounce-short z-50 shadow-2xl backdrop-blur-sm ${localPayout! > 0 ? 'border-green-500 shadow-[0_0_80px_rgba(34,197,94,0.4)]' : 'border-red-500 shadow-[0_0_80px_rgba(239,68,68,0.4)]'}`}>
                         <span className="text-gray-400 text-xs font-black uppercase tracking-widest mb-2">Outcome</span>
                         <span className="text-8xl font-black text-white">{winningNumber}</span>
                         {localPayout! > 0 ? (
@@ -335,12 +342,12 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                     </div>
                 )}
 
-                {/* PREMIUM FELT TABLE */}
-                <div className={`w-full max-w-5xl overflow-x-auto pb-4 transition-opacity duration-500 ${isSpinning ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-                    <div className="min-w-[800px] bg-[#0A3B1C] border-[16px] border-[#061b0c] text-white flex flex-col cursor-pointer select-none shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-3xl p-4 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] relative">
+                {/* HYPER-REALISTIC FELT TABLE */}
+                <div className={`w-full max-w-5xl overflow-x-auto pb-4 transition-opacity duration-500 ${isSpinning ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+                    <div className="min-w-[800px] bg-[#0c4a25] border-[16px] border-[#072411] text-white flex flex-col cursor-pointer select-none shadow-[0_30px_60px_rgba(0,0,0,0.8)] rounded-3xl p-4 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] relative">
                         
-                        <div className="flex border-[3px] border-white/20 rounded-xl overflow-hidden relative z-10 bg-[#0b421f]">
-                            <div onClick={() => handlePlaceChip(BetType.StraightUp, [0, 0, 0, 0])} className={`relative flex-none w-20 border-r-[3px] border-white/20 flex items-center justify-center transition-all text-5xl font-black ${winningNumber === 0 ? 'bg-yellow-400 text-black shadow-[inset_0_0_30px_rgba(0,0,0,0.5)]' : 'bg-[#156e34] hover:bg-[#1a853f]'}`}>
+                        <div className="flex border-[4px] border-white/20 rounded-2xl overflow-hidden relative z-10 shadow-xl bg-[#09381c]">
+                            <div onClick={() => handlePlaceChip(BetType.StraightUp, [0, 0, 0, 0])} className={`relative flex-none w-20 border-r-[4px] border-white/20 flex items-center justify-center transition-all text-5xl font-black ${winningNumber === 0 ? 'bg-yellow-400 text-black shadow-[inset_0_0_40px_rgba(0,0,0,0.7)]' : 'bg-[#156e34] hover:bg-[#1a853f]'}`}>
                                 0 {renderChip(BetType.StraightUp, [0, 0, 0, 0])}
                             </div>
                             
@@ -350,35 +357,34 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                                 {renderNumberCell(1, 'red')} {renderNumberCell(4, 'black')} {renderNumberCell(7, 'red')} {renderNumberCell(10, 'black')} {renderNumberCell(13, 'black')} {renderNumberCell(16, 'red')} {renderNumberCell(19, 'red')} {renderNumberCell(22, 'black')} {renderNumberCell(25, 'red')} {renderNumberCell(28, 'black')} {renderNumberCell(31, 'black')} {renderNumberCell(34, 'red')}
                             </div>
 
-                            <div className="flex-none w-20 grid grid-rows-3 font-black text-sm uppercase bg-[#061b0c] text-gray-400 border-l-[3px] border-white/20">
-                                <div onClick={() => handlePlaceChip(BetType.Column, [3, 0, 0, 0])} className="relative border-b border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">2:1 {renderChip(BetType.Column, [3, 0, 0, 0])}</div>
-                                <div onClick={() => handlePlaceChip(BetType.Column, [2, 0, 0, 0])} className="relative border-b border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">2:1 {renderChip(BetType.Column, [2, 0, 0, 0])}</div>
+                            <div className="flex-none w-20 grid grid-rows-3 font-black text-sm uppercase bg-[#072411] text-gray-400 border-l-[4px] border-white/20 shadow-[inset_10px_0_20px_rgba(0,0,0,0.5)]">
+                                <div onClick={() => handlePlaceChip(BetType.Column, [3, 0, 0, 0])} className="relative border-b-[4px] border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">2:1 {renderChip(BetType.Column, [3, 0, 0, 0])}</div>
+                                <div onClick={() => handlePlaceChip(BetType.Column, [2, 0, 0, 0])} className="relative border-b-[4px] border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">2:1 {renderChip(BetType.Column, [2, 0, 0, 0])}</div>
                                 <div onClick={() => handlePlaceChip(BetType.Column, [1, 0, 0, 0])} className="relative flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">2:1 {renderChip(BetType.Column, [1, 0, 0, 0])}</div>
                             </div>
                         </div>
 
-                        <div className="flex ml-[5.3rem] mr-[5.3rem] mt-4 border-[3px] border-white/20 rounded-xl overflow-hidden h-16 font-black uppercase tracking-widest bg-[#061b0c] text-gray-300">
-                            <div onClick={() => handlePlaceChip(BetType.Dozen, [1, 0, 0, 0])} className="relative flex-1 border-r border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">1st 12 {renderChip(BetType.Dozen, [1, 0, 0, 0])}</div>
-                            <div onClick={() => handlePlaceChip(BetType.Dozen, [2, 0, 0, 0])} className="relative flex-1 border-r border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">2nd 12 {renderChip(BetType.Dozen, [2, 0, 0, 0])}</div>
+                        <div className="flex ml-[5.3rem] mr-[5.3rem] mt-4 border-[4px] border-white/20 rounded-2xl overflow-hidden h-16 font-black uppercase tracking-widest bg-[#072411] text-gray-300 shadow-xl">
+                            <div onClick={() => handlePlaceChip(BetType.Dozen, [1, 0, 0, 0])} className="relative flex-1 border-r-[4px] border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">1st 12 {renderChip(BetType.Dozen, [1, 0, 0, 0])}</div>
+                            <div onClick={() => handlePlaceChip(BetType.Dozen, [2, 0, 0, 0])} className="relative flex-1 border-r-[4px] border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">2nd 12 {renderChip(BetType.Dozen, [2, 0, 0, 0])}</div>
                             <div onClick={() => handlePlaceChip(BetType.Dozen, [3, 0, 0, 0])} className="relative flex-1 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">3rd 12 {renderChip(BetType.Dozen, [3, 0, 0, 0])}</div>
                         </div>
 
-                        <div className="flex ml-[5.3rem] mr-[5.3rem] mt-4 border-[3px] border-white/20 rounded-xl overflow-hidden h-20 font-black uppercase tracking-wider text-base bg-[#061b0c] text-gray-300">
-                            <div onClick={() => handlePlaceChip(BetType.HighLow, [0, 0, 0, 0])} className="relative flex-1 border-r border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">1-18 {renderChip(BetType.HighLow, [0, 0, 0, 0])}</div>
-                            <div onClick={() => handlePlaceChip(BetType.OddEven, [1, 0, 0, 0])} className="relative flex-1 border-r border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">Even {renderChip(BetType.OddEven, [1, 0, 0, 0])}</div>
+                        <div className="flex ml-[5.3rem] mr-[5.3rem] mt-4 border-[4px] border-white/20 rounded-2xl overflow-hidden h-20 font-black uppercase tracking-wider text-base bg-[#072411] text-gray-300 shadow-xl">
+                            <div onClick={() => handlePlaceChip(BetType.HighLow, [0, 0, 0, 0])} className="relative flex-1 border-r-[4px] border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">1-18 {renderChip(BetType.HighLow, [0, 0, 0, 0])}</div>
+                            <div onClick={() => handlePlaceChip(BetType.OddEven, [1, 0, 0, 0])} className="relative flex-1 border-r-[4px] border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">Even {renderChip(BetType.OddEven, [1, 0, 0, 0])}</div>
                             
-                            <div onClick={() => handlePlaceChip(BetType.RedBlack, [0, 0, 0, 0])} className="relative flex-1 border-r border-white/20 flex items-center justify-center bg-[#a31616] hover:bg-[#c22020] text-white transition-colors">
-                                <div className="w-5 h-5 bg-[#ed3232] rounded-sm mr-3 shadow-inner"></div> RED {renderChip(BetType.RedBlack, [0, 0, 0, 0])}
+                            <div onClick={() => handlePlaceChip(BetType.RedBlack, [0, 0, 0, 0])} className="relative flex-1 border-r-[4px] border-white/20 flex items-center justify-center bg-[#b81d1d] hover:bg-[#d62828] text-white transition-colors">
+                                <div className="w-5 h-5 bg-[#ff3333] rounded-sm mr-3 shadow-inner"></div> RED {renderChip(BetType.RedBlack, [0, 0, 0, 0])}
                             </div>
                             
-                            <div onClick={() => handlePlaceChip(BetType.RedBlack, [1, 0, 0, 0])} className="relative flex-1 border-r border-white/20 flex items-center justify-center bg-black hover:bg-gray-900 text-white transition-colors">
-                                <div className="w-5 h-5 bg-[#222] rounded-sm mr-3 shadow-inner"></div> BLACK {renderChip(BetType.RedBlack, [1, 0, 0, 0])}
+                            <div onClick={() => handlePlaceChip(BetType.RedBlack, [1, 0, 0, 0])} className="relative flex-1 border-r-[4px] border-white/20 flex items-center justify-center bg-[#111] hover:bg-[#222] text-white transition-colors">
+                                <div className="w-5 h-5 bg-[#333] rounded-sm mr-3 shadow-inner"></div> BLACK {renderChip(BetType.RedBlack, [1, 0, 0, 0])}
                             </div>
                             
-                            <div onClick={() => handlePlaceChip(BetType.OddEven, [0, 0, 0, 0])} className="relative flex-1 border-r border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">Odd {renderChip(BetType.OddEven, [0, 0, 0, 0])}</div>
+                            <div onClick={() => handlePlaceChip(BetType.OddEven, [0, 0, 0, 0])} className="relative flex-1 border-r-[4px] border-white/20 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">Odd {renderChip(BetType.OddEven, [0, 0, 0, 0])}</div>
                             <div onClick={() => handlePlaceChip(BetType.HighLow, [1, 0, 0, 0])} className="relative flex-1 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors">19-36 {renderChip(BetType.HighLow, [1, 0, 0, 0])}</div>
                         </div>
-
                     </div>
                 </div>
             </div>

@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
+// THE FIX: Added `Debug` to the derive macro so it can be printed in the console logs
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BetType {
     StraightUp, // 35:1
     Split,      // 17:1
@@ -15,7 +16,8 @@ pub enum BetType {
     HighLow,    // 1:1
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy)]
+// Added `Debug` here as well just to be safe for any future logging
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug)]
 pub struct RouletteBet {
     pub bet_type: BetType,
     pub data: [u8; 4], // Stores numbers or identifiers (e.g., [0,0,0,0] for Red, or [1,2,3,4] for Corner)
