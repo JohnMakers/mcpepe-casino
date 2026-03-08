@@ -65,25 +65,13 @@ pub fn resolve_roulette(ctx: Context<ResolveRoulette>, unhashed_server_seed: Str
         }
     }
 
-    msg!("Roulette Result: {}, Total Payout: {}", winning_number, total_payout);
-
     if total_payout > 0 {
         let vault_balance = ctx.accounts.vault.lamports();
         require!(vault_balance >= total_payout, CustomError::InsufficientVaultFunds);
 
-        let bump = ctx.bumps.vault;
-        let seeds = &[b"vault".as_ref(), &[bump]];
-        let signer = &[&seeds[..]];
-
-        let cpi_context = CpiContext::new_with_signer(
-            ctx.accounts.system_program.to_account_info(),
-            anchor_lang::system_program::Transfer {
-                from: ctx.accounts.vault.to_account_info(),
-                to: ctx.accounts.player.to_account_info(),
-            },
-            signer,
-        );
-        anchor_lang::system_program::transfer(cpi_context, total_payout)?;
+        // THE FIX: Direct Lamport Mutation. This completely bypasses the Anchor `close` override bug!
+        **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? = ctx.accounts.vault.lamports().checked_sub(total_payout).unwrap();
+        **ctx.accounts.player.to_account_info().try_borrow_mut_lamports()? = ctx.accounts.player.lamports().checked_add(total_payout).unwrap();
     }
 
     game_state.is_active = false;
