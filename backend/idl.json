@@ -469,6 +469,120 @@
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "startPump",
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "betAmount",
+          "type": "u64"
+        },
+        {
+          "name": "difficulty",
+          "type": "u8"
+        },
+        {
+          "name": "serverSeedHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "clientSeed",
+          "type": "string"
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "processPump",
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "unhashedServerSeed",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "cashOutPump",
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "finalMultiplierBps",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -518,6 +632,59 @@
           {
             "name": "clientSeed",
             "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PumpGameState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "publicKey"
+          },
+          {
+            "name": "authority",
+            "type": "publicKey"
+          },
+          {
+            "name": "betAmount",
+            "type": "u64"
+          },
+          {
+            "name": "difficulty",
+            "type": "u8"
+          },
+          {
+            "name": "currentStep",
+            "type": "u8"
+          },
+          {
+            "name": "serverSeedHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "clientSeed",
+            "type": "string"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "isActive",
+            "type": "bool"
+          },
+          {
+            "name": "cashedOut",
+            "type": "bool"
           }
         ]
       }
@@ -761,6 +928,6 @@
     }
   ],
   "metadata": {
-    "address": "BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz"
+    "address": "CT2c6kv2KgSTaDqxwNh4o7cCso2cqzZzVEaZoKqi54em"
   }
 }
