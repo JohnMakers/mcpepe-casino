@@ -24,9 +24,12 @@ export default function LeftSidebar({ isOpen, activeGame, setActiveGame }: Props
             <span className="flex items-center gap-2"><span className="text-xl">✂️</span> RPS</span>
           </button>
 
-          {/* ADDED ROULETTE MENU ITEM */}
           <button onClick={() => setActiveGame('roulette')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'roulette' ? 'bg-green-900/20 border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.15)]' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
             <span className="flex items-center gap-2"><span className="text-xl">🐸</span> Roulette</span>
+          </button>
+          
+          <button onClick={() => setActiveGame('pumpit')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'pumpit' ? 'bg-green-900/20 border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.15)]' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
+            <span className="flex items-center gap-2"><span className="text-xl">📈</span> Pump It</span>
           </button>
         </div>
       </div>

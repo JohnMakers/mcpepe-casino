@@ -22,4 +22,10 @@ pub enum CustomError {
     WagerMismatch,
     #[msg("The vault does not have enough funds to pay out the winnings.")]
     InsufficientVaultFunds,
+    #[msg("Invalid difficulty level. Must be 0 (Easy), 1 (Medium), or 2 (Hard).")]
+    InvalidDifficulty,
+    #[msg("Maximum steps (24) reached. Cash out now!")]
+    MaxStepsReached,
+    #[msg("No profits to withdraw. You must pump at least once.")]
+    NoProfitsToWithdraw,
 }

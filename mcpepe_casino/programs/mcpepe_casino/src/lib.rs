@@ -5,11 +5,14 @@ pub mod coinflip;
 pub mod whackd; 
 pub mod rps;
 pub mod roulette;
+pub mod pumpit;
+
 
 use coinflip::*;
 use whackd::*;  
 use rps::*;
 use roulette::*;
+use pumpit::*;
 
 declare_id!("BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz");
 
@@ -81,5 +84,25 @@ pub mod mcpepe_casino {
         unhashed_server_seed: String
     ) -> Result<()> {
         roulette::resolve_roulette(ctx, unhashed_server_seed)
+    }
+
+    // --- PUMP IT ROUTES ---
+    pub fn start_pump(
+        ctx: Context<StartPump>,
+        bet_amount: u64,
+        difficulty: u8,
+        server_seed_hash: [u8; 32],
+        client_seed: String,
+        nonce: u64,
+    ) -> Result<()> {
+        pumpit::start_pump(ctx, bet_amount, difficulty, server_seed_hash, client_seed, nonce)
+    }
+
+    pub fn process_pump(ctx: Context<ProcessPump>, unhashed_server_seed: String) -> Result<()> {
+        pumpit::process_pump(ctx, unhashed_server_seed)
+    }
+
+    pub fn cash_out_pump(ctx: Context<CashOutPump>, final_multiplier_bps: u64) -> Result<()> {
+        pumpit::cash_out(ctx, final_multiplier_bps)
     }
 }
