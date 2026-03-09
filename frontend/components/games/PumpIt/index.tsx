@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import pumpData from '../../../config/pumpMultipliers.json';
+import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import * as anchor from '@coral-xyz/anchor';
+import { PublicKey, Keypair, SystemProgram } from '@solana/web3.js';
+import idl from '../../../idl.json'; // Make sure this path points to your frontend/idl.json
 
 // Types
 type GameState = 'IDLE' | 'PLAYING' | 'CASHED_OUT' | 'RUGGED';
@@ -10,54 +14,112 @@ interface ChartPoint {
   multiplier: number;
 }
 
+// Your program ID from lib.rs
+const PROGRAM_ID = new PublicKey("BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz");
+
 export default function PumpIt() {
+  // Wallet & RPC
+  const { connection } = useConnection();
+  const wallet = useWallet();
+
   // Game State
   const [gameState, setGameState] = useState<GameState>('IDLE');
-  const [betAmount, setBetAmount] = useState<number>(0.1); // Default 0.1 SOL
+  const [betAmount, setBetAmount] = useState<number>(0.1); 
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [chartPoints, setChartPoints] = useState<ChartPoint[]>([{ step: 0, multiplier: 1.0 }]);
   const [clientSeed, setClientSeed] = useState<string>('');
   
-  // Hover state for tooltip
+  // Blockchain State
+  const [gameStateKeypair, setGameStateKeypair] = useState<Keypair | null>(null);
+  const [unhashedServerSeed, setUnhashedServerSeed] = useState<string>('');
   const [isHoveringPump, setIsHoveringPump] = useState(false);
 
-  // Constants
   const levels = pumpData.levels;
   const currentLevelData = levels[difficulty];
   const maxSteps = 24;
 
-  // Generate a random client seed on mount
   useEffect(() => {
     setClientSeed(Math.random().toString(36).substring(2, 15));
   }, []);
 
-  // --- SOLANA / BACKEND PLACEHOLDERS ---
-  // In a real scenario, you'd wrap these in your useSolanaWallet and Anchor Provider hooks
+  // --- SOLANA SMART CONTRACT CALLS ---
   
   const handleStartGame = async () => {
+    if (!wallet.publicKey || !wallet.signTransaction) {
+      alert("Please connect your Phantom wallet first!");
+      return;
+    }
+
     try {
-      // 1. Generate Server Seed Hash (via backend API)
-      // 2. Call Anchor contract: start_pump(betAmount, difficultyIndex, serverSeedHash, clientSeed, nonce)
-      console.log("TX: start_pump", { betAmount, difficulty, clientSeed });
+      const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
+      const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
+      
+      // Generate a new account to hold this round's data
+      const newGameStateKeypair = Keypair.generate();
+      setGameStateKeypair(newGameStateKeypair);
+      
+      const [vaultPDA] = PublicKey.findProgramAddressSync([Buffer.from("vault")], program.programId);
+      
+      // Mocking the backend server seed generation for DevNet
+      const seed = "pumpit_server_" + Date.now().toString();
+      setUnhashedServerSeed(seed);
+      
+      const encoder = new TextEncoder();
+      const encodedSeed = encoder.encode(seed);
+      // Cast to standard Uint8Array to satisfy TypeScript's strict BufferSource requirement
+      const hashBuffer = await crypto.subtle.digest('SHA-256', encodedSeed as any);
+      const serverSeedHash = Array.from(new Uint8Array(hashBuffer));
+      
+      const betAmountLamports = new anchor.BN(betAmount * anchor.web3.LAMPORTS_PER_SOL);
+      const diffIndex = difficulty === 'easy' ? 0 : difficulty === 'medium' ? 1 : 2;
+      
+      console.log("Triggering Phantom to Start Game...");
+      const tx = await program.methods.startPump(
+          betAmountLamports, 
+          diffIndex, 
+          serverSeedHash, 
+          clientSeed, 
+          new anchor.BN(0) 
+      ).accounts({
+          gameState: newGameStateKeypair.publicKey,
+          player: wallet.publicKey,
+          vault: vaultPDA,
+          authority: wallet.publicKey, // For devnet, player acts as authority
+          systemProgram: SystemProgram.programId,
+      }).signers([newGameStateKeypair]).rpc();
+      
+      console.log("Tx Confirmed:", tx);
       
       setGameState('PLAYING');
       setCurrentStep(0);
       setChartPoints([{ step: 0, multiplier: 1.0 }]);
     } catch (error) {
       console.error("Failed to start game", error);
+      alert("Transaction failed or was rejected.");
     }
   };
 
   const handlePump = async () => {
-    if (gameState !== 'PLAYING' || currentStep >= maxSteps) return;
+    if (gameState !== 'PLAYING' || currentStep >= maxSteps || !gameStateKeypair || !wallet.publicKey) return;
 
     try {
-      // 1. Call Anchor contract: process_pump(unhashedServerSeed)
-      // Simulating the transaction outcome for UI purposes
-      const success = Math.random() < currentLevelData.probability; 
+      const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
+      const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
       
-      if (success) {
+      console.log("Triggering Phantom to Keep Holding...");
+      const tx = await program.methods.processPump(unhashedServerSeed).accounts({
+          gameState: gameStateKeypair.publicKey,
+          authority: wallet.publicKey, 
+      }).rpc();
+      
+      console.log("Pump Tx Confirmed:", tx);
+
+      // Fetch the updated on-chain state to see if the provably fair logic resulted in a win or rug
+      const state = await program.account.pumpGameState.fetch(gameStateKeypair.publicKey);
+      
+      if (state.isActive) {
+        // Successful Pump
         const nextStep = currentStep + 1;
         setCurrentStep(nextStep);
         setChartPoints(prev => [...prev, { 
@@ -67,7 +129,7 @@ export default function PumpIt() {
       } else {
         // RUGGED
         setGameState('RUGGED');
-        setChartPoints(prev => [...prev, { step: currentStep + 1, multiplier: 0 }]); // Drop to 0
+        setChartPoints(prev => [...prev, { step: currentStep + 1, multiplier: 0 }]); 
         broadcastWager('RUGGED', 0);
       }
     } catch (error) {
@@ -76,14 +138,27 @@ export default function PumpIt() {
   };
 
   const handleCashOut = async () => {
-    if (gameState !== 'PLAYING' || currentStep === 0) return;
+    if (gameState !== 'PLAYING' || currentStep === 0 || !gameStateKeypair || !wallet.publicKey) return;
 
     try {
+      const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
+      const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
+      const [vaultPDA] = PublicKey.findProgramAddressSync([Buffer.from("vault")], program.programId);
+
       const finalMultiplier = currentLevelData.multipliers[currentStep - 1];
-      const finalMultiplierBps = Math.floor(finalMultiplier * 10000);
+      // Convert multiplier to basis points for the smart contract (e.g. 1.0309 -> 10309)
+      const finalMultiplierBps = new anchor.BN(Math.floor(finalMultiplier * 10000));
       
-      // 1. Call Anchor contract: cash_out_pump(finalMultiplierBps)
-      console.log("TX: cash_out_pump", finalMultiplierBps);
+      console.log("Triggering Phantom to Cash Out...");
+      const tx = await program.methods.cashOutPump(finalMultiplierBps).accounts({
+          gameState: gameStateKeypair.publicKey,
+          player: wallet.publicKey,
+          vault: vaultPDA,
+          authority: wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+      }).rpc();
+      
+      console.log("Cash Out Tx Confirmed:", tx);
 
       setGameState('CASHED_OUT');
       broadcastWager('CASH_OUT', finalMultiplier);
@@ -93,21 +168,13 @@ export default function PumpIt() {
   };
 
   const broadcastWager = (event: 'CASH_OUT' | 'RUGGED', finalMultiplier: number) => {
-    // 1. Send WebSocket message to LiveWagerFeed
-    console.log("WS Broadcast:", {
-      game: "Pump It",
-      event,
-      bet: betAmount,
-      multiplier: finalMultiplier,
-      payout: event === 'CASH_OUT' ? betAmount * finalMultiplier : 0
-    });
+    console.log("WS Broadcast Placeholder:", { game: "Pump It", event, bet: betAmount, payout: event === 'CASH_OUT' ? betAmount * finalMultiplier : 0 });
   };
 
-  // --- UI HELPERS ---
+  // --- UI RENDER HELPERS ---
   const currentMultiplier = currentStep === 0 ? 1.0 : currentLevelData.multipliers[currentStep - 1];
   const nextMultiplier = currentStep < maxSteps ? currentLevelData.multipliers[currentStep] : null;
 
-  // Chart Rendering Logic
   const renderChart = () => {
     const chartWidth = 600;
     const chartHeight = 300;
@@ -123,11 +190,10 @@ export default function PumpIt() {
 
     return (
       <div className="relative w-full h-64 bg-[#050806] border border-green-900/50 rounded-lg overflow-hidden flex items-center justify-center">
-        {/* SVG Chart */}
         <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="absolute inset-0 w-full h-full p-4 overflow-visible">
           <polyline
             fill="none"
-            stroke={isRugged ? "#ef4444" : "#22c55e"} // Red on rug, Green on pump
+            stroke={isRugged ? "#ef4444" : "#22c55e"} 
             strokeWidth="4"
             points={points}
             className="transition-all duration-300 drop-shadow-[0_0_8px_rgba(34,197,94,0.5)]"
@@ -141,10 +207,8 @@ export default function PumpIt() {
           })}
         </svg>
 
-        {/* Status Overlays */}
         {gameState === 'RUGGED' && (
           <div className="absolute inset-0 bg-red-900/40 flex flex-col items-center justify-center backdrop-blur-sm z-10">
-            {/* Replace with your actual pepe_rugged.png */}
             <div className="text-6xl mb-4">📉🐸</div> 
             <h2 className="text-4xl font-black text-red-500 uppercase tracking-widest drop-shadow-md">Rugged!</h2>
             <p className="text-red-200 mt-2">The devs dumped on you.</p>
@@ -153,14 +217,12 @@ export default function PumpIt() {
 
         {gameState === 'CASHED_OUT' && (
           <div className="absolute inset-0 bg-green-900/40 flex flex-col items-center justify-center backdrop-blur-sm z-10">
-             {/* Replace with your actual pepe_rich.png */}
             <div className="text-6xl mb-4">💰🐸</div>
             <h2 className="text-4xl font-black text-green-400 uppercase tracking-widest drop-shadow-md">Secured the Bag</h2>
             <p className="text-green-200 mt-2 text-xl font-bold">{currentMultiplier.toFixed(4)}x Payout</p>
           </div>
         )}
 
-        {/* Current Multiplier Display (Live) */}
         {gameState === 'PLAYING' && (
           <div className="absolute top-4 left-4 z-0">
             <span className="text-5xl font-black text-green-500/30 tracking-tighter">
@@ -202,7 +264,7 @@ export default function PumpIt() {
           </div>
         </div>
 
-        {/* Bet Input Placeholder */}
+        {/* Bet Input */}
         <div className="space-y-2 mt-4">
           <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Bet Amount (SOL)</label>
           <div className="flex gap-2">
@@ -284,7 +346,6 @@ export default function PumpIt() {
 
       {/* RIGHT PANEL: Chart View */}
       <div className="flex-1 flex flex-col gap-4">
-        {/* Header Stats */}
         <div className="flex justify-between items-center bg-[#0a0f0c] border border-gray-800 p-4 rounded-xl">
           <div>
             <div className="text-xs text-gray-500 font-bold uppercase">Current Step</div>
@@ -297,10 +358,7 @@ export default function PumpIt() {
             </div>
           </div>
         </div>
-
-        {/* The Chart */}
         {renderChart()}
-        
       </div>
     </div>
   );
