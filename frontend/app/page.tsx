@@ -130,6 +130,12 @@ export default function Dashboard() {
                setShowProvablyFair={setShowProvablyFair} 
              />
           )}
+
+          {/* ADDED PUMP IT COMPONENT RENDER BLOCK */}
+          {activeGame === 'pumpit' && (
+             <PumpIt />
+          )}
+
         </main>
 
         <RightSidebar 
