@@ -12,7 +12,7 @@ import ReceiptModal from "../components/modals/ReceiptModal";
 import CoinflipGame from "../components/games/Coinflip";
 import WhackdGame from "../components/games/Whackd"; 
 import RockPaperScissorsGame from "../components/games/RockPaperScissors";
-// ADDED IMPORT
+import PumpIt from "../components/games/PumpIt";
 import RouletteGame from "../components/games/Roulette"; 
 
 const INITIAL_BETS = [
@@ -98,6 +98,9 @@ export default function Dashboard() {
                   <button onClick={() => setActiveGame('rps')} className="bg-transparent border border-yellow-500 text-yellow-500 hover:bg-yellow-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Play RPS</button>
                   {/* ADDED ROULETTE BUTTON */}
                   <button onClick={() => setActiveGame('roulette')} className="bg-transparent border border-blue-500 text-blue-500 hover:bg-blue-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Pepe Roulette</button>
+                  {/* ADDED PUMP IT BUTTON */}
+                  <button onClick={() => setActiveGame('pumpit')} className="bg-transparent border border-purple-500 text-purple-500 hover:bg-purple-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Pump It!</button>
+              
               </div>
             </div>
           )}
