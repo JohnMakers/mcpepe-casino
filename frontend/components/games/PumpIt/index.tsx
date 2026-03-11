@@ -50,14 +50,6 @@ export default function PumpIt() {
     return () => clearInterval(interval);
   }, [gameState]);
 
-  // --- Bet Input Handlers ---
-  const handleBetChange = (val: number) => {
-    // Prevent negative numbers and enforce 0.1 minimum
-    const safeVal = Math.max(0.1, val);
-    // Round to 2 decimal places to avoid floating point weirdness
-    setBetAmount(Math.round(safeVal * 100) / 100);
-  };
-
   const handleStartGame = async () => {
     if (!wallet.publicKey || !wallet.signTransaction) {
       alert("Please connect your Phantom wallet first!");
@@ -202,13 +194,10 @@ export default function PumpIt() {
     const neonStrokeColor = isRugged ? "#ff2a2a" : "#39ff14"; 
     const fillColor = isRugged ? "#ef4444" : "#22c55e"; 
 
-    // Target Line Calculation with Minimum Visual Gap Override
     let targetY = 0;
     if (nextMultiplier) {
       const rawTargetY = chartHeight - (nextMultiplier / maxRenderedMultiplier) * chartHeight * 0.8;
       const currentVisualY = chartHeight - (currentMultiplier / maxRenderedMultiplier) * chartHeight * 0.8;
-      
-      // If the upcoming line is less than 50 pixels away from our current line, force it higher visually
       targetY = (currentVisualY - rawTargetY < 50) ? currentVisualY - 50 : rawTargetY;
     }
 
@@ -224,7 +213,7 @@ export default function PumpIt() {
           }
           .animate-pop-blast { animation: popUpBlast 1.2s ease-out forwards; }
           
-          /* Rugged Glitch Animation */
+          /* FIXED: Glitch now only iterates 15 times (~2.25 seconds) and stops */
           @keyframes redGlitch {
             0% { transform: translate(0) }
             20% { transform: translate(-3px, 3px) }
@@ -233,9 +222,8 @@ export default function PumpIt() {
             80% { transform: translate(3px, -3px) }
             100% { transform: translate(0) }
           }
-          .animate-glitch { animation: redGlitch 0.15s infinite; }
+          .animate-glitch { animation: redGlitch 0.15s 15 ease-in-out forwards; }
 
-          /* Winner Float Animation */
           @keyframes winFloat {
             0% { transform: translateY(20px) scale(0.9); opacity: 0; }
             100% { transform: translateY(0) scale(1); opacity: 1; }
@@ -306,7 +294,6 @@ export default function PumpIt() {
           />
         </svg>
 
-        {/* Upgraded Rugged Screen */}
         {gameState === 'RUGGED' && (
           <div className="absolute inset-0 bg-[#0a0000]/80 flex flex-col items-center justify-center backdrop-blur-sm z-30 shadow-[inset_0_0_100px_rgba(255,0,0,0.5)]">
             <h2 className="text-7xl font-black text-red-600 uppercase tracking-tighter animate-glitch mix-blend-screen drop-shadow-[0_0_20px_rgba(239,68,68,1)]">LIQUIDATED</h2>
@@ -316,7 +303,6 @@ export default function PumpIt() {
           </div>
         )}
 
-        {/* Upgraded Winner Screen */}
         {gameState === 'CASHED_OUT' && (
           <div className="absolute inset-0 bg-[#001a00]/80 flex flex-col items-center justify-center backdrop-blur-sm z-30 shadow-[inset_0_0_100px_rgba(0,255,0,0.3)]">
             <div className="animate-win-float flex flex-col items-center">
@@ -366,7 +352,6 @@ export default function PumpIt() {
           </div>
         </div>
 
-        {/* Upgraded Sleek Bet Slip */}
         <div className="space-y-2 mt-4">
           <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Bet Amount</label>
           <div className="bg-[#050806] border border-gray-800 rounded-lg p-3 flex flex-col gap-3 shadow-inner">
@@ -376,25 +361,33 @@ export default function PumpIt() {
             </div>
             <div className="flex items-center gap-3">
                <button 
-                 onClick={() => handleBetChange(betAmount - 0.1)} disabled={gameState === 'PLAYING'}
+                 onClick={() => setBetAmount(prev => Math.max(0, prev - 0.1))} disabled={gameState === 'PLAYING'}
                  className="w-12 h-12 bg-gray-900 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white font-black text-xl disabled:opacity-50 transition-colors flex items-center justify-center shadow-md"
                >
                  -
                </button>
+               {/* FIXED: Removed restrictive constraints, allowing free typing of decimals */}
                <input 
-                 type="number" min="0.1" step="0.1" value={betAmount} onChange={(e) => handleBetChange(Number(e.target.value))} disabled={gameState === 'PLAYING'}
+                 type="number" min="0" step="0.001" 
+                 value={betAmount.toString()} 
+                 onChange={(e) => {
+                    let val = parseFloat(e.target.value);
+                    if (isNaN(val) || val < 0) val = 0;
+                    setBetAmount(val);
+                 }} 
+                 disabled={gameState === 'PLAYING'}
                  className="flex-1 bg-transparent text-center text-white font-mono text-2xl font-black outline-none disabled:opacity-50 w-full"
                />
                <button 
-                 onClick={() => handleBetChange(betAmount + 0.1)} disabled={gameState === 'PLAYING'}
+                 onClick={() => setBetAmount(prev => prev + 0.1)} disabled={gameState === 'PLAYING'}
                  className="w-12 h-12 bg-gray-900 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white font-black text-xl disabled:opacity-50 transition-colors flex items-center justify-center shadow-md"
                >
                  +
                </button>
             </div>
             <div className="flex gap-2 mt-1">
-               <button onClick={() => handleBetChange(betAmount / 2)} disabled={gameState === 'PLAYING'} className="flex-1 py-2 bg-black border border-gray-800 rounded text-xs font-black tracking-widest text-gray-500 hover:text-white hover:border-gray-600 disabled:opacity-50 transition-all">½</button>
-               <button onClick={() => handleBetChange(betAmount * 2)} disabled={gameState === 'PLAYING'} className="flex-1 py-2 bg-black border border-gray-800 rounded text-xs font-black tracking-widest text-gray-500 hover:text-white hover:border-gray-600 disabled:opacity-50 transition-all">2x</button>
+               <button onClick={() => setBetAmount(prev => Math.max(0, Math.floor((prev / 2) * 1000) / 1000))} disabled={gameState === 'PLAYING'} className="flex-1 py-2 bg-black border border-gray-800 rounded text-xs font-black tracking-widest text-gray-500 hover:text-white hover:border-gray-600 disabled:opacity-50 transition-all">½</button>
+               <button onClick={() => setBetAmount(prev => Math.round((prev * 2) * 1000) / 1000)} disabled={gameState === 'PLAYING'} className="flex-1 py-2 bg-black border border-gray-800 rounded text-xs font-black tracking-widest text-gray-500 hover:text-white hover:border-gray-600 disabled:opacity-50 transition-all">2x</button>
             </div>
           </div>
         </div>
