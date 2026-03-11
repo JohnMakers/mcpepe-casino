@@ -5,8 +5,8 @@ anchor_version = "0.29.0"
 resolution = true
 skip-lint = false
 
-[programs.devnet]
-mcpepe_casino = "iyaNXUTFPUgqgFAMht5LQpQDjPSXuHm8HspAe7Cs9fH"
+[programs.localnet]
+mcpepe_casino = "7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw"
 
 [registry]
 url = "https://api.apr.dev"

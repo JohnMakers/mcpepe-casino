@@ -7,7 +7,7 @@ import idl from '../../../idl.json';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import ProvablyFairModal from '../../modals/ProvablyFairModal';
 
-const PROGRAM_ID = new PublicKey("iyaNXUTFPUgqgFAMht5LQpQDjPSXuHm8HspAe7Cs9fH");
+const PROGRAM_ID = new PublicKey("7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw");
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
 const MULTIPLIERS = [1.9, 3.6, 6.8, 13.0, 24.5, 46.5];

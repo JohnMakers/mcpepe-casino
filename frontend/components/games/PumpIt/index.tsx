@@ -13,7 +13,7 @@ interface ChartPoint {
   multiplier: number;
 }
 
-const PROGRAM_ID = new PublicKey("BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz");
+const PROGRAM_ID = new PublicKey("7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw");
 
 export default function PumpIt() {
   const { connection } = useConnection();
