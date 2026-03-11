@@ -13,7 +13,8 @@ interface ChartPoint {
   multiplier: number;
 }
 
-const PROGRAM_ID = new PublicKey("7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw");
+// ⚠️ IMPORTANT: Paste your actual Program ID from 'anchor keys list' here!
+const PROGRAM_ID = new PublicKey("7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw"); 
 
 export default function PumpIt() {
   const { connection } = useConnection();
@@ -30,7 +31,6 @@ export default function PumpIt() {
   const [unhashedServerSeed, setUnhashedServerSeed] = useState<string>('');
   const [isHoveringPump, setIsHoveringPump] = useState(false);
 
-  // Animation States
   const [time, setTime] = useState(0);
   const [popTarget, setPopTarget] = useState<{ mult: number, key: number } | null>(null);
 
@@ -42,14 +42,21 @@ export default function PumpIt() {
     setClientSeed(Math.random().toString(36).substring(2, 15));
   }, []);
 
-  // Smooth Live Market Jitter Loop (No Resets)
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (gameState === 'PLAYING') {
-      interval = setInterval(() => setTime(Date.now()), 40); // 25fps equivalent for smooth animation
+      interval = setInterval(() => setTime(Date.now()), 40); 
     }
     return () => clearInterval(interval);
   }, [gameState]);
+
+  // --- Bet Input Handlers ---
+  const handleBetChange = (val: number) => {
+    // Prevent negative numbers and enforce 0.1 minimum
+    const safeVal = Math.max(0.1, val);
+    // Round to 2 decimal places to avoid floating point weirdness
+    setBetAmount(Math.round(safeVal * 100) / 100);
+  };
 
   const handleStartGame = async () => {
     if (!wallet.publicKey || !wallet.signTransaction) {
@@ -166,7 +173,6 @@ export default function PumpIt() {
     const viewBoxWidth = 600;
     const isRugged = gameState === 'RUGGED';
 
-    // Dynamic scale now perfectly accounts for the NEXT multiplier so the target line is always visible
     const highestValToRender = Math.max(1.5, ...chartPoints.map(p => p.multiplier), nextMultiplier ? nextMultiplier : 0);
     const maxRenderedMultiplier = highestValToRender * 1.2;
 
@@ -178,13 +184,11 @@ export default function PumpIt() {
 
     const lastPoint = pointsData[pointsData.length - 1];
 
-    // Smooth, continuous undulating animation (No Resets)
     let liveX = lastPoint.x;
     let liveY = lastPoint.y;
     if (gameState === 'PLAYING') {
-        // Continuous organic noise math instead of modulus
-        const noiseX = (Math.sin(time / 400) + 1) * 12; // Gently pulses forward and back organically
-        const noiseY = Math.sin(time / 150) * 8 + Math.cos(time / 250) * 6; // Undulates up and down
+        const noiseX = (Math.sin(time / 400) + 1) * 12; 
+        const noiseY = Math.sin(time / 150) * 8 + Math.cos(time / 250) * 6; 
         liveX += noiseX;
         liveY += noiseY;
     }
@@ -195,13 +199,17 @@ export default function PumpIt() {
     const fullPath = isRugged ? historicalPath : `${historicalPath} L ${liveX} ${liveY}`;
     const areaPath = `${fullPath} L ${isRugged ? lastPoint.x : liveX} ${chartHeight} L 0 ${chartHeight} Z`;
 
-    const neonStrokeColor = isRugged ? "#ff2a2a" : "#39ff14"; // Bright red or Cyber Neon Green
+    const neonStrokeColor = isRugged ? "#ff2a2a" : "#39ff14"; 
     const fillColor = isRugged ? "#ef4444" : "#22c55e"; 
 
-    // Target Line Calculation
+    // Target Line Calculation with Minimum Visual Gap Override
     let targetY = 0;
     if (nextMultiplier) {
-      targetY = chartHeight - (nextMultiplier / maxRenderedMultiplier) * chartHeight * 0.8;
+      const rawTargetY = chartHeight - (nextMultiplier / maxRenderedMultiplier) * chartHeight * 0.8;
+      const currentVisualY = chartHeight - (currentMultiplier / maxRenderedMultiplier) * chartHeight * 0.8;
+      
+      // If the upcoming line is less than 50 pixels away from our current line, force it higher visually
+      targetY = (currentVisualY - rawTargetY < 50) ? currentVisualY - 50 : rawTargetY;
     }
 
     return (
@@ -214,9 +222,25 @@ export default function PumpIt() {
             80% { transform: translate(-50%, -90%) scale(1); opacity: 1; text-shadow: 0 0 20px #39ff14; }
             100% { transform: translate(-50%, -120%) scale(0.8); opacity: 0; }
           }
-          .animate-pop-blast {
-            animation: popUpBlast 1.2s ease-out forwards;
+          .animate-pop-blast { animation: popUpBlast 1.2s ease-out forwards; }
+          
+          /* Rugged Glitch Animation */
+          @keyframes redGlitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-3px, 3px) }
+            40% { transform: translate(-3px, -3px) }
+            60% { transform: translate(3px, 3px) }
+            80% { transform: translate(3px, -3px) }
+            100% { transform: translate(0) }
           }
+          .animate-glitch { animation: redGlitch 0.15s infinite; }
+
+          /* Winner Float Animation */
+          @keyframes winFloat {
+            0% { transform: translateY(20px) scale(0.9); opacity: 0; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+          }
+          .animate-win-float { animation: winFloat 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
         `}</style>
 
         {popTarget && (
@@ -230,7 +254,6 @@ export default function PumpIt() {
         )}
 
         <svg viewBox={`${targetViewX} 0 ${viewBoxWidth} ${chartHeight}`} className="absolute inset-0 w-full h-full p-0 overflow-visible">
-          
           <defs>
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
               <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#112211" strokeWidth="1" />
@@ -239,8 +262,6 @@ export default function PumpIt() {
               <stop offset="0%" stopColor={fillColor} stopOpacity="0.4" />
               <stop offset="100%" stopColor={fillColor} stopOpacity="0.0" />
             </linearGradient>
-            
-            {/* Super Neon Glow Filter */}
             <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur1"/>
               <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur2"/>
@@ -252,40 +273,21 @@ export default function PumpIt() {
             </filter>
           </defs>
 
-          {/* Grid Background */}
           <rect x={targetViewX} y="0" width={viewBoxWidth} height={chartHeight} fill="url(#grid)" />
-
-          {/* Area Gradient */}
           <path d={areaPath} fill="url(#chartGradient)" />
 
-          {/* Target Line & Badge (Rendered underneath the main chart line) */}
           {gameState === 'PLAYING' && nextMultiplier && (
             <g className="transition-all duration-500">
               <line 
-                x1={targetViewX} 
-                y1={targetY} 
-                x2={targetViewX + viewBoxWidth} 
-                y2={targetY} 
-                stroke="#10b981" 
-                strokeWidth="2"
-                strokeDasharray="6,6"
-                opacity="0.6"
+                x1={targetViewX} y1={targetY} x2={targetViewX + viewBoxWidth} y2={targetY} 
+                stroke="#10b981" strokeWidth="2" strokeDasharray="6,6" opacity="0.6"
               />
               <rect 
-                x={targetViewX + viewBoxWidth - 80} 
-                y={targetY - 12} 
-                width="80" 
-                height="24" 
-                fill="#0a0f0c" 
-                stroke="#10b981"
-                strokeWidth="1"
-                rx="4"
+                x={targetViewX + viewBoxWidth - 80} y={targetY - 12} width="80" height="24" 
+                fill="#0a0f0c" stroke="#10b981" strokeWidth="1" rx="4"
               />
               <text 
-                x={targetViewX + viewBoxWidth - 40} 
-                y={targetY + 4} 
-                fill="#10b981" 
-                textAnchor="middle" 
+                x={targetViewX + viewBoxWidth - 40} y={targetY + 4} fill="#10b981" textAnchor="middle" 
                 className="font-mono text-xs font-black drop-shadow-[0_0_5px_rgba(16,185,129,0.8)]"
               >
                 {nextMultiplier.toFixed(2)}x
@@ -293,44 +295,39 @@ export default function PumpIt() {
             </g>
           )}
 
-          {/* Main Neon Line */}
           <path
-            d={fullPath}
-            fill="none"
-            stroke={neonStrokeColor}
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            filter="url(#neonGlow)"
-            className="transition-all duration-[40ms] linear"
+            d={fullPath} fill="none" stroke={neonStrokeColor} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"
+            filter="url(#neonGlow)" className="transition-all duration-[40ms] linear"
           />
 
-          {/* Glowing Live Market Dot */}
           <circle 
-            cx={isRugged ? lastPoint.x : liveX} 
-            cy={isRugged ? lastPoint.y : liveY} 
-            r={isRugged ? "10" : "8"} 
-            fill="#ffffff" 
-            stroke={neonStrokeColor}
-            strokeWidth="3"
-            filter="url(#neonGlow)"
-            className="transition-all duration-[40ms] linear"
+            cx={isRugged ? lastPoint.x : liveX} cy={isRugged ? lastPoint.y : liveY} r={isRugged ? "10" : "8"} 
+            fill="#ffffff" stroke={neonStrokeColor} strokeWidth="3" filter="url(#neonGlow)" className="transition-all duration-[40ms] linear"
           />
         </svg>
 
+        {/* Upgraded Rugged Screen */}
         {gameState === 'RUGGED' && (
-          <div className="absolute inset-0 bg-red-900/60 flex flex-col items-center justify-center backdrop-blur-sm z-30">
-            <div className="text-6xl mb-4">📉🐸</div> 
-            <h2 className="text-5xl font-black text-red-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]">Rugged!</h2>
-            <p className="text-red-200 mt-2 font-bold text-lg">The devs dumped on you.</p>
+          <div className="absolute inset-0 bg-[#0a0000]/80 flex flex-col items-center justify-center backdrop-blur-sm z-30 shadow-[inset_0_0_100px_rgba(255,0,0,0.5)]">
+            <h2 className="text-7xl font-black text-red-600 uppercase tracking-tighter animate-glitch mix-blend-screen drop-shadow-[0_0_20px_rgba(239,68,68,1)]">LIQUIDATED</h2>
+            <div className="mt-4 bg-red-900/40 border border-red-600/50 px-6 py-2 rounded-full">
+               <p className="text-red-400 font-bold tracking-widest text-sm uppercase">The devs dumped on you</p>
+            </div>
           </div>
         )}
 
+        {/* Upgraded Winner Screen */}
         {gameState === 'CASHED_OUT' && (
-          <div className="absolute inset-0 bg-green-900/60 flex flex-col items-center justify-center backdrop-blur-sm z-30">
-            <div className="text-6xl mb-4">💰🐸</div>
-            <h2 className="text-5xl font-black text-green-400 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]">Bag Secured</h2>
-            <p className="text-green-100 mt-2 text-2xl font-black">{currentMultiplier.toFixed(4)}x Payout</p>
+          <div className="absolute inset-0 bg-[#001a00]/80 flex flex-col items-center justify-center backdrop-blur-sm z-30 shadow-[inset_0_0_100px_rgba(0,255,0,0.3)]">
+            <div className="animate-win-float flex flex-col items-center">
+              <h2 className="text-6xl font-black text-green-400 uppercase tracking-tighter drop-shadow-[0_0_30px_rgba(34,197,94,0.8)] mb-2">BAG SECURED</h2>
+              <div className="bg-green-900/40 border border-green-500/50 px-8 py-4 rounded-2xl shadow-[0_0_40px_rgba(34,197,94,0.2)]">
+                <p className="text-green-200 text-sm font-bold uppercase tracking-widest text-center mb-1">Total Payout</p>
+                <p className="text-white font-mono text-4xl font-black text-center drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
+                  {(betAmount * currentMultiplier).toFixed(4)} <span className="text-green-500 text-2xl">SOL</span>
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -348,7 +345,6 @@ export default function PumpIt() {
   return (
     <div className="flex flex-col md:flex-row gap-6 p-6 w-full max-w-6xl mx-auto">
       
-      {/* LEFT PANEL */}
       <div className="w-full md:w-80 flex flex-col gap-4 shrink-0 bg-[#0a0f0c] p-6 rounded-xl border border-gray-800 shadow-2xl">
         
         <div className="space-y-2">
@@ -356,13 +352,9 @@ export default function PumpIt() {
           <div className="flex gap-2 bg-black p-1 rounded-lg border border-gray-800">
             {(['easy', 'medium', 'hard'] as Difficulty[]).map(lvl => (
               <button
-                key={lvl}
-                disabled={gameState === 'PLAYING'}
-                onClick={() => setDifficulty(lvl)}
+                key={lvl} disabled={gameState === 'PLAYING'} onClick={() => setDifficulty(lvl)}
                 className={`flex-1 py-2 text-sm font-black uppercase rounded-md transition-all ${
-                  difficulty === lvl 
-                    ? 'bg-green-600 text-black shadow-[0_0_10px_rgba(34,197,94,0.3)]' 
-                    : 'text-gray-400 hover:text-white disabled:opacity-50 disabled:hover:text-gray-400'
+                  difficulty === lvl ? 'bg-green-600 text-black shadow-[0_0_10px_rgba(34,197,94,0.3)]' : 'text-gray-400 hover:text-white disabled:opacity-50 disabled:hover:text-gray-400'
                 }`}
               >
                 {lvl}
@@ -374,51 +366,55 @@ export default function PumpIt() {
           </div>
         </div>
 
+        {/* Upgraded Sleek Bet Slip */}
         <div className="space-y-2 mt-4">
-          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Bet Amount (SOL)</label>
-          <div className="flex gap-2">
-            <input 
-              type="number" 
-              value={betAmount}
-              onChange={(e) => setBetAmount(Number(e.target.value))}
-              disabled={gameState === 'PLAYING'}
-              className="w-full bg-black border border-gray-800 rounded-lg p-3 text-white font-mono focus:border-green-500 outline-none disabled:opacity-50 transition-colors"
-            />
-            <button 
-              onClick={() => setBetAmount(prev => prev / 2)}
-              disabled={gameState === 'PLAYING'}
-              className="px-4 bg-gray-900 border border-gray-800 rounded-lg text-gray-400 font-bold hover:bg-gray-800 hover:text-white disabled:opacity-50 transition-colors"
-            >
-              ½
-            </button>
-            <button 
-              onClick={() => setBetAmount(prev => prev * 2)}
-              disabled={gameState === 'PLAYING'}
-              className="px-4 bg-gray-900 border border-gray-800 rounded-lg text-gray-400 font-bold hover:bg-gray-800 hover:text-white disabled:opacity-50 transition-colors"
-            >
-              2x
-            </button>
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Bet Amount</label>
+          <div className="bg-[#050806] border border-gray-800 rounded-lg p-3 flex flex-col gap-3 shadow-inner">
+            <div className="flex items-center justify-between px-1">
+               <span className="text-gray-600 text-xs font-black uppercase tracking-widest">Wager</span>
+               <span className="text-green-500 font-bold text-xs">SOL</span>
+            </div>
+            <div className="flex items-center gap-3">
+               <button 
+                 onClick={() => handleBetChange(betAmount - 0.1)} disabled={gameState === 'PLAYING'}
+                 className="w-12 h-12 bg-gray-900 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white font-black text-xl disabled:opacity-50 transition-colors flex items-center justify-center shadow-md"
+               >
+                 -
+               </button>
+               <input 
+                 type="number" min="0.1" step="0.1" value={betAmount} onChange={(e) => handleBetChange(Number(e.target.value))} disabled={gameState === 'PLAYING'}
+                 className="flex-1 bg-transparent text-center text-white font-mono text-2xl font-black outline-none disabled:opacity-50 w-full"
+               />
+               <button 
+                 onClick={() => handleBetChange(betAmount + 0.1)} disabled={gameState === 'PLAYING'}
+                 className="w-12 h-12 bg-gray-900 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white font-black text-xl disabled:opacity-50 transition-colors flex items-center justify-center shadow-md"
+               >
+                 +
+               </button>
+            </div>
+            <div className="flex gap-2 mt-1">
+               <button onClick={() => handleBetChange(betAmount / 2)} disabled={gameState === 'PLAYING'} className="flex-1 py-2 bg-black border border-gray-800 rounded text-xs font-black tracking-widest text-gray-500 hover:text-white hover:border-gray-600 disabled:opacity-50 transition-all">½</button>
+               <button onClick={() => handleBetChange(betAmount * 2)} disabled={gameState === 'PLAYING'} className="flex-1 py-2 bg-black border border-gray-800 rounded text-xs font-black tracking-widest text-gray-500 hover:text-white hover:border-gray-600 disabled:opacity-50 transition-all">2x</button>
+            </div>
           </div>
         </div>
 
-        <div className="mt-8 space-y-3">
+        <div className="mt-6 space-y-3">
           {gameState === 'IDLE' || gameState === 'RUGGED' || gameState === 'CASHED_OUT' ? (
              <button 
                onClick={handleStartGame}
-               className="w-full py-4 bg-green-500 hover:bg-green-400 text-black font-black text-lg uppercase tracking-widest rounded-lg transition-all shadow-[0_0_20px_rgba(34,197,94,0.2)] hover:shadow-[0_0_30px_rgba(34,197,94,0.5)] hover:-translate-y-1"
+               className="w-full py-5 bg-green-500 hover:bg-green-400 text-black font-black text-xl uppercase tracking-widest rounded-lg transition-all shadow-[0_0_20px_rgba(34,197,94,0.2)] hover:shadow-[0_0_30px_rgba(34,197,94,0.5)] hover:-translate-y-1"
              >
                Start Game
              </button>
           ) : (
             <>
               <div 
-                className="relative"
-                onMouseEnter={() => setIsHoveringPump(true)}
-                onMouseLeave={() => setIsHoveringPump(false)}
+                className="relative" onMouseEnter={() => setIsHoveringPump(true)} onMouseLeave={() => setIsHoveringPump(false)}
               >
                 <button 
                   onClick={handlePump}
-                  className="w-full py-4 bg-green-600 hover:bg-green-500 text-black font-black text-lg uppercase tracking-widest rounded-lg transition-all shadow-[0_0_15px_rgba(34,197,94,0.4)]"
+                  className="w-full py-5 bg-green-600 hover:bg-green-500 text-black font-black text-xl uppercase tracking-widest rounded-lg transition-all shadow-[0_0_15px_rgba(34,197,94,0.4)]"
                 >
                   Keep Holding 📈
                 </button>
@@ -438,9 +434,8 @@ export default function PumpIt() {
               </div>
 
               <button 
-                onClick={handleCashOut}
-                disabled={currentStep === 0}
-                className="w-full py-4 bg-gray-800 hover:bg-gray-700 text-white font-black text-lg uppercase tracking-widest rounded-lg transition-all border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:border-gray-400"
+                onClick={handleCashOut} disabled={currentStep === 0}
+                className="w-full py-4 bg-[#0a0f0c] hover:bg-gray-900 text-white font-black text-lg uppercase tracking-widest rounded-lg transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:border-gray-400"
               >
                 Cash Out ({currentMultiplier.toFixed(2)}x)
               </button>
@@ -449,7 +444,6 @@ export default function PumpIt() {
         </div>
       </div>
 
-      {/* RIGHT PANEL */}
       <div className="flex-1 flex flex-col gap-4">
         <div className="flex justify-between items-center bg-[#0a0f0c] border border-gray-800 p-5 rounded-xl shadow-xl">
           <div>
