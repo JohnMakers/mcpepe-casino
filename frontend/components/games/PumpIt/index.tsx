@@ -13,7 +13,7 @@ interface ChartPoint {
   multiplier: number;
 }
 
-const PROGRAM_ID = new PublicKey("7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw");
+const PROGRAM_ID = new PublicKey("BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz");
 
 export default function PumpIt() {
   const { connection } = useConnection();
@@ -42,11 +42,11 @@ export default function PumpIt() {
     setClientSeed(Math.random().toString(36).substring(2, 15));
   }, []);
 
-  // Live Market Jitter Loop
+  // Smooth Live Market Jitter Loop (No Resets)
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (gameState === 'PLAYING') {
-      interval = setInterval(() => setTime(Date.now()), 50);
+      interval = setInterval(() => setTime(Date.now()), 40); // 25fps equivalent for smooth animation
     }
     return () => clearInterval(interval);
   }, [gameState]);
@@ -121,7 +121,6 @@ export default function PumpIt() {
         const newMult = currentLevelData.multipliers[nextStep - 1];
         setChartPoints(prev => [...prev, { step: nextStep, multiplier: newMult }]);
         
-        // Trigger the Popping Animation
         setPopTarget({ mult: newMult, key: Date.now() });
       } else {
         setGameState('RUGGED');
@@ -162,15 +161,15 @@ export default function PumpIt() {
   const displayProbability = currentLevelData.marginalProbabilities[currentStep < maxSteps ? currentStep : maxSteps - 1];
 
   const renderChart = () => {
-    const stepWidth = 120; // Fixed width per step makes jumps feel massive
+    const stepWidth = 120; 
     const chartHeight = 300;
     const viewBoxWidth = 600;
     const isRugged = gameState === 'RUGGED';
 
-    // Dynamic vertical scaling (leaves 20% headroom at the top)
-    const maxRenderedMultiplier = Math.max(1.5, ...chartPoints.map(p => p.multiplier)) * 1.2;
+    // Dynamic scale now perfectly accounts for the NEXT multiplier so the target line is always visible
+    const highestValToRender = Math.max(1.5, ...chartPoints.map(p => p.multiplier), nextMultiplier ? nextMultiplier : 0);
+    const maxRenderedMultiplier = highestValToRender * 1.2;
 
-    // Fixed Historical Points
     const pointsData = chartPoints.map((p) => {
       const x = p.step * stepWidth;
       const y = chartHeight - (p.multiplier / maxRenderedMultiplier) * chartHeight * 0.8;
@@ -179,25 +178,31 @@ export default function PumpIt() {
 
     const lastPoint = pointsData[pointsData.length - 1];
 
-    // The Live, Jittering Point (Simulates TradingView tick movement)
+    // Smooth, continuous undulating animation (No Resets)
     let liveX = lastPoint.x;
     let liveY = lastPoint.y;
     if (gameState === 'PLAYING') {
-        const drift = ((time % 2000) / 2000) * (stepWidth * 0.4); 
-        const noise = Math.sin(time / 150) * 8 + Math.cos(time / 250) * 5; 
-        liveX += drift;
-        liveY += noise;
+        // Continuous organic noise math instead of modulus
+        const noiseX = (Math.sin(time / 400) + 1) * 12; // Gently pulses forward and back organically
+        const noiseY = Math.sin(time / 150) * 8 + Math.cos(time / 250) * 6; // Undulates up and down
+        liveX += noiseX;
+        liveY += noiseY;
     }
 
-    // Dynamic Panning: Keep the current action on the right side of the screen
     const targetViewX = Math.max(0, liveX - viewBoxWidth + stepWidth * 1.5);
 
-    // Build the SVG paths
     const historicalPath = pointsData.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
     const fullPath = isRugged ? historicalPath : `${historicalPath} L ${liveX} ${liveY}`;
     const areaPath = `${fullPath} L ${isRugged ? lastPoint.x : liveX} ${chartHeight} L 0 ${chartHeight} Z`;
 
-    const strokeColor = isRugged ? "#ef4444" : "#22c55e"; // Red or Green
+    const neonStrokeColor = isRugged ? "#ff2a2a" : "#39ff14"; // Bright red or Cyber Neon Green
+    const fillColor = isRugged ? "#ef4444" : "#22c55e"; 
+
+    // Target Line Calculation
+    let targetY = 0;
+    if (nextMultiplier) {
+      targetY = chartHeight - (nextMultiplier / maxRenderedMultiplier) * chartHeight * 0.8;
+    }
 
     return (
       <div className="relative w-full h-64 bg-[#050806] border border-gray-800 rounded-lg overflow-hidden flex items-center justify-center shadow-[inset_0_0_50px_rgba(0,0,0,0.8)]">
@@ -205,8 +210,8 @@ export default function PumpIt() {
         <style>{`
           @keyframes popUpBlast {
             0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
-            15% { transform: translate(-50%, -60%) scale(1.3); opacity: 1; text-shadow: 0 0 40px #22c55e, 0 0 80px #22c55e; }
-            80% { transform: translate(-50%, -90%) scale(1); opacity: 1; text-shadow: 0 0 20px #22c55e; }
+            15% { transform: translate(-50%, -60%) scale(1.3); opacity: 1; text-shadow: 0 0 40px #39ff14, 0 0 80px #39ff14; }
+            80% { transform: translate(-50%, -90%) scale(1); opacity: 1; text-shadow: 0 0 20px #39ff14; }
             100% { transform: translate(-50%, -120%) scale(0.8); opacity: 0; }
           }
           .animate-pop-blast {
@@ -214,18 +219,16 @@ export default function PumpIt() {
           }
         `}</style>
 
-        {/* The Giant Popping Multiplier Overlay */}
         {popTarget && (
           <div 
             key={popTarget.key} 
-            className="absolute z-30 font-black text-6xl text-white pointer-events-none animate-pop-blast"
+            className="absolute z-40 font-black text-6xl text-white pointer-events-none animate-pop-blast"
             style={{ left: '50%', top: '50%' }}
           >
             {popTarget.mult.toFixed(2)}x
           </div>
         )}
 
-        {/* TradingView SVG Engine */}
         <svg viewBox={`${targetViewX} 0 ${viewBoxWidth} ${chartHeight}`} className="absolute inset-0 w-full h-full p-0 overflow-visible">
           
           <defs>
@@ -233,47 +236,90 @@ export default function PumpIt() {
               <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#112211" strokeWidth="1" />
             </pattern>
             <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={strokeColor} stopOpacity="0.4" />
-              <stop offset="100%" stopColor={strokeColor} stopOpacity="0.0" />
+              <stop offset="0%" stopColor={fillColor} stopOpacity="0.4" />
+              <stop offset="100%" stopColor={fillColor} stopOpacity="0.0" />
             </linearGradient>
-            <filter id="glow">
-              <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+            
+            {/* Super Neon Glow Filter */}
+            <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur1"/>
+              <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur2"/>
               <feMerge>
-                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="blur2"/>
+                <feMergeNode in="blur1"/>
                 <feMergeNode in="SourceGraphic"/>
               </feMerge>
             </filter>
           </defs>
 
-          {/* Background Grid */}
+          {/* Grid Background */}
           <rect x={targetViewX} y="0" width={viewBoxWidth} height={chartHeight} fill="url(#grid)" />
 
-          {/* Area Fill */}
+          {/* Area Gradient */}
           <path d={areaPath} fill="url(#chartGradient)" />
 
-          {/* Main Line */}
+          {/* Target Line & Badge (Rendered underneath the main chart line) */}
+          {gameState === 'PLAYING' && nextMultiplier && (
+            <g className="transition-all duration-500">
+              <line 
+                x1={targetViewX} 
+                y1={targetY} 
+                x2={targetViewX + viewBoxWidth} 
+                y2={targetY} 
+                stroke="#10b981" 
+                strokeWidth="2"
+                strokeDasharray="6,6"
+                opacity="0.6"
+              />
+              <rect 
+                x={targetViewX + viewBoxWidth - 80} 
+                y={targetY - 12} 
+                width="80" 
+                height="24" 
+                fill="#0a0f0c" 
+                stroke="#10b981"
+                strokeWidth="1"
+                rx="4"
+              />
+              <text 
+                x={targetViewX + viewBoxWidth - 40} 
+                y={targetY + 4} 
+                fill="#10b981" 
+                textAnchor="middle" 
+                className="font-mono text-xs font-black drop-shadow-[0_0_5px_rgba(16,185,129,0.8)]"
+              >
+                {nextMultiplier.toFixed(2)}x
+              </text>
+            </g>
+          )}
+
+          {/* Main Neon Line */}
           <path
             d={fullPath}
             fill="none"
-            stroke={strokeColor}
+            stroke={neonStrokeColor}
             strokeWidth="4"
-            filter="url(#glow)"
-            className="transition-all duration-[50ms] linear"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            filter="url(#neonGlow)"
+            className="transition-all duration-[40ms] linear"
           />
 
-          {/* The Current Live Dot */}
+          {/* Glowing Live Market Dot */}
           <circle 
             cx={isRugged ? lastPoint.x : liveX} 
             cy={isRugged ? lastPoint.y : liveY} 
-            r={isRugged ? "8" : "6"} 
-            fill={strokeColor} 
-            className="transition-all duration-[50ms] linear"
+            r={isRugged ? "10" : "8"} 
+            fill="#ffffff" 
+            stroke={neonStrokeColor}
+            strokeWidth="3"
+            filter="url(#neonGlow)"
+            className="transition-all duration-[40ms] linear"
           />
         </svg>
 
-        {/* Status Overlays */}
         {gameState === 'RUGGED' && (
-          <div className="absolute inset-0 bg-red-900/60 flex flex-col items-center justify-center backdrop-blur-sm z-20">
+          <div className="absolute inset-0 bg-red-900/60 flex flex-col items-center justify-center backdrop-blur-sm z-30">
             <div className="text-6xl mb-4">📉🐸</div> 
             <h2 className="text-5xl font-black text-red-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]">Rugged!</h2>
             <p className="text-red-200 mt-2 font-bold text-lg">The devs dumped on you.</p>
@@ -281,14 +327,13 @@ export default function PumpIt() {
         )}
 
         {gameState === 'CASHED_OUT' && (
-          <div className="absolute inset-0 bg-green-900/60 flex flex-col items-center justify-center backdrop-blur-sm z-20">
+          <div className="absolute inset-0 bg-green-900/60 flex flex-col items-center justify-center backdrop-blur-sm z-30">
             <div className="text-6xl mb-4">💰🐸</div>
             <h2 className="text-5xl font-black text-green-400 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]">Bag Secured</h2>
             <p className="text-green-100 mt-2 text-2xl font-black">{currentMultiplier.toFixed(4)}x Payout</p>
           </div>
         )}
 
-        {/* Current Multiplier Display (Live) */}
         {gameState === 'PLAYING' && (
           <div className="absolute top-6 left-6 z-10">
             <span className="text-6xl font-black text-white/10 tracking-tighter mix-blend-overlay">
@@ -303,7 +348,7 @@ export default function PumpIt() {
   return (
     <div className="flex flex-col md:flex-row gap-6 p-6 w-full max-w-6xl mx-auto">
       
-      {/* LEFT PANEL: Controls */}
+      {/* LEFT PANEL */}
       <div className="w-full md:w-80 flex flex-col gap-4 shrink-0 bg-[#0a0f0c] p-6 rounded-xl border border-gray-800 shadow-2xl">
         
         <div className="space-y-2">
@@ -379,9 +424,9 @@ export default function PumpIt() {
                 </button>
                 
                 {isHoveringPump && nextMultiplier && (
-                  <div className="absolute bottom-full left-0 w-full mb-3 bg-[#0a0f0c] border border-green-900/50 rounded-lg p-4 shadow-2xl z-40">
+                  <div className="absolute bottom-full left-0 w-full mb-3 bg-[#0a0f0c] border border-green-900/50 rounded-lg p-4 shadow-2xl z-50">
                     <div className="flex justify-between items-center text-sm border-b border-gray-800 pb-2 mb-2">
-                      <span className="text-gray-400 font-bold uppercase">Next Payout:</span>
+                      <span className="text-gray-400 font-bold uppercase">Next Target:</span>
                       <span className="text-green-400 font-black text-lg">{nextMultiplier.toFixed(2)}x</span>
                     </div>
                     <div className="flex justify-between items-center text-sm">
@@ -404,7 +449,7 @@ export default function PumpIt() {
         </div>
       </div>
 
-      {/* RIGHT PANEL: Chart View */}
+      {/* RIGHT PANEL */}
       <div className="flex-1 flex flex-col gap-4">
         <div className="flex justify-between items-center bg-[#0a0f0c] border border-gray-800 p-5 rounded-xl shadow-xl">
           <div>
