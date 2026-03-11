@@ -926,5 +926,8 @@
       "name": "InvalidAuthority",
       "msg": "Invalid House Authority signer."
     }
-  ]
+  ],
+  "metadata": {
+    "address": "iyaNXUTFPUgqgFAMht5LQpQDjPSXuHm8HspAe7Cs9fH"
+  }
 }

@@ -14,7 +14,7 @@ use rps::*;
 use roulette::*;
 use pumpit::*;
 
-declare_id!("BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz");
+declare_id!("iyaNXUTFPUgqgFAMht5LQpQDjPSXuHm8HspAe7Cs9fH");
 
 #[program]
 pub mod mcpepe_casino {

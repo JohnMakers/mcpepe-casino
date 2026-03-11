@@ -9,7 +9,7 @@ const idl = require('./idl.json');
 
 if (!idl.types) idl.types = [];
 
-const PROGRAM_ID_STRING = "BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz";
+const PROGRAM_ID_STRING = "iyaNXUTFPUgqgFAMht5LQpQDjPSXuHm8HspAe7Cs9fH";
 const PROGRAM_ID = new anchor.web3.PublicKey(PROGRAM_ID_STRING);
 idl.address = PROGRAM_ID_STRING;
 if (!idl.metadata) idl.metadata = {};
