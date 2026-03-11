@@ -21,7 +21,8 @@ export default function PumpIt() {
   const wallet = useWallet();
 
   const [gameState, setGameState] = useState<GameState>('IDLE');
-  const [betAmount, setBetAmount] = useState<number>(0.1); 
+  // FIXED: Store betAmount as a string to allow typing decimals without React deleting the "."
+  const [betAmount, setBetAmount] = useState<string>("0.1"); 
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [chartPoints, setChartPoints] = useState<ChartPoint[]>([{ step: 0, multiplier: 1.0 }]);
@@ -50,11 +51,26 @@ export default function PumpIt() {
     return () => clearInterval(interval);
   }, [gameState]);
 
+  // UI Helpers to manage the string-based wager state
+  const multiplyBet = (factor: number) => {
+    const current = parseFloat(betAmount) || 0;
+    // Format to 3 decimal places max and remove trailing zeros
+    setBetAmount((current * factor).toFixed(3).replace(/\.?0+$/, ''));
+  };
+
+  const addBet = (amount: number) => {
+    const current = parseFloat(betAmount) || 0;
+    setBetAmount(Math.max(0, current + amount).toFixed(3).replace(/\.?0+$/, ''));
+  };
+
   const handleStartGame = async () => {
     if (!wallet.publicKey || !wallet.signTransaction) {
       alert("Please connect your Phantom wallet first!");
       return;
     }
+
+    const wager = parseFloat(betAmount) || 0;
+    if (wager <= 0) return alert("Invalid bet amount");
 
     try {
       const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
@@ -73,7 +89,7 @@ export default function PumpIt() {
       const hashBuffer = await crypto.subtle.digest('SHA-256', encodedSeed as any);
       const serverSeedHash = Array.from(new Uint8Array(hashBuffer));
       
-      const betAmountLamports = new anchor.BN(betAmount * anchor.web3.LAMPORTS_PER_SOL);
+      const betAmountLamports = new anchor.BN(wager * anchor.web3.LAMPORTS_PER_SOL);
       const diffIndex = difficulty === 'easy' ? 0 : difficulty === 'medium' ? 1 : 2;
       
       const tx = await program.methods.startPump(
@@ -158,6 +174,7 @@ export default function PumpIt() {
   const currentMultiplier = currentStep === 0 ? 1.0 : currentLevelData.multipliers[currentStep - 1];
   const nextMultiplier = currentStep < maxSteps ? currentLevelData.multipliers[currentStep] : null;
   const displayProbability = currentLevelData.marginalProbabilities[currentStep < maxSteps ? currentStep : maxSteps - 1];
+  const parsedWager = parseFloat(betAmount) || 0;
 
   const renderChart = () => {
     const stepWidth = 120; 
@@ -213,7 +230,6 @@ export default function PumpIt() {
           }
           .animate-pop-blast { animation: popUpBlast 1.2s ease-out forwards; }
           
-          /* FIXED: Glitch now only iterates 15 times (~2.25 seconds) and stops */
           @keyframes redGlitch {
             0% { transform: translate(0) }
             20% { transform: translate(-3px, 3px) }
@@ -310,7 +326,7 @@ export default function PumpIt() {
               <div className="bg-green-900/40 border border-green-500/50 px-8 py-4 rounded-2xl shadow-[0_0_40px_rgba(34,197,94,0.2)]">
                 <p className="text-green-200 text-sm font-bold uppercase tracking-widest text-center mb-1">Total Payout</p>
                 <p className="text-white font-mono text-4xl font-black text-center drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
-                  {(betAmount * currentMultiplier).toFixed(4)} <span className="text-green-500 text-2xl">SOL</span>
+                  {(parsedWager * currentMultiplier).toFixed(4)} <span className="text-green-500 text-2xl">SOL</span>
                 </p>
               </div>
             </div>
@@ -352,6 +368,7 @@ export default function PumpIt() {
           </div>
         </div>
 
+        {/* RE-ENGINEERED STRING-BASED BET SLIP */}
         <div className="space-y-2 mt-4">
           <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Bet Amount</label>
           <div className="bg-[#050806] border border-gray-800 rounded-lg p-3 flex flex-col gap-3 shadow-inner">
@@ -361,33 +378,40 @@ export default function PumpIt() {
             </div>
             <div className="flex items-center gap-3">
                <button 
-                 onClick={() => setBetAmount(prev => Math.max(0, prev - 0.1))} disabled={gameState === 'PLAYING'}
+                 onClick={() => addBet(-0.1)} disabled={gameState === 'PLAYING'}
                  className="w-12 h-12 bg-gray-900 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white font-black text-xl disabled:opacity-50 transition-colors flex items-center justify-center shadow-md"
                >
                  -
                </button>
-               {/* FIXED: Removed restrictive constraints, allowing free typing of decimals */}
                <input 
-                 type="number" min="0" step="0.001" 
-                 value={betAmount.toString()} 
+                 type="number" min="0" step="0.1" 
+                 value={betAmount} 
                  onChange={(e) => {
-                    let val = parseFloat(e.target.value);
-                    if (isNaN(val) || val < 0) val = 0;
-                    setBetAmount(val);
+                    const val = e.target.value;
+                    if (val === "") {
+                      setBetAmount("");
+                      return;
+                    }
+                    const num = parseFloat(val);
+                    if (num < 0) {
+                      setBetAmount("0");
+                    } else {
+                      setBetAmount(val); // Store EXACTLY what was typed so decimals work
+                    }
                  }} 
                  disabled={gameState === 'PLAYING'}
                  className="flex-1 bg-transparent text-center text-white font-mono text-2xl font-black outline-none disabled:opacity-50 w-full"
                />
                <button 
-                 onClick={() => setBetAmount(prev => prev + 0.1)} disabled={gameState === 'PLAYING'}
+                 onClick={() => addBet(0.1)} disabled={gameState === 'PLAYING'}
                  className="w-12 h-12 bg-gray-900 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white font-black text-xl disabled:opacity-50 transition-colors flex items-center justify-center shadow-md"
                >
                  +
                </button>
             </div>
             <div className="flex gap-2 mt-1">
-               <button onClick={() => setBetAmount(prev => Math.max(0, Math.floor((prev / 2) * 1000) / 1000))} disabled={gameState === 'PLAYING'} className="flex-1 py-2 bg-black border border-gray-800 rounded text-xs font-black tracking-widest text-gray-500 hover:text-white hover:border-gray-600 disabled:opacity-50 transition-all">½</button>
-               <button onClick={() => setBetAmount(prev => Math.round((prev * 2) * 1000) / 1000)} disabled={gameState === 'PLAYING'} className="flex-1 py-2 bg-black border border-gray-800 rounded text-xs font-black tracking-widest text-gray-500 hover:text-white hover:border-gray-600 disabled:opacity-50 transition-all">2x</button>
+               <button onClick={() => multiplyBet(0.5)} disabled={gameState === 'PLAYING'} className="flex-1 py-2 bg-black border border-gray-800 rounded text-xs font-black tracking-widest text-gray-500 hover:text-white hover:border-gray-600 disabled:opacity-50 transition-all">½</button>
+               <button onClick={() => multiplyBet(2)} disabled={gameState === 'PLAYING'} className="flex-1 py-2 bg-black border border-gray-800 rounded text-xs font-black tracking-widest text-gray-500 hover:text-white hover:border-gray-600 disabled:opacity-50 transition-all">2x</button>
             </div>
           </div>
         </div>
@@ -446,7 +470,7 @@ export default function PumpIt() {
           <div className="text-right">
             <div className="text-xs text-gray-500 font-black uppercase tracking-widest">Potential Payout</div>
             <div className="text-2xl text-green-400 font-mono font-black drop-shadow-[0_0_8px_rgba(34,197,94,0.4)]">
-               {(betAmount * currentMultiplier).toFixed(4)} SOL
+               {(parsedWager * currentMultiplier).toFixed(4)} SOL
             </div>
           </div>
         </div>
