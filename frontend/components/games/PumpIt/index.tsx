@@ -3,7 +3,7 @@ import pumpData from '../../../config/pumpMultipliers.json';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import * as anchor from '@coral-xyz/anchor';
 import { PublicKey, Keypair, SystemProgram } from '@solana/web3.js';
-import idl from '../../../idl.json'; // Make sure this path points to your frontend/idl.json
+import idl from '../../../idl.json';
 
 // Types
 type GameState = 'IDLE' | 'PLAYING' | 'CASHED_OUT' | 'RUGGED';
@@ -14,15 +14,13 @@ interface ChartPoint {
   multiplier: number;
 }
 
-// Your program ID from lib.rs
+// Ensure this matches your actual program ID
 const PROGRAM_ID = new PublicKey("BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz");
 
 export default function PumpIt() {
-  // Wallet & RPC
   const { connection } = useConnection();
   const wallet = useWallet();
 
-  // Game State
   const [gameState, setGameState] = useState<GameState>('IDLE');
   const [betAmount, setBetAmount] = useState<number>(0.1); 
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
@@ -30,12 +28,12 @@ export default function PumpIt() {
   const [chartPoints, setChartPoints] = useState<ChartPoint[]>([{ step: 0, multiplier: 1.0 }]);
   const [clientSeed, setClientSeed] = useState<string>('');
   
-  // Blockchain State
   const [gameStateKeypair, setGameStateKeypair] = useState<Keypair | null>(null);
   const [unhashedServerSeed, setUnhashedServerSeed] = useState<string>('');
   const [isHoveringPump, setIsHoveringPump] = useState(false);
 
-  const levels = pumpData.levels;
+  // Forcefully cast the JSON type to bypass TypeScript's aggressive JSON caching
+  const levels = pumpData.levels as Record<Difficulty, { marginalProbabilities: number[], multipliers: number[] }>;
   const currentLevelData = levels[difficulty];
   const maxSteps = 24;
 
@@ -43,8 +41,6 @@ export default function PumpIt() {
     setClientSeed(Math.random().toString(36).substring(2, 15));
   }, []);
 
-  // --- SOLANA SMART CONTRACT CALLS ---
-  
   const handleStartGame = async () => {
     if (!wallet.publicKey || !wallet.signTransaction) {
       alert("Please connect your Phantom wallet first!");
@@ -55,19 +51,16 @@ export default function PumpIt() {
       const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
       const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
       
-      // Generate a new account to hold this round's data
       const newGameStateKeypair = Keypair.generate();
       setGameStateKeypair(newGameStateKeypair);
       
       const [vaultPDA] = PublicKey.findProgramAddressSync([Buffer.from("vault")], program.programId);
       
-      // Mocking the backend server seed generation for DevNet
       const seed = "pumpit_server_" + Date.now().toString();
       setUnhashedServerSeed(seed);
       
       const encoder = new TextEncoder();
       const encodedSeed = encoder.encode(seed);
-      // Cast to standard Uint8Array to satisfy TypeScript's strict BufferSource requirement
       const hashBuffer = await crypto.subtle.digest('SHA-256', encodedSeed as any);
       const serverSeedHash = Array.from(new Uint8Array(hashBuffer));
       
@@ -85,7 +78,7 @@ export default function PumpIt() {
           gameState: newGameStateKeypair.publicKey,
           player: wallet.publicKey,
           vault: vaultPDA,
-          authority: wallet.publicKey, // For devnet, player acts as authority
+          authority: wallet.publicKey,
           systemProgram: SystemProgram.programId,
       }).signers([newGameStateKeypair]).rpc();
       
@@ -115,11 +108,9 @@ export default function PumpIt() {
       
       console.log("Pump Tx Confirmed:", tx);
 
-      // Fetch the updated on-chain state to see if the provably fair logic resulted in a win or rug
       const state = await program.account.pumpGameState.fetch(gameStateKeypair.publicKey);
       
       if (state.isActive) {
-        // Successful Pump
         const nextStep = currentStep + 1;
         setCurrentStep(nextStep);
         setChartPoints(prev => [...prev, { 
@@ -127,7 +118,6 @@ export default function PumpIt() {
           multiplier: currentLevelData.multipliers[nextStep - 1] 
         }]);
       } else {
-        // RUGGED
         setGameState('RUGGED');
         setChartPoints(prev => [...prev, { step: currentStep + 1, multiplier: 0 }]); 
         broadcastWager('RUGGED', 0);
@@ -146,7 +136,6 @@ export default function PumpIt() {
       const [vaultPDA] = PublicKey.findProgramAddressSync([Buffer.from("vault")], program.programId);
 
       const finalMultiplier = currentLevelData.multipliers[currentStep - 1];
-      // Convert multiplier to basis points for the smart contract (e.g. 1.0309 -> 10309)
       const finalMultiplierBps = new anchor.BN(Math.floor(finalMultiplier * 10000));
       
       console.log("Triggering Phantom to Cash Out...");
@@ -171,9 +160,11 @@ export default function PumpIt() {
     console.log("WS Broadcast Placeholder:", { game: "Pump It", event, bet: betAmount, payout: event === 'CASH_OUT' ? betAmount * finalMultiplier : 0 });
   };
 
-  // --- UI RENDER HELPERS ---
   const currentMultiplier = currentStep === 0 ? 1.0 : currentLevelData.multipliers[currentStep - 1];
   const nextMultiplier = currentStep < maxSteps ? currentLevelData.multipliers[currentStep] : null;
+
+  // Use the safe probability for display to prevent index out of bounds
+  const displayProbability = currentLevelData.marginalProbabilities[currentStep < maxSteps ? currentStep : maxSteps - 1];
 
   const renderChart = () => {
     const chartWidth = 600;
@@ -236,11 +227,8 @@ export default function PumpIt() {
 
   return (
     <div className="flex flex-col md:flex-row gap-6 p-6 w-full max-w-6xl mx-auto">
-      
-      {/* LEFT PANEL: Controls */}
       <div className="w-full md:w-80 flex flex-col gap-4 shrink-0 bg-[#0a0f0c] p-6 rounded-xl border border-gray-800">
         
-        {/* Difficulty Selector */}
         <div className="space-y-2">
           <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Difficulty</label>
           <div className="flex gap-2 bg-black p-1 rounded-lg border border-gray-800">
@@ -260,11 +248,10 @@ export default function PumpIt() {
             ))}
           </div>
           <div className="text-xs text-gray-400 text-center">
-            Chance: <span className="text-green-400 font-bold">{currentLevelData.probability * 100}%</span> per pump
+            Next Pump Chance: <span className="text-green-400 font-bold">{Math.round(displayProbability * 100)}%</span>
           </div>
         </div>
 
-        {/* Bet Input */}
         <div className="space-y-2 mt-4">
           <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Bet Amount (SOL)</label>
           <div className="flex gap-2">
@@ -292,7 +279,6 @@ export default function PumpIt() {
           </div>
         </div>
 
-        {/* Action Buttons */}
         <div className="mt-6 space-y-3">
           {gameState === 'IDLE' || gameState === 'RUGGED' || gameState === 'CASHED_OUT' ? (
              <button 
@@ -303,7 +289,6 @@ export default function PumpIt() {
              </button>
           ) : (
             <>
-              {/* Keep Holding Button with Tooltip */}
               <div 
                 className="relative"
                 onMouseEnter={() => setIsHoveringPump(true)}
@@ -316,7 +301,6 @@ export default function PumpIt() {
                   Keep Holding 📈
                 </button>
                 
-                {/* Tooltip */}
                 {isHoveringPump && nextMultiplier && (
                   <div className="absolute bottom-full left-0 w-full mb-2 bg-black border border-green-900 rounded-lg p-3 shadow-xl z-20">
                     <div className="flex justify-between items-center text-sm">
@@ -325,13 +309,12 @@ export default function PumpIt() {
                     </div>
                     <div className="flex justify-between items-center text-sm mt-1">
                       <span className="text-gray-400">Success Chance:</span>
-                      <span className="text-white font-bold">{currentLevelData.probability * 100}%</span>
+                      <span className="text-white font-bold">{Math.round(displayProbability * 100)}%</span>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Cash Out Button */}
               <button 
                 onClick={handleCashOut}
                 disabled={currentStep === 0}
@@ -344,7 +327,6 @@ export default function PumpIt() {
         </div>
       </div>
 
-      {/* RIGHT PANEL: Chart View */}
       <div className="flex-1 flex flex-col gap-4">
         <div className="flex justify-between items-center bg-[#0a0f0c] border border-gray-800 p-4 rounded-xl">
           <div>

@@ -64,13 +64,19 @@ pub fn process_pump(ctx: Context<ProcessPump>, unhashed_server_seed: String) -> 
     let numeric_value = u32::from_be_bytes(roll_bytes);
     let roll = numeric_value % 10000;
 
-    let probability_threshold = match game_state.difficulty {
-        0 => 9700, 
-        1 => 9000, 
-        2 => 7500, 
+    // NEW LOGIC: Extract Base Chance and Decay Rate (Base, Decay)
+let (base_chance, decay_rate): (u32, u32) = match game_state.difficulty {
+        0 => (9600, 100), // Easy: 96% start, -1% per step
+        1 => (8800, 200), // Medium: 88% start, -2% per step
+        2 => (6500, 200), // Hard: 65% start, -2% per step
         _ => return err!(CustomError::InvalidDifficulty),
     };
 
+    // Calculate dynamic threshold: Base - (Decay * Current_Step)
+    let step_penalty = decay_rate.checked_mul(game_state.current_step as u32).unwrap();
+    let probability_threshold = base_chance.checked_sub(step_penalty).unwrap();
+
+    // Win Condition Evaluation
     if roll < probability_threshold {
         game_state.current_step += 1;
     } else {
