@@ -6,7 +6,7 @@ import * as anchor from "@coral-xyz/anchor";
 import idl from "../../../idl.json";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
-const PROGRAM_ID = new anchor.web3.PublicKey("BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz");
+const PROGRAM_ID = new anchor.web3.PublicKey("iyaNXUTFPUgqgFAMht5LQpQDjPSXuHm8HspAe7Cs9fH");
 const HOUSE_PUBKEY = new anchor.web3.PublicKey("Gf9QEwbxosqQY9bLBrgjKommtX8qPdNqFrKazmHfaZBv");
 
 interface Props {

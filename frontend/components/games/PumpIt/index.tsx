@@ -15,7 +15,7 @@ interface ChartPoint {
 }
 
 // Ensure this matches your actual program ID
-const PROGRAM_ID = new PublicKey("BNpcicNi55iYT6yfe2isgHnqqSWBtAr8qfiGwpKbxyuz");
+const PROGRAM_ID = new PublicKey("iyaNXUTFPUgqgFAMht5LQpQDjPSXuHm8HspAe7Cs9fH");
 
 export default function PumpIt() {
   const { connection } = useConnection();
