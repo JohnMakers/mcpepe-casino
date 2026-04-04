@@ -6,13 +6,14 @@ pub mod whackd;
 pub mod rps;
 pub mod roulette;
 pub mod pumpit;
-
+pub mod blackjack; 
 
 use coinflip::*;
 use whackd::*;  
 use rps::*;
 use roulette::*;
 use pumpit::*;
+use blackjack::*; 
 
 declare_id!("7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw");
 
@@ -104,5 +105,31 @@ pub mod mcpepe_casino {
 
     pub fn cash_out_pump(ctx: Context<CashOutPump>, final_multiplier_bps: u64) -> Result<()> {
         pumpit::cash_out(ctx, final_multiplier_bps)
+    }
+
+// --- BLACKJACK ROUTES ---
+    pub fn start_blackjack(
+        ctx: Context<StartBlackjack>,
+        bet_amount: u64,
+        server_seed_hash: [u8; 32],
+        client_seed: String,
+        nonce: u64,
+    ) -> Result<()> {
+        blackjack::start_blackjack(ctx, bet_amount, server_seed_hash, client_seed, nonce)
+    }
+
+    pub fn increase_blackjack_bet(
+        ctx: Context<IncreaseBlackjackBet>,
+        additional_amount: u64,
+    ) -> Result<()> {
+        blackjack::increase_blackjack_bet(ctx, additional_amount)
+    }
+
+    pub fn resolve_blackjack(
+        ctx: Context<ResolveBlackjack>,
+        unhashed_server_seed: String,
+        payout: u64,
+    ) -> Result<()> {
+        blackjack::resolve_blackjack(ctx, unhashed_server_seed, payout)
     }
 }

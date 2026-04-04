@@ -501,6 +501,274 @@ app.post('/api/roulette/resolve', async (req, res) => {
     }
 });
 
+// ==========================================
+// BLACKJACK ENDPOINTS & ENGINE
+// ==========================================
+const activeBlackjackGames = new Map();
+
+// Provably Fair Deck Generator (Infinite Deck)
+function getNextCard(serverSeed, clientSeed, nonce, cardIndex) {
+    const hmac = crypto.createHmac('sha256', serverSeed);
+    hmac.update(`${clientSeed}:${nonce}:${cardIndex}`);
+    const hash = hmac.digest('hex');
+    
+    // Convert hex to 0-51 card (Stake/Rainbet standard algorithm)
+    for (let i = 0; i < hash.length; i += 2) {
+        const byte = parseInt(hash.substring(i, i + 2), 16);
+        if (byte < 208) return byte % 52;
+    }
+    return 0; // Fallback
+}
+
+// Hand Evaluator
+function getHandInfo(hand) {
+    let total = 0;
+    let aces = 0;
+    for (let card of hand) {
+        let rank = card % 13;
+        if (rank < 9) total += rank + 2; // 2-10
+        else if (rank < 12) total += 10; // J, Q, K
+        else { total += 11; aces++; }    // Ace
+    }
+    
+    let isSoft = false;
+    while (total > 21 && aces > 0) {
+        total -= 10;
+        aces--;
+    }
+    if (aces > 0 && total <= 21) isSoft = true;
+    
+    return { total, isSoft, isBlackjack: hand.length === 2 && total === 21 };
+}
+
+app.post('/api/blackjack/init', (req, res) => {
+    try {
+        const { playerPubkey, gamePubkey, clientSeed, betAmount } = req.body;
+        if (!playerPubkey || !gamePubkey) return res.status(400).json({ error: "Missing keys" });
+
+        const serverSeed = crypto.randomBytes(32).toString('hex');
+        const serverSeedHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
+        const nonce = 1;
+
+        // Deal initial 4 cards: Player 1, Dealer 1, Player 2, Dealer 2 (Hidden)
+        const p1 = getNextCard(serverSeed, clientSeed, nonce, 0);
+        const d1 = getNextCard(serverSeed, clientSeed, nonce, 1);
+        const p2 = getNextCard(serverSeed, clientSeed, nonce, 2);
+        const d2 = getNextCard(serverSeed, clientSeed, nonce, 3);
+
+        const playerHands = [[p1, p2]];
+        const dealerCards = [d1, d2];
+        const playerInfo = getHandInfo(playerHands[0]);
+        const dealerInfo = getHandInfo(dealerCards);
+
+        let status = "playing";
+        let payout = 0;
+        let resolved = false;
+
+        // Check Naturals
+        if (playerInfo.isBlackjack) {
+            resolved = true;
+            status = "resolved";
+            if (dealerInfo.isBlackjack) {
+                payout = betAmount; // Push
+            } else {
+                payout = betAmount + (betAmount * 1.5); // 3:2 Blackjack win
+            }
+        } else if (dealerInfo.isBlackjack && (d1 % 13 >= 9)) {
+            // Dealer natural (checking if face card is 10 or Ace to speed up)
+            resolved = true;
+            status = "resolved";
+        }
+
+        const gameState = {
+            serverSeed, clientSeed, nonce, betAmount: Number(betAmount),
+            playerHands, currentHandIndex: 0,
+            dealerCards, cardIndex: 4,
+            status, payout, gamePubkey,
+            insuranceBought: false,
+            splitBetAmount: 0 // In case they split
+        };
+
+        activeBlackjackGames.set(playerPubkey, gameState);
+
+        if (resolved) {
+            resolveBlackjackOnChain(playerPubkey, serverSeed, payout).catch(console.error);
+        }
+
+        res.json({ 
+            success: true, 
+            serverSeedHash,
+            playerHands,
+            dealerFaceCard: d1,
+            status,
+            payout,
+            insuranceOffered: (d1 % 13 === 12) && !playerInfo.isBlackjack
+        });
+
+    } catch (error) {
+        console.error("❌ Blackjack Init Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/blackjack/action', async (req, res) => {
+    try {
+        const { playerPubkey, action } = req.body; // action: 'hit', 'stand', 'double', 'split', 'insurance'
+        const game = activeBlackjackGames.get(playerPubkey);
+
+        if (!game || game.status !== "playing") return res.status(400).json({ error: "Invalid game state." });
+
+        let hand = game.playerHands[game.currentHandIndex];
+        let handInfo = getHandInfo(hand);
+
+        if (action === "insurance" && game.dealerCards[0] % 13 === 12 && hand.length === 2) {
+            game.insuranceBought = true;
+            // Note: Frontend must charge 0.5x bet on-chain separately
+            return res.json({ success: true, state: _sanitizeState(game) });
+        }
+
+        if (action === "split" && hand.length === 2 && (hand[0] % 13) === (hand[1] % 13) && game.playerHands.length === 1) {
+            game.playerHands.push([hand[1]]);
+            game.playerHands[0] = [hand[0]];
+            game.splitBetAmount = game.betAmount; 
+            
+            // Deal one card to first hand
+            game.playerHands[0].push(getNextCard(game.serverSeed, game.clientSeed, game.nonce, game.cardIndex++));
+            
+            // If splitting Aces, force stand
+            if (hand[0] % 13 === 12) {
+                game.playerHands[1].push(getNextCard(game.serverSeed, game.clientSeed, game.nonce, game.cardIndex++));
+                game.status = "dealer_turn";
+            }
+        } 
+        else if (action === "double" && hand.length === 2) {
+            game.playerHands[game.currentHandIndex].push(getNextCard(game.serverSeed, game.clientSeed, game.nonce, game.cardIndex++));
+            game.betAmount *= 2; 
+            game.currentHandIndex++; // Force stand after double
+        }
+        else if (action === "hit") {
+            game.playerHands[game.currentHandIndex].push(getNextCard(game.serverSeed, game.clientSeed, game.nonce, game.cardIndex++));
+            if (getHandInfo(game.playerHands[game.currentHandIndex]).total >= 21) {
+                game.currentHandIndex++; // Auto-stand on bust or 21
+            }
+        }
+        else if (action === "stand") {
+            game.currentHandIndex++;
+        }
+
+        // Check if player turn is completely over
+        if (game.currentHandIndex >= game.playerHands.length || game.status === "dealer_turn") {
+            game.status = "dealer_turn";
+            
+            // Evaluate Dealer (Stand on Soft 17)
+            let dInfo = getHandInfo(game.dealerCards);
+            let allBust = game.playerHands.every(h => getHandInfo(h).total > 21);
+
+            if (!allBust) {
+                while (dInfo.total < 17) {
+                    game.dealerCards.push(getNextCard(game.serverSeed, game.clientSeed, game.nonce, game.cardIndex++));
+                    dInfo = getHandInfo(game.dealerCards);
+                }
+            }
+
+            // Calculate Payouts
+            game.payout = 0;
+            const dealerTotal = dInfo.total;
+
+            for (let i = 0; i < game.playerHands.length; i++) {
+                let pTotal = getHandInfo(game.playerHands[i]).total;
+                let activeBet = (i === 1) ? game.splitBetAmount : game.betAmount;
+
+                if (pTotal > 21) {
+                    // Bust
+                } else if (dealerTotal > 21 || pTotal > dealerTotal) {
+                    game.payout += activeBet * 2; // Win 1:1
+                } else if (pTotal === dealerTotal) {
+                    game.payout += activeBet; // Push
+                }
+            }
+
+            // Insurance payout
+            if (game.insuranceBought && dInfo.isBlackjack) {
+                game.payout += game.betAmount; // 2:1 on the half bet = full bet
+            }
+
+            game.status = "resolved";
+            
+            // Settle On-Chain
+            await resolveBlackjackOnChain(playerPubkey, game.serverSeed, game.payout);
+            activeBlackjackGames.delete(playerPubkey);
+            
+            return res.json({ success: true, state: _sanitizeState(game, true), serverSeed: game.serverSeed });
+        }
+
+        res.json({ success: true, state: _sanitizeState(game) });
+
+    } catch (error) {
+        console.error("❌ Blackjack Action Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+function _sanitizeState(game, showDealerCards = false) {
+    return {
+        playerHands: game.playerHands,
+        currentHandIndex: game.currentHandIndex,
+        dealerCards: showDealerCards ? game.dealerCards : [game.dealerCards[0]],
+        status: game.status,
+        payout: game.payout
+    };
+}
+
+async function resolveBlackjackOnChain(playerPubkeyStr, unhashedServerSeed, payoutAmount) {
+    try {
+        console.log(`[HOUSE] Resolving Blackjack for ${playerPubkeyStr}. Payout: ${payoutAmount} lamports`);
+        
+        const gamePubkey = activeBlackjackGames.get(playerPubkeyStr)?.gamePubkey;
+        if (!gamePubkey) return;
+
+        const playerPubkey = new anchor.web3.PublicKey(playerPubkeyStr);
+        const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("vault")], PROGRAM_ID);
+
+        const sighash = crypto.createHash('sha256').update("global:resolve_blackjack").digest().slice(0, 8);
+        
+        const seedBuffer = Buffer.from(unhashedServerSeed, 'utf8');
+        const seedLengthBuffer = Buffer.alloc(4);
+        seedLengthBuffer.writeUInt32LE(seedBuffer.length, 0);
+        
+        const payoutBuffer = Buffer.alloc(8);
+        payoutBuffer.writeBigUInt64LE(BigInt(payoutAmount));
+        
+        const ixData = Buffer.concat([sighash, seedLengthBuffer, seedBuffer, payoutBuffer]);
+
+        const resolveIx = new anchor.web3.TransactionInstruction({
+            programId: PROGRAM_ID,
+            keys: [
+                { pubkey: new anchor.web3.PublicKey(gamePubkey), isSigner: false, isWritable: true },
+                { pubkey: houseKeypair.publicKey, isSigner: true, isWritable: true },
+                { pubkey: vaultPDA, isSigner: false, isWritable: true },
+                { pubkey: playerPubkey, isSigner: false, isWritable: true },
+                { pubkey: anchor.web3.SystemProgram.programId, isSigner: false, isWritable: false },
+            ],
+            data: ixData
+        });
+
+        const tx = new anchor.web3.Transaction().add(resolveIx);
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = houseKeypair.publicKey;
+        tx.sign(houseKeypair);
+
+        const txSig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+        await connection.confirmTransaction({ signature: txSig, blockhash, lastValidBlockHeight }, "confirmed");
+
+        console.log(`✅ [HOUSE] Blackjack Resolved! TX: ${txSig}`);
+    } catch (err) {
+        console.error("❌ [HOUSE] Failed to resolve Blackjack on-chain:", err.message);
+    }
+}
+// ==========================================
+
 setInterval(() => {}, 1000 * 60 * 60);
 
 const PORT = process.env.PORT || 3005;
