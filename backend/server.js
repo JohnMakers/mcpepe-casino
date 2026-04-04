@@ -599,7 +599,7 @@ app.post('/api/blackjack/init', (req, res) => {
             success: true, 
             serverSeedHash,
             playerHands,
-            dealerFaceCard: d1,
+            dealerCards: [d1], // 🐛 FIXED: Frontend needs this to be an array so it can .map() it
             status,
             payout,
             insuranceOffered: (d1 % 13 === 12) && !playerInfo.isBlackjack
