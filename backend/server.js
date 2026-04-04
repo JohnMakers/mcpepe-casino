@@ -506,6 +506,25 @@ app.post('/api/roulette/resolve', async (req, res) => {
 // ==========================================
 const activeBlackjackGames = new Map();
 
+app.post('/api/blackjack/seed', (req, res) => {
+    try {
+        const { playerPubkey } = req.body;
+        const serverSeed = crypto.randomBytes(32).toString('hex');
+        const serverSeedHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
+        
+        // Store the seed temporarily before the user locks their TX
+        activeBlackjackGames.set(playerPubkey, { 
+            serverSeed, 
+            serverSeedHash,
+            status: "waiting_for_tx" 
+        });
+        
+        res.json({ success: true, serverSeedHash });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Provably Fair Deck Generator (Infinite Deck)
 function getNextCard(serverSeed, clientSeed, nonce, cardIndex) {
     const hmac = crypto.createHmac('sha256', serverSeed);
@@ -546,8 +565,13 @@ app.post('/api/blackjack/init', (req, res) => {
         const { playerPubkey, gamePubkey, clientSeed, betAmount } = req.body;
         if (!playerPubkey || !gamePubkey) return res.status(400).json({ error: "Missing keys" });
 
-        const serverSeed = crypto.randomBytes(32).toString('hex');
-        const serverSeedHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
+        const game = activeBlackjackGames.get(playerPubkey);
+        if (!game || game.status !== "waiting_for_tx") {
+            return res.status(400).json({ error: "Game session not initialized. Fetch seed first." });
+        }
+
+        const serverSeed = game.serverSeed;
+        const serverSeedHash = game.serverSeedHash;
         const nonce = 1;
 
         // Deal initial 4 cards: Player 1, Dealer 1, Player 2, Dealer 2 (Hidden)
@@ -575,21 +599,19 @@ app.post('/api/blackjack/init', (req, res) => {
                 payout = betAmount + (betAmount * 1.5); // 3:2 Blackjack win
             }
         } else if (dealerInfo.isBlackjack && (d1 % 13 >= 9)) {
-            // Dealer natural (checking if face card is 10 or Ace to speed up)
             resolved = true;
             status = "resolved";
         }
 
-        const gameState = {
-            serverSeed, clientSeed, nonce, betAmount: Number(betAmount),
+        // Update active game state
+        Object.assign(game, {
+            clientSeed, nonce, betAmount: Number(betAmount),
             playerHands, currentHandIndex: 0,
             dealerCards, cardIndex: 4,
             status, payout, gamePubkey,
             insuranceBought: false,
-            splitBetAmount: 0 // In case they split
-        };
-
-        activeBlackjackGames.set(playerPubkey, gameState);
+            splitBetAmount: 0 
+        });
 
         if (resolved) {
             resolveBlackjackOnChain(playerPubkey, serverSeed, payout).catch(console.error);
@@ -599,7 +621,7 @@ app.post('/api/blackjack/init', (req, res) => {
             success: true, 
             serverSeedHash,
             playerHands,
-            dealerCards: [d1], // 🐛 FIXED: Frontend needs this to be an array so it can .map() it
+            dealerCards: [d1],
             status,
             payout,
             insuranceOffered: (d1 % 13 === 12) && !playerInfo.isBlackjack

@@ -702,6 +702,22 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "cancelBlackjack",
+      "accounts": [
+        {
+          "name": "game",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": true
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -1049,68 +1065,38 @@
   "errors": [
     {
       "code": 6000,
-      "name": "GameNotActive",
-      "msg": "The game is currently inactive."
+      "name": "InvalidMove",
+      "msg": "Invalid move selected."
     },
     {
       "code": 6001,
-      "name": "InvalidGuess",
-      "msg": "Guess must be 0 (Heads) or 1 (Tails)."
+      "name": "GameAlreadyActive",
+      "msg": "Game is already active. Awaiting house resolution."
     },
     {
       "code": 6002,
-      "name": "SeedMismatch",
-      "msg": "Server seed hash does not match the commitment. The House tried to cheat!"
+      "name": "GameNotActive",
+      "msg": "Game is not active."
     },
     {
       "code": 6003,
-      "name": "InvalidMineCount",
-      "msg": "Mine count must be between 1 and 24."
+      "name": "InvalidHash",
+      "msg": "House commitment hash mismatch."
     },
     {
       "code": 6004,
-      "name": "InvalidBetAmount",
-      "msg": "Bet amount must be greater than 0."
+      "name": "NoWinnings",
+      "msg": "No winnings to claim."
     },
     {
       "code": 6005,
-      "name": "GameAlreadyResolved",
-      "msg": "Game has already been resolved or closed."
+      "name": "GameIsActive",
+      "msg": "Cannot settle while round is active."
     },
     {
       "code": 6006,
-      "name": "MathOverflow",
-      "msg": "Math logic overflowed during calculation."
-    },
-    {
-      "code": 6007,
-      "name": "InvalidResolutionState",
-      "msg": "Resolution state must be either a cashout or a bust."
-    },
-    {
-      "code": 6008,
-      "name": "WagerMismatch",
-      "msg": "The total wager does not match the sum of the individual bets."
-    },
-    {
-      "code": 6009,
-      "name": "InsufficientVaultFunds",
-      "msg": "The vault does not have enough funds to pay out the winnings."
-    },
-    {
-      "code": 6010,
-      "name": "InvalidDifficulty",
-      "msg": "Invalid difficulty level. Must be 0 (Easy), 1 (Medium), or 2 (Hard)."
-    },
-    {
-      "code": 6011,
-      "name": "MaxStepsReached",
-      "msg": "Maximum steps (24) reached. Cash out now!"
-    },
-    {
-      "code": 6012,
-      "name": "NoProfitsToWithdraw",
-      "msg": "No profits to withdraw. You must pump at least once."
+      "name": "InvalidAuthority",
+      "msg": "Invalid House Authority signer."
     }
   ],
   "metadata": {

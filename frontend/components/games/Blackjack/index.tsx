@@ -1,13 +1,13 @@
 // Author: John McAfee
 import React, { useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { Transaction, PublicKey, SystemProgram } from '@solana/web3.js';
+import { PublicKey, SystemProgram } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import idl from '../../../idl.json';
 
-
+// Bypass TypeScript IDL strictness
 const PROGRAM_ID_STRING = "7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw";
-const PROGRAM_ID = new PublicKey(PROGRAM_ID_STRING)
+const PROGRAM_ID = new PublicKey(PROGRAM_ID_STRING);
 
 interface BlackjackProps {
   balance: number;
@@ -26,7 +26,6 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Card Rendering Helper (0-51 mapping)
   const renderCard = (val: number, hidden = false) => {
     if (hidden) return (
       <div className="w-16 h-24 sm:w-20 sm:h-28 rounded-lg border-2 border-green-900 bg-[url('/cf_tail.png')] bg-cover bg-center shadow-md flex items-center justify-center relative overflow-hidden">
@@ -58,14 +57,23 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     setError(null);
 
     try {
-      // 1. Escrow Wager On-Chain
+      // 1. Fetch Real Seed Hash from Backend
+      const seedRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3005'}/api/blackjack/seed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerPubkey: publicKey.toBase58() })
+      });
+      const seedData = await seedRes.json();
+      if (!seedData.success) throw new Error("Failed to generate provably fair seed.");
+
+      // Convert hex string to byte array safely for Anchor's [u8; 32]
+      const hashBytes = Array.from(Buffer.from(seedData.serverSeedHash, 'hex'));
+
+      // 2. Escrow Wager On-Chain
       const clientSeed = "mcpepe_" + Math.random().toString(36).substring(2, 10);
       const [gamePda] = PublicKey.findProgramAddressSync([Buffer.from("blackjack"), publicKey.toBuffer()], PROGRAM_ID);
       const [vaultPDA] = PublicKey.findProgramAddressSync([Buffer.from("vault")], PROGRAM_ID);
 
-      // We need a dummy hash for the initial TX, the backend will verify it later
-      const dummyHash = Array.from({length: 32}, () => 0); 
-      
       const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "confirmed" });
       const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
 
@@ -73,7 +81,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
       
       const tx = await program.methods.startBlackjack(
         new anchor.BN(lamports),
-        dummyHash,
+        hashBytes, // 🛡️ Now passing the REAL verified hash here!
         clientSeed,
         new anchor.BN(1)
       ).accounts({
@@ -86,7 +94,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
       const signature = await sendTransaction(tx, connection);
       await connection.confirmTransaction(signature, "confirmed");
 
-      // 2. Initialize with Backend
+      // 3. Initialize with Backend
       const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3005'}/api/blackjack/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -169,6 +177,28 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     setLoading(false);
   };
 
+  const handleClearStuck = async () => {
+    if (!publicKey) return;
+    setLoading(true);
+    try {
+      const [gamePda] = PublicKey.findProgramAddressSync([Buffer.from("blackjack"), publicKey.toBuffer()], PROGRAM_ID);
+      const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "confirmed" });
+      const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
+
+      const tx = await program.methods.cancelBlackjack().accounts({
+        game: gamePda,
+        player: publicKey,
+      }).transaction();
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+      setError("Stuck game cleared! You can play normally now.");
+    } catch (err: any) {
+      setError("Failed to clear. You either need to deploy the cancel_blackjack route to Anchor, or just switch to Account 2 in your Phantom Wallet.");
+    }
+    setLoading(false);
+  };
+
   return (
     <div className="flex flex-col items-center justify-center w-full max-w-4xl mx-auto p-4 animate-fade-in">
       <div className="w-full bg-[#0a0f0c] border border-[#339933] rounded-2xl p-6 shadow-[0_0_30px_rgba(51,153,51,0.2)]">
@@ -239,20 +269,30 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
         {/* Controls */}
         <div className="bg-black/50 rounded-xl p-4 border border-gray-800">
           {!gameState || gameState.status === "resolved" ? (
-            <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
-              <div className="bg-black border border-gray-700 rounded-lg flex items-center px-4 py-3 w-full sm:w-auto">
-                <span className="text-gray-400 font-bold mr-2">SOL</span>
-                <input 
-                  type="number" value={betAmount} onChange={(e) => setBetAmount(Number(e.target.value))}
-                  className="bg-transparent text-white font-black text-xl outline-none w-24 text-right"
-                  step="0.05" min="0.05"
-                />
+            <div className="flex flex-col items-center">
+              <div className="flex flex-col sm:flex-row gap-4 items-center justify-center w-full">
+                <div className="bg-black border border-gray-700 rounded-lg flex items-center px-4 py-3 w-full sm:w-auto">
+                  <span className="text-gray-400 font-bold mr-2">SOL</span>
+                  <input 
+                    type="number" value={betAmount} onChange={(e) => setBetAmount(Number(e.target.value))}
+                    className="bg-transparent text-white font-black text-xl outline-none w-24 text-right"
+                    step="0.05" min="0.05"
+                  />
+                </div>
+                <button 
+                  onClick={startGame} disabled={loading}
+                  className="w-full sm:w-auto bg-[#339933] hover:bg-[#297a29] text-white px-10 py-3 rounded-lg font-black text-lg uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(51,153,51,0.4)] disabled:opacity-50"
+                >
+                  {loading ? 'Dealing...' : 'Deal Hand'}
+                </button>
               </div>
+              
+              {/* Emergency Unstuck Button */}
               <button 
-                onClick={startGame} disabled={loading}
-                className="w-full sm:w-auto bg-[#339933] hover:bg-[#297a29] text-white px-10 py-3 rounded-lg font-black text-lg uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(51,153,51,0.4)] disabled:opacity-50"
+                onClick={handleClearStuck} disabled={loading}
+                className="mt-4 text-xs text-red-500/50 hover:text-red-500 transition-colors uppercase tracking-widest"
               >
-                {loading ? 'Dealing...' : 'Deal Hand'}
+                Clear Stuck Game
               </button>
             </div>
           ) : (

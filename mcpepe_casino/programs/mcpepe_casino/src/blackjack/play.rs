@@ -60,6 +60,20 @@ pub struct ResolveBlackjack<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct CancelBlackjack<'info> {
+    #[account(
+        mut,
+        seeds = [b"blackjack", player.key().as_ref()],
+        bump,
+        has_one = player,
+        close = player // Closes the account and refunds rent
+    )]
+    pub game: Account<'info, BlackjackGame>,
+    #[account(mut)]
+    pub player: Signer<'info>,
+}
+
 pub fn start_blackjack(
     ctx: Context<StartBlackjack>,
     bet_amount: u64,
@@ -135,5 +149,10 @@ pub fn resolve_blackjack(
         transfer(cpi_context, payout)?;
     }
     
+    Ok(())
+}
+
+pub fn cancel_blackjack(_ctx: Context<CancelBlackjack>) -> Result<()> {
+    // Emergency route to close a corrupted PDA and refund the player
     Ok(())
 }
