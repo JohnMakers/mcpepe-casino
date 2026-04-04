@@ -5,7 +5,9 @@ import { Transaction, PublicKey, SystemProgram } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import idl from '../../../idl.json';
 
-const PROGRAM_ID = new PublicKey(idl.address);
+
+const PROGRAM_ID_STRING = "7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw";
+const PROGRAM_ID = new PublicKey(PROGRAM_ID_STRING)
 
 interface BlackjackProps {
   balance: number;
