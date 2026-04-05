@@ -1,3 +1,4 @@
+// Author: John McAfee
 import React, { useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
@@ -41,15 +42,28 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     return total;
   };
 
-  const renderCard = (val: number, hidden = false, index = 0) => {
-    const cardStyles = "w-16 h-24 sm:w-20 sm:h-28 rounded-md shadow-[2px_4px_10px_rgba(0,0,0,0.5)] object-contain";
+  // Dedicated Sequencer to mimic real-world dealer pitching mechanics
+  const getCardDelay = (isDealer: boolean, index: number, handIdx: number = 0) => {
+    if (index === 0 && !isDealer && handIdx === 0) return '0ms';
+    if (index === 0 && isDealer) return '300ms';
+    if (index === 1 && !isDealer && handIdx === 0) return '600ms';
+    if (index === 1 && isDealer) return '900ms';
     
-    // Inject animation delay based on index so cards "fly in" sequentially
+    // Hit timing
+    if (!isDealer) return '200ms'; 
+    if (isDealer) return `${(index - 1) * 400}ms`; 
+    return '0ms';
+  };
+
+  const renderCard = (val: number, hidden = false, isDealer = false, index = 0, handIdx = 0) => {
+    const cardStyles = "w-16 h-24 sm:w-20 sm:h-28 rounded-md shadow-[2px_4px_10px_rgba(0,0,0,0.5)] object-contain transition-all duration-300";
+    const delay = getCardDelay(isDealer, index, handIdx);
+    
     const animStyle = {
-      animation: `dealCard 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`,
-      animationDelay: `${index * 150}ms`,
+      animation: `dealCard 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`,
+      animationDelay: delay,
       opacity: 0,
-      transform: 'translateY(-100px) rotateX(60deg) scale(0.8)'
+      transform: 'translateY(-150px) rotateX(60deg) scale(0.8)'
     };
     
     if (hidden) return (
@@ -77,6 +91,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     
     setLoading(true);
     setError(null);
+    setGameState(null); // Clear table for new deal
 
     try {
       const seedRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3005'}/api/blackjack/seed`, {
@@ -127,13 +142,17 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
 
-      setGameState(data);
-      if (data.status === "resolved") {
-        setBalance(balance - betAmount + (data.payout / anchor.web3.LAMPORTS_PER_SOL));
-        logWager("Blackjack", betAmount, data.payout > 0, data.payout / anchor.web3.LAMPORTS_PER_SOL, signature, clientSeed);
-      } else {
-        setBalance(balance - betAmount);
-      }
+      // Force a tiny delay so React correctly mounts the new table state to trigger keyframes
+      setTimeout(() => {
+        setGameState(data);
+        if (data.status === "resolved") {
+          setBalance(balance - betAmount + (data.payout / anchor.web3.LAMPORTS_PER_SOL));
+          logWager("Blackjack", betAmount, data.payout > 0, data.payout / anchor.web3.LAMPORTS_PER_SOL, signature, clientSeed);
+        } else {
+          setBalance(balance - betAmount);
+        }
+      }, 50);
+
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Failed to start game.");
@@ -222,16 +241,10 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
   return (
     <div className="flex flex-col items-center justify-center w-full max-w-4xl mx-auto p-4 animate-fade-in relative">
       
-      {/* 🚀 Custom Casino Keyframes */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes dealCard {
-          0% { opacity: 0; transform: translateY(-100px) rotateX(60deg) scale(0.8); }
+          0% { opacity: 0; transform: translateY(-150px) rotateX(60deg) scale(0.8); }
           100% { opacity: 1; transform: translateY(0) rotateX(0deg) scale(1); }
-        }
-        @keyframes resultPop {
-          0% { transform: scale(0.5) rotate(-5deg); opacity: 0; }
-          60% { transform: scale(1.2) rotate(3deg); opacity: 1; filter: brightness(1.5); }
-          100% { transform: scale(1) rotate(0deg); opacity: 1; filter: brightness(1); }
         }
         @keyframes pulseGlow {
           0%, 100% { box-shadow: 0 0 20px rgba(51, 153, 51, 0.4); }
@@ -241,7 +254,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
 
       <div className="w-full bg-[#0a0f0c] border border-[#339933] rounded-2xl p-6 shadow-[0_0_30px_rgba(51,153,51,0.2)]">
         
-        <div className="flex justify-between items-center mb-8 border-b border-green-900/50 pb-4">
+        <div className="flex justify-between items-center mb-6 border-b border-green-900/50 pb-4">
           <h2 className="text-3xl font-black uppercase tracking-widest text-[#FFC72C]">
             🃏 McPepe <span className="text-[#339933]">Blackjack</span>
           </h2>
@@ -252,10 +265,10 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
 
         {error && <div className="bg-red-900/50 border border-red-500 text-red-200 p-3 rounded-lg mb-6 text-center text-sm font-bold shadow-lg">{error}</div>}
 
-        <div className="relative w-full min-h-[350px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-900/40 via-[#0a0f0c] to-[#050806] rounded-xl border border-green-900/30 p-6 flex flex-col justify-between mb-6 overflow-hidden">
+        <div className="relative w-full min-h-[400px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-900/40 via-[#0a0f0c] to-[#050806] rounded-xl border border-green-900/30 p-6 flex flex-col justify-between mb-6 overflow-hidden">
           
           {/* DEALER AREA */}
-          <div className="flex flex-col items-center mb-10 z-10">
+          <div className="flex flex-col items-center z-10">
             <div className="flex items-center gap-3 mb-3">
               <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">Dealer</div>
               {gameState && (
@@ -265,49 +278,50 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
               )}
             </div>
             
-            <div className="flex gap-[-20px] relative">
+            <div className="flex gap-[-20px] relative h-28 sm:h-32">
               {gameState ? (
                 gameState.dealerCards.map((c: number, i: number) => {
                   const isHidden = !showDealerHoleCard && i >= 1;
+                  // Critical: Key must be stable (dealer-0, dealer-1) so React doesn't remount the DOM node when the hole card reveals.
                   return (
-                    <div key={`dealer-${i}-${c}`} className={`${i > 0 ? '-ml-10' : ''} transition-transform hover:-translate-y-3 z-${i}`}>
-                      {renderCard(c, isHidden, i)}
+                    <div key={`dealer-${i}`} className={`${i > 0 ? '-ml-10' : ''} transition-transform hover:-translate-y-3`} style={{ zIndex: i }}>
+                      {renderCard(c, isHidden, true, i)}
                     </div>
                   );
                 })
               ) : (
                 <div className="flex gap-[-20px] opacity-40">
-                  <div className="transition-transform hover:-translate-y-2">{renderCard(0, true, 0)}</div>
-                  <div className="-ml-10 transition-transform hover:-translate-y-2">{renderCard(0, true, 1)}</div>
+                  <div style={{ zIndex: 0 }}>{renderCard(0, true, true, 0)}</div>
+                  <div className="-ml-10" style={{ zIndex: 1 }}>{renderCard(0, true, true, 1)}</div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* MASSIVE OUTCOME BANNER (Only shows when resolved) */}
+          {/* SLEEK OUTCOME PLAQUE (Replaces massive overlay) */}
           {gameState?.status === "resolved" && (
-            <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none bg-black/60 backdrop-blur-sm" style={{ animation: 'resultPop 0.6s ease-out forwards' }}>
-              <div className={`px-12 py-6 rounded-2xl border-4 shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col items-center
-                ${gameState.payout > betAmount ? 'bg-green-900/80 border-[#339933] text-[#339933]' : 
-                  gameState.payout === betAmount ? 'bg-gray-800/90 border-gray-400 text-white' : 
-                  'bg-red-900/90 border-red-500 text-red-500'}`}
-              >
-                <span className="text-5xl font-black uppercase tracking-widest drop-shadow-[0_4px_4px_rgba(0,0,0,1)]">
-                  {gameState.payout > betAmount * 2 ? 'BLACKJACK!' : 
-                   gameState.payout > betAmount ? 'YOU WIN!' : 
-                   gameState.payout === betAmount ? 'PUSH' : 'BUSTED'}
-                </span>
-                {gameState.payout > 0 && (
-                  <span className="text-2xl font-bold mt-2 text-[#FFC72C] bg-black/50 px-4 py-1 rounded-lg">
-                    +{Number(gameState.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(2)} SOL
+             <div className="flex flex-col items-center justify-center my-4 z-20 animate-fade-in drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]">
+                <div className={`px-8 py-2 rounded-lg border-2 flex flex-col sm:flex-row items-center gap-2 sm:gap-4
+                  ${gameState.payout > betAmount ? 'bg-green-900/90 border-[#339933] text-[#339933]' : 
+                    gameState.payout === betAmount ? 'bg-gray-800/90 border-gray-400 text-white' : 
+                    'bg-red-900/90 border-red-500 text-red-500'}`}
+                >
+                  <span className="text-2xl sm:text-3xl font-black uppercase tracking-widest drop-shadow-md">
+                    {gameState.payout > betAmount * 2 ? 'BLACKJACK!' : 
+                     gameState.payout > betAmount ? 'YOU WIN!' : 
+                     gameState.payout === betAmount ? 'PUSH' : 'BUSTED'}
                   </span>
-                )}
-              </div>
-            </div>
+                  {gameState.payout > 0 && (
+                    <span className="text-lg sm:text-xl font-bold text-[#FFC72C] bg-black/60 px-3 py-1 rounded-md">
+                      +{Number(gameState.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(2)} SOL
+                    </span>
+                  )}
+                </div>
+             </div>
           )}
 
           {/* PLAYER AREA */}
-          <div className="flex flex-col items-center z-10">
+          <div className="flex flex-col items-center z-10 mt-auto">
             <div className="text-xs font-bold text-[#FFC72C] mb-2 uppercase tracking-widest">Player</div>
             <div className="flex gap-12">
               {gameState ? (
@@ -318,10 +332,11 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
                       {calculateHandTotal(hand)}
                     </div>
 
-                    <div className={`flex relative ${gameState.currentHandIndex === handIdx && gameState.status === 'playing' ? 'ring-4 ring-[#FFC72C] ring-offset-4 ring-offset-[#0a0f0c] rounded-xl p-2 bg-yellow-900/10' : ''}`}>
+                    <div className={`flex relative h-28 sm:h-32 ${gameState.currentHandIndex === handIdx && gameState.status === 'playing' ? 'ring-4 ring-[#FFC72C] ring-offset-4 ring-offset-[#0a0f0c] rounded-xl p-2 bg-yellow-900/10' : ''}`}>
                       {hand.map((c: number, i: number) => (
-                        <div key={`player-${handIdx}-${i}-${c}`} className={`${i > 0 ? '-ml-10' : ''} transition-transform hover:-translate-y-3 z-${i}`}>
-                          {renderCard(c, false, i)}
+                        // Stable keys for player cards
+                        <div key={`player-${handIdx}-${i}`} className={`${i > 0 ? '-ml-10' : ''} transition-transform hover:-translate-y-3`} style={{ zIndex: i }}>
+                          {renderCard(c, false, false, i, handIdx)}
                         </div>
                       ))}
                     </div>
@@ -329,18 +344,18 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
                 ))
               ) : (
                 <div className="flex gap-[-20px] opacity-40">
-                  <div className="transition-transform hover:-translate-y-2">{renderCard(0, true, 0)}</div>
-                  <div className="-ml-10 transition-transform hover:-translate-y-2">{renderCard(0, true, 1)}</div>
+                  <div style={{ zIndex: 0 }}>{renderCard(0, true, false, 0)}</div>
+                  <div className="-ml-10" style={{ zIndex: 1 }}>{renderCard(0, true, false, 1)}</div>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* CONTROLS (Chunky 3D Buttons) */}
-        <div className="bg-black/60 rounded-xl p-6 border-t border-[#339933]/30 shadow-[inset_0_4px_20px_rgba(0,0,0,0.5)]">
+        {/* CONTROLS */}
+        <div className="bg-black/60 rounded-xl p-6 border-t border-[#339933]/30 shadow-[inset_0_4px_20px_rgba(0,0,0,0.5)] min-h-[100px] flex flex-col justify-center">
           {!gameState || gameState.status === "resolved" ? (
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center w-full">
               <div className="flex flex-col sm:flex-row gap-6 items-center justify-center w-full">
                 
                 <div className="bg-[#050806] border-2 border-gray-700 rounded-xl flex items-center px-4 py-3 w-full sm:w-auto shadow-inner">
@@ -368,12 +383,12 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
               </button>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-4 justify-center">
+            <div className="flex flex-wrap gap-4 justify-center w-full">
               
               <button 
                 onClick={() => handleAction('hit')} disabled={loading} 
                 className="bg-green-600 text-white px-8 py-3 rounded-xl font-black text-lg uppercase tracking-wider transition-all 
-                border-b-[6px] border-green-900 active:border-b-0 active:translate-y-[6px] hover:bg-green-500 hover:brightness-110"
+                border-b-[6px] border-green-900 active:border-b-0 active:translate-y-[6px] hover:bg-green-500 hover:brightness-110 flex-1 sm:flex-none min-w-[120px]"
               >
                 Hit
               </button>
@@ -381,7 +396,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
               <button 
                 onClick={() => handleAction('stand')} disabled={loading} 
                 className="bg-red-600 text-white px-8 py-3 rounded-xl font-black text-lg uppercase tracking-wider transition-all 
-                border-b-[6px] border-red-900 active:border-b-0 active:translate-y-[6px] hover:bg-red-500 hover:brightness-110"
+                border-b-[6px] border-red-900 active:border-b-0 active:translate-y-[6px] hover:bg-red-500 hover:brightness-110 flex-1 sm:flex-none min-w-[120px]"
               >
                 Stand
               </button>
@@ -390,7 +405,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
                 <button 
                   onClick={() => handleAction('double')} disabled={loading} 
                   className="bg-[#FFC72C] text-black px-8 py-3 rounded-xl font-black text-lg uppercase tracking-wider transition-all 
-                  border-b-[6px] border-yellow-700 active:border-b-0 active:translate-y-[6px] hover:bg-yellow-400 hover:brightness-110"
+                  border-b-[6px] border-yellow-700 active:border-b-0 active:translate-y-[6px] hover:bg-yellow-400 hover:brightness-110 flex-1 sm:flex-none min-w-[120px]"
                 >
                   Double
                 </button>
@@ -401,7 +416,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
                 <button 
                   onClick={() => handleAction('split')} disabled={loading} 
                   className="bg-blue-600 text-white px-8 py-3 rounded-xl font-black text-lg uppercase tracking-wider transition-all 
-                  border-b-[6px] border-blue-900 active:border-b-0 active:translate-y-[6px] hover:bg-blue-500 hover:brightness-110"
+                  border-b-[6px] border-blue-900 active:border-b-0 active:translate-y-[6px] hover:bg-blue-500 hover:brightness-110 flex-1 sm:flex-none min-w-[120px]"
                 >
                   Split
                 </button>
