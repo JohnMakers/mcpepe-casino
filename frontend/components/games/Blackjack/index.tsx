@@ -41,12 +41,21 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     return total;
   };
 
-  const renderCard = (val: number, hidden = false) => {
-    const cardStyles = "w-16 h-24 sm:w-20 sm:h-28 rounded-md shadow-md object-contain";
+  const renderCard = (val: number, hidden = false, index = 0) => {
+    const cardStyles = "w-16 h-24 sm:w-20 sm:h-28 rounded-md shadow-[2px_4px_10px_rgba(0,0,0,0.5)] object-contain";
     
-    // Updated to pull from the /cards/ directory
+    // Inject animation delay based on index so cards "fly in" sequentially
+    const animStyle = {
+      animation: `dealCard 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`,
+      animationDelay: `${index * 150}ms`,
+      opacity: 0,
+      transform: 'translateY(-100px) rotateX(60deg) scale(0.8)'
+    };
+    
     if (hidden) return (
-      <img src="/cards/card_back.png" alt="Hidden Card" className={cardStyles} />
+      <div style={animStyle}>
+        <img src="/cards/card_back.png" alt="Hidden Card" className={cardStyles} />
+      </div>
     );
     
     const suitMap = ['s', 'h', 'd', 'c']; 
@@ -55,9 +64,10 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     const rank = rankMap[val % 13];
     const suit = suitMap[Math.floor(val / 13) % 4];
     
-    // Updated to pull from the /cards/ directory
     return (
-      <img src={`/cards/${rank}-${suit}.png`} alt={`${rank} of ${suit}`} className={cardStyles} />
+      <div style={animStyle}>
+        <img src={`/cards/${rank}-${suit}.png`} alt={`${rank} of ${suit}`} className={cardStyles} />
+      </div>
     );
   };
 
@@ -199,18 +209,36 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
       const sig = await sendTransaction(tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
       setError("Stuck game cleared! You can play normally now.");
+      setGameState(null);
     } catch (err: any) {
       setError("Failed to clear. You either need to deploy the cancel_blackjack route to Anchor, or switch to Account 2.");
     }
     setLoading(false);
   };
 
-  // Evaluate if player busted all hands to hide dealer's hole card
   const allBust = gameState?.playerHands?.every((hand: number[]) => calculateHandTotal(hand) > 21) ?? false;
   const showDealerHoleCard = gameState?.status === "resolved" && !allBust;
 
   return (
-    <div className="flex flex-col items-center justify-center w-full max-w-4xl mx-auto p-4 animate-fade-in">
+    <div className="flex flex-col items-center justify-center w-full max-w-4xl mx-auto p-4 animate-fade-in relative">
+      
+      {/* 🚀 Custom Casino Keyframes */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes dealCard {
+          0% { opacity: 0; transform: translateY(-100px) rotateX(60deg) scale(0.8); }
+          100% { opacity: 1; transform: translateY(0) rotateX(0deg) scale(1); }
+        }
+        @keyframes resultPop {
+          0% { transform: scale(0.5) rotate(-5deg); opacity: 0; }
+          60% { transform: scale(1.2) rotate(3deg); opacity: 1; filter: brightness(1.5); }
+          100% { transform: scale(1) rotate(0deg); opacity: 1; filter: brightness(1); }
+        }
+        @keyframes pulseGlow {
+          0%, 100% { box-shadow: 0 0 20px rgba(51, 153, 51, 0.4); }
+          50% { box-shadow: 0 0 40px rgba(51, 153, 51, 0.8); }
+        }
+      `}} />
+
       <div className="w-full bg-[#0a0f0c] border border-[#339933] rounded-2xl p-6 shadow-[0_0_30px_rgba(51,153,51,0.2)]">
         
         <div className="flex justify-between items-center mb-8 border-b border-green-900/50 pb-4">
@@ -222,125 +250,173 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
           </button>
         </div>
 
-        {error && <div className="bg-red-900/50 border border-red-500 text-red-200 p-3 rounded-lg mb-6 text-center text-sm">{error}</div>}
+        {error && <div className="bg-red-900/50 border border-red-500 text-red-200 p-3 rounded-lg mb-6 text-center text-sm font-bold shadow-lg">{error}</div>}
 
-        <div className="relative w-full min-h-[300px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-900/40 via-[#0a0f0c] to-[#050806] rounded-xl border border-green-900/30 p-6 flex flex-col justify-between mb-6">
+        <div className="relative w-full min-h-[350px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-900/40 via-[#0a0f0c] to-[#050806] rounded-xl border border-green-900/30 p-6 flex flex-col justify-between mb-6 overflow-hidden">
           
           {/* DEALER AREA */}
-          <div className="flex flex-col items-center mb-8">
+          <div className="flex flex-col items-center mb-10 z-10">
             <div className="flex items-center gap-3 mb-3">
               <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">Dealer</div>
               {gameState && (
-                <div className="bg-black/80 border border-gray-700 text-white font-black text-xs px-2 py-1 rounded shadow-inner">
+                <div className="bg-black/90 border border-gray-700 text-white font-black text-sm px-3 py-1 rounded-md shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
                   {calculateHandTotal(showDealerHoleCard ? gameState.dealerCards : [gameState.dealerCards[0]])}
                 </div>
               )}
             </div>
             
-            <div className="flex gap-[-20px]">
+            <div className="flex gap-[-20px] relative">
               {gameState ? (
                 gameState.dealerCards.map((c: number, i: number) => {
                   const isHidden = !showDealerHoleCard && i >= 1;
                   return (
-                    <div key={i} className={`${i > 0 ? '-ml-8' : ''} transition-transform hover:-translate-y-2`}>
-                      {renderCard(c, isHidden)}
+                    <div key={`dealer-${i}-${c}`} className={`${i > 0 ? '-ml-10' : ''} transition-transform hover:-translate-y-3 z-${i}`}>
+                      {renderCard(c, isHidden, i)}
                     </div>
                   );
                 })
               ) : (
-                <div className="flex gap-[-20px]">
-                  <div className="transition-transform hover:-translate-y-2">{renderCard(0, true)}</div>
-                  <div className="-ml-8 transition-transform hover:-translate-y-2">{renderCard(0, true)}</div>
+                <div className="flex gap-[-20px] opacity-40">
+                  <div className="transition-transform hover:-translate-y-2">{renderCard(0, true, 0)}</div>
+                  <div className="-ml-10 transition-transform hover:-translate-y-2">{renderCard(0, true, 1)}</div>
                 </div>
               )}
             </div>
           </div>
 
+          {/* MASSIVE OUTCOME BANNER (Only shows when resolved) */}
+          {gameState?.status === "resolved" && (
+            <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none bg-black/60 backdrop-blur-sm" style={{ animation: 'resultPop 0.6s ease-out forwards' }}>
+              <div className={`px-12 py-6 rounded-2xl border-4 shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col items-center
+                ${gameState.payout > betAmount ? 'bg-green-900/80 border-[#339933] text-[#339933]' : 
+                  gameState.payout === betAmount ? 'bg-gray-800/90 border-gray-400 text-white' : 
+                  'bg-red-900/90 border-red-500 text-red-500'}`}
+              >
+                <span className="text-5xl font-black uppercase tracking-widest drop-shadow-[0_4px_4px_rgba(0,0,0,1)]">
+                  {gameState.payout > betAmount * 2 ? 'BLACKJACK!' : 
+                   gameState.payout > betAmount ? 'YOU WIN!' : 
+                   gameState.payout === betAmount ? 'PUSH' : 'BUSTED'}
+                </span>
+                {gameState.payout > 0 && (
+                  <span className="text-2xl font-bold mt-2 text-[#FFC72C] bg-black/50 px-4 py-1 rounded-lg">
+                    +{Number(gameState.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(2)} SOL
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* PLAYER AREA */}
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-center z-10">
             <div className="text-xs font-bold text-[#FFC72C] mb-2 uppercase tracking-widest">Player</div>
-            <div className="flex gap-8">
+            <div className="flex gap-12">
               {gameState ? (
                 gameState.playerHands.map((hand: number[], handIdx: number) => (
-                  <div key={handIdx} className="flex flex-col items-center">
+                  <div key={`player-hand-${handIdx}`} className="flex flex-col items-center">
                     
-                    <div className="bg-black/80 border border-[#339933] text-[#FFC72C] font-black text-xs px-3 py-1 rounded shadow-inner mb-3">
+                    <div className="bg-black/90 border-2 border-[#339933] text-[#FFC72C] font-black text-sm px-4 py-1 rounded-md shadow-[0_2px_8px_rgba(51,153,51,0.4)] mb-4">
                       {calculateHandTotal(hand)}
                     </div>
 
-                    <div className={`flex ${gameState.currentHandIndex === handIdx && gameState.status === 'playing' ? 'ring-2 ring-[#FFC72C] rounded-xl p-2' : ''}`}>
+                    <div className={`flex relative ${gameState.currentHandIndex === handIdx && gameState.status === 'playing' ? 'ring-4 ring-[#FFC72C] ring-offset-4 ring-offset-[#0a0f0c] rounded-xl p-2 bg-yellow-900/10' : ''}`}>
                       {hand.map((c: number, i: number) => (
-                        <div key={i} className={`${i > 0 ? '-ml-8' : ''} transition-transform hover:-translate-y-2`}>
-                          {renderCard(c)}
+                        <div key={`player-${handIdx}-${i}-${c}`} className={`${i > 0 ? '-ml-10' : ''} transition-transform hover:-translate-y-3 z-${i}`}>
+                          {renderCard(c, false, i)}
                         </div>
                       ))}
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="flex gap-[-20px]">
-                  <div className="transition-transform hover:-translate-y-2">{renderCard(0, true)}</div>
-                  <div className="-ml-8 transition-transform hover:-translate-y-2">{renderCard(0, true)}</div>
+                <div className="flex gap-[-20px] opacity-40">
+                  <div className="transition-transform hover:-translate-y-2">{renderCard(0, true, 0)}</div>
+                  <div className="-ml-10 transition-transform hover:-translate-y-2">{renderCard(0, true, 1)}</div>
                 </div>
               )}
             </div>
-            {gameState?.status === "resolved" && (
-              <div className={`mt-6 text-2xl font-black uppercase tracking-widest ${gameState.payout > 0 ? 'text-[#339933] drop-shadow-[0_0_10px_rgba(51,153,51,0.8)]' : 'text-red-500'}`}>
-                {gameState.payout > 0 ? `+${(gameState.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(2)} SOL` : 'BUSTED'}
-              </div>
-            )}
           </div>
         </div>
 
-        {/* CONTROLS */}
-        <div className="bg-black/50 rounded-xl p-4 border border-gray-800">
+        {/* CONTROLS (Chunky 3D Buttons) */}
+        <div className="bg-black/60 rounded-xl p-6 border-t border-[#339933]/30 shadow-[inset_0_4px_20px_rgba(0,0,0,0.5)]">
           {!gameState || gameState.status === "resolved" ? (
             <div className="flex flex-col items-center">
-              <div className="flex flex-col sm:flex-row gap-4 items-center justify-center w-full">
-                <div className="bg-black border border-gray-700 rounded-lg flex items-center px-4 py-3 w-full sm:w-auto">
-                  <span className="text-gray-400 font-bold mr-2">SOL</span>
+              <div className="flex flex-col sm:flex-row gap-6 items-center justify-center w-full">
+                
+                <div className="bg-[#050806] border-2 border-gray-700 rounded-xl flex items-center px-4 py-3 w-full sm:w-auto shadow-inner">
+                  <span className="text-[#FFC72C] font-black mr-3 text-lg">SOL</span>
                   <input 
                     type="number" value={betAmount} onChange={(e) => setBetAmount(Number(e.target.value))}
-                    className="bg-transparent text-white font-black text-xl outline-none w-24 text-right"
+                    className="bg-transparent text-white font-black text-2xl outline-none w-28 text-right"
                     step="0.05" min="0.05"
                   />
                 </div>
+
                 <button 
                   onClick={startGame} disabled={loading}
-                  className="w-full sm:w-auto bg-[#339933] hover:bg-[#297a29] text-white px-10 py-3 rounded-lg font-black text-lg uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(51,153,51,0.4)] disabled:opacity-50"
+                  className="w-full sm:w-auto bg-[#339933] text-white px-12 py-4 rounded-xl font-black text-xl uppercase tracking-widest transition-all 
+                  border-b-8 border-green-900 active:border-b-0 active:translate-y-[8px] hover:bg-[#297a29] hover:brightness-110 disabled:opacity-50 disabled:pointer-events-none"
+                  style={{ animation: !loading ? 'pulseGlow 2s infinite' : 'none' }}
                 >
                   {loading ? 'Dealing...' : 'Deal Hand'}
                 </button>
+
               </div>
               
-              <button onClick={handleClearStuck} disabled={loading} className="mt-4 text-xs text-red-500/50 hover:text-red-500 transition-colors uppercase tracking-widest">
+              <button onClick={handleClearStuck} disabled={loading} className="mt-6 text-xs text-red-500/30 hover:text-red-500 font-bold transition-colors uppercase tracking-widest">
                 Clear Stuck Game
               </button>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-3 justify-center">
-              {gameState.insuranceOffered && (
-                <button onClick={() => handleAction('insurance')} disabled={loading} className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-lg font-black uppercase tracking-wider transition-all w-full sm:w-auto">
-                  Insurance (0.5x)
-                </button>
-              )}
-              <button onClick={() => handleAction('hit')} disabled={loading} className="bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white px-8 py-3 rounded-lg font-black uppercase tracking-wider transition-all">
+            <div className="flex flex-wrap gap-4 justify-center">
+              
+              <button 
+                onClick={() => handleAction('hit')} disabled={loading} 
+                className="bg-green-600 text-white px-8 py-3 rounded-xl font-black text-lg uppercase tracking-wider transition-all 
+                border-b-[6px] border-green-900 active:border-b-0 active:translate-y-[6px] hover:bg-green-500 hover:brightness-110"
+              >
                 Hit
               </button>
-              <button onClick={() => handleAction('stand')} disabled={loading} className="bg-red-600 hover:bg-red-500 text-white px-8 py-3 rounded-lg font-black uppercase tracking-wider transition-all">
+              
+              <button 
+                onClick={() => handleAction('stand')} disabled={loading} 
+                className="bg-red-600 text-white px-8 py-3 rounded-xl font-black text-lg uppercase tracking-wider transition-all 
+                border-b-[6px] border-red-900 active:border-b-0 active:translate-y-[6px] hover:bg-red-500 hover:brightness-110"
+              >
                 Stand
               </button>
+              
               {gameState.playerHands[gameState.currentHandIndex]?.length === 2 && (
-                <button onClick={() => handleAction('double')} disabled={loading} className="bg-[#FFC72C] hover:bg-yellow-400 text-black px-8 py-3 rounded-lg font-black uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(255,199,44,0.3)]">
+                <button 
+                  onClick={() => handleAction('double')} disabled={loading} 
+                  className="bg-[#FFC72C] text-black px-8 py-3 rounded-xl font-black text-lg uppercase tracking-wider transition-all 
+                  border-b-[6px] border-yellow-700 active:border-b-0 active:translate-y-[6px] hover:bg-yellow-400 hover:brightness-110"
+                >
                   Double
                 </button>
               )}
+              
               {gameState.playerHands.length === 1 && gameState.playerHands[0].length === 2 && 
                (gameState.playerHands[0][0] % 13) === (gameState.playerHands[0][1] % 13) && (
-                <button onClick={() => handleAction('split')} disabled={loading} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-lg font-black uppercase tracking-wider transition-all">
+                <button 
+                  onClick={() => handleAction('split')} disabled={loading} 
+                  className="bg-blue-600 text-white px-8 py-3 rounded-xl font-black text-lg uppercase tracking-wider transition-all 
+                  border-b-[6px] border-blue-900 active:border-b-0 active:translate-y-[6px] hover:bg-blue-500 hover:brightness-110"
+                >
                   Split
                 </button>
               )}
+
+              {gameState.insuranceOffered && (
+                <button 
+                  onClick={() => handleAction('insurance')} disabled={loading} 
+                  className="bg-purple-600 text-white px-8 py-3 rounded-xl font-black text-lg uppercase tracking-wider transition-all 
+                  border-b-[6px] border-purple-900 active:border-b-0 active:translate-y-[6px] hover:bg-purple-500 hover:brightness-110 w-full sm:w-auto"
+                >
+                  Insurance (0.5x)
+                </button>
+              )}
+
             </div>
           )}
         </div>
