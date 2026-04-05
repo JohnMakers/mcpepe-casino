@@ -1,4 +1,3 @@
-// Author: John McAfee
 import React, { useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
@@ -26,26 +25,39 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  const calculateHandTotal = (hand: number[]) => {
+    let total = 0;
+    let aces = 0;
+    for (let card of hand) {
+      let rank = card % 13;
+      if (rank < 9) total += rank + 2; 
+      else if (rank < 12) total += 10; 
+      else { total += 11; aces++; }    
+    }
+    while (total > 21 && aces > 0) {
+      total -= 10;
+      aces--;
+    }
+    return total;
+  };
+
   const renderCard = (val: number, hidden = false) => {
+    const cardStyles = "w-16 h-24 sm:w-20 sm:h-28 rounded-md shadow-md object-contain";
+    
+    // Updated to pull from the /cards/ directory
     if (hidden) return (
-      <div className="w-16 h-24 sm:w-20 sm:h-28 rounded-lg border-2 border-green-900 bg-[url('/cf_tail.png')] bg-cover bg-center shadow-md flex items-center justify-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-black/40"></div>
-        <span className="text-3xl relative z-10 opacity-50">🐸</span>
-      </div>
+      <img src="/cards/card_back.png" alt="Hidden Card" className={cardStyles} />
     );
     
-    const suits = ['♠', '♥', '♦', '♣'];
-    const ranks = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
-    const rank = ranks[val % 13];
-    const suit = suits[Math.floor(val / 13) % 4];
-    const color = (suit === '♥' || suit === '♦') ? 'text-red-500' : 'text-gray-900';
+    const suitMap = ['s', 'h', 'd', 'c']; 
+    const rankMap = ['2','3','4','5','6','7','8','9','10','j','q','k','a'];
     
+    const rank = rankMap[val % 13];
+    const suit = suitMap[Math.floor(val / 13) % 4];
+    
+    // Updated to pull from the /cards/ directory
     return (
-      <div className={`w-16 h-24 sm:w-20 sm:h-28 rounded-lg bg-white border-2 border-gray-300 shadow-md flex flex-col justify-between p-1 sm:p-2 ${color}`}>
-        <div className="text-sm sm:text-lg font-bold leading-none">{rank}</div>
-        <div className="text-2xl sm:text-4xl self-center">{suit}</div>
-        <div className="text-sm sm:text-lg font-bold leading-none self-end rotate-180">{rank}</div>
-      </div>
+      <img src={`/cards/${rank}-${suit}.png`} alt={`${rank} of ${suit}`} className={cardStyles} />
     );
   };
 
@@ -57,7 +69,6 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     setError(null);
 
     try {
-      // 1. Fetch Real Seed Hash from Backend
       const seedRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3005'}/api/blackjack/seed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -66,10 +77,8 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
       const seedData = await seedRes.json();
       if (!seedData.success) throw new Error("Failed to generate provably fair seed.");
 
-      // Convert hex string to byte array safely for Anchor's [u8; 32]
       const hashBytes = Array.from(Buffer.from(seedData.serverSeedHash, 'hex'));
 
-      // 2. Escrow Wager On-Chain
       const clientSeed = "mcpepe_" + Math.random().toString(36).substring(2, 10);
       const [gamePda] = PublicKey.findProgramAddressSync([Buffer.from("blackjack"), publicKey.toBuffer()], PROGRAM_ID);
       const [vaultPDA] = PublicKey.findProgramAddressSync([Buffer.from("vault")], PROGRAM_ID);
@@ -81,7 +90,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
       
       const tx = await program.methods.startBlackjack(
         new anchor.BN(lamports),
-        hashBytes, // 🛡️ Now passing the REAL verified hash here!
+        hashBytes, 
         clientSeed,
         new anchor.BN(1)
       ).accounts({
@@ -94,7 +103,6 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
       const signature = await sendTransaction(tx, connection);
       await connection.confirmTransaction(signature, "confirmed");
 
-      // 3. Initialize with Backend
       const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3005'}/api/blackjack/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -128,7 +136,6 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     setLoading(true);
 
     try {
-      // If Doubling or Splitting, we must Escrow additional funds on-chain first
       if (action === "double" || action === "split" || action === "insurance") {
         const [gamePda] = PublicKey.findProgramAddressSync([Buffer.from("blackjack"), publicKey.toBuffer()], PROGRAM_ID);
         const [vaultPDA] = PublicKey.findProgramAddressSync([Buffer.from("vault")], PROGRAM_ID);
@@ -153,7 +160,6 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
         setBalance(balance - (extraLamports / anchor.web3.LAMPORTS_PER_SOL));
       }
 
-      // Process Action with Backend
       const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3005'}/api/blackjack/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -194,16 +200,19 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
       await connection.confirmTransaction(sig, "confirmed");
       setError("Stuck game cleared! You can play normally now.");
     } catch (err: any) {
-      setError("Failed to clear. You either need to deploy the cancel_blackjack route to Anchor, or just switch to Account 2 in your Phantom Wallet.");
+      setError("Failed to clear. You either need to deploy the cancel_blackjack route to Anchor, or switch to Account 2.");
     }
     setLoading(false);
   };
+
+  // Evaluate if player busted all hands to hide dealer's hole card
+  const allBust = gameState?.playerHands?.every((hand: number[]) => calculateHandTotal(hand) > 21) ?? false;
+  const showDealerHoleCard = gameState?.status === "resolved" && !allBust;
 
   return (
     <div className="flex flex-col items-center justify-center w-full max-w-4xl mx-auto p-4 animate-fade-in">
       <div className="w-full bg-[#0a0f0c] border border-[#339933] rounded-2xl p-6 shadow-[0_0_30px_rgba(51,153,51,0.2)]">
         
-        {/* Header */}
         <div className="flex justify-between items-center mb-8 border-b border-green-900/50 pb-4">
           <h2 className="text-3xl font-black uppercase tracking-widest text-[#FFC72C]">
             🃏 McPepe <span className="text-[#339933]">Blackjack</span>
@@ -215,46 +224,63 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
 
         {error && <div className="bg-red-900/50 border border-red-500 text-red-200 p-3 rounded-lg mb-6 text-center text-sm">{error}</div>}
 
-        {/* Game Table Area */}
         <div className="relative w-full min-h-[300px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-900/40 via-[#0a0f0c] to-[#050806] rounded-xl border border-green-900/30 p-6 flex flex-col justify-between mb-6">
           
-          {/* Dealer Area */}
+          {/* DEALER AREA */}
           <div className="flex flex-col items-center mb-8">
-            <div className="text-xs font-bold text-gray-400 mb-2 uppercase tracking-widest">Dealer</div>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">Dealer</div>
+              {gameState && (
+                <div className="bg-black/80 border border-gray-700 text-white font-black text-xs px-2 py-1 rounded shadow-inner">
+                  {calculateHandTotal(showDealerHoleCard ? gameState.dealerCards : [gameState.dealerCards[0]])}
+                </div>
+              )}
+            </div>
+            
             <div className="flex gap-[-20px]">
               {gameState ? (
-                gameState.dealerCards.map((c: number, i: number) => (
-                  <div key={i} className={`${i > 0 ? '-ml-8' : ''} transition-transform hover:-translate-y-2`}>
-                    {renderCard(c, gameState.status !== "resolved" && i === 1)}
-                  </div>
-                ))
+                gameState.dealerCards.map((c: number, i: number) => {
+                  const isHidden = !showDealerHoleCard && i >= 1;
+                  return (
+                    <div key={i} className={`${i > 0 ? '-ml-8' : ''} transition-transform hover:-translate-y-2`}>
+                      {renderCard(c, isHidden)}
+                    </div>
+                  );
+                })
               ) : (
                 <div className="flex gap-[-20px]">
-                  {renderCard(0, true)}
-                  <div className="-ml-8">{renderCard(0, true)}</div>
+                  <div className="transition-transform hover:-translate-y-2">{renderCard(0, true)}</div>
+                  <div className="-ml-8 transition-transform hover:-translate-y-2">{renderCard(0, true)}</div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Player Area */}
+          {/* PLAYER AREA */}
           <div className="flex flex-col items-center">
             <div className="text-xs font-bold text-[#FFC72C] mb-2 uppercase tracking-widest">Player</div>
             <div className="flex gap-8">
               {gameState ? (
                 gameState.playerHands.map((hand: number[], handIdx: number) => (
-                  <div key={handIdx} className={`flex ${gameState.currentHandIndex === handIdx && gameState.status === 'playing' ? 'ring-2 ring-[#FFC72C] rounded-xl p-2' : ''}`}>
-                    {hand.map((c: number, i: number) => (
-                      <div key={i} className={`${i > 0 ? '-ml-8' : ''} transition-transform hover:-translate-y-2`}>
-                        {renderCard(c)}
-                      </div>
-                    ))}
+                  <div key={handIdx} className="flex flex-col items-center">
+                    
+                    <div className="bg-black/80 border border-[#339933] text-[#FFC72C] font-black text-xs px-3 py-1 rounded shadow-inner mb-3">
+                      {calculateHandTotal(hand)}
+                    </div>
+
+                    <div className={`flex ${gameState.currentHandIndex === handIdx && gameState.status === 'playing' ? 'ring-2 ring-[#FFC72C] rounded-xl p-2' : ''}`}>
+                      {hand.map((c: number, i: number) => (
+                        <div key={i} className={`${i > 0 ? '-ml-8' : ''} transition-transform hover:-translate-y-2`}>
+                          {renderCard(c)}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))
               ) : (
                 <div className="flex gap-[-20px]">
-                  {renderCard(0, true)}
-                  <div className="-ml-8">{renderCard(0, true)}</div>
+                  <div className="transition-transform hover:-translate-y-2">{renderCard(0, true)}</div>
+                  <div className="-ml-8 transition-transform hover:-translate-y-2">{renderCard(0, true)}</div>
                 </div>
               )}
             </div>
@@ -266,7 +292,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
           </div>
         </div>
 
-        {/* Controls */}
+        {/* CONTROLS */}
         <div className="bg-black/50 rounded-xl p-4 border border-gray-800">
           {!gameState || gameState.status === "resolved" ? (
             <div className="flex flex-col items-center">
@@ -287,11 +313,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
                 </button>
               </div>
               
-              {/* Emergency Unstuck Button */}
-              <button 
-                onClick={handleClearStuck} disabled={loading}
-                className="mt-4 text-xs text-red-500/50 hover:text-red-500 transition-colors uppercase tracking-widest"
-              >
+              <button onClick={handleClearStuck} disabled={loading} className="mt-4 text-xs text-red-500/50 hover:text-red-500 transition-colors uppercase tracking-widest">
                 Clear Stuck Game
               </button>
             </div>
