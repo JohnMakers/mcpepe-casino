@@ -1,5 +1,5 @@
 // Author: John McAfee
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
@@ -25,11 +25,27 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
   const [gameState, setGameState] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [showOutcome, setShowOutcome] = useState<boolean>(false);
+
+  // Synchronize the outcome banner delay with the dealer's draw time
+  useEffect(() => {
+    if (gameState?.status === "resolved") {
+      const dealerExtraCards = Math.max(0, gameState.dealerCards.length - 2);
+      // Wait 1.5s for initial flip, plus 600ms per extra card the dealer has to draw
+      const delay = 1500 + (dealerExtraCards * 600);
+      const timer = setTimeout(() => setShowOutcome(true), delay);
+      return () => clearTimeout(timer);
+    } else {
+      setShowOutcome(false);
+    }
+  }, [gameState?.status, gameState?.dealerCards?.length]);
 
   const calculateHandTotal = (hand: number[]) => {
+    if (!hand || hand.length === 0) return 0;
     let total = 0;
     let aces = 0;
     for (let card of hand) {
+      if (card === -1) continue; // Ignore hidden cards in calculations
       let rank = card % 13;
       if (rank < 9) total += rank + 2; 
       else if (rank < 12) total += 10; 
@@ -42,45 +58,61 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     return total;
   };
 
-  // Dedicated Sequencer to mimic real-world dealer pitching mechanics
-  const getCardDelay = (isDealer: boolean, index: number, handIdx: number = 0) => {
-    if (index === 0 && !isDealer && handIdx === 0) return '0ms';
-    if (index === 0 && isDealer) return '300ms';
-    if (index === 1 && !isDealer && handIdx === 0) return '600ms';
-    if (index === 1 && isDealer) return '900ms';
-    
-    // Hit timing
-    if (!isDealer) return '200ms'; 
-    if (isDealer) return `${(index - 1) * 400}ms`; 
-    return '0ms';
-  };
-
+  // 3D Physics & Deal Sequencer
   const renderCard = (val: number, hidden = false, isDealer = false, index = 0, handIdx = 0) => {
-    const cardStyles = "w-16 h-24 sm:w-20 sm:h-28 rounded-md shadow-[2px_4px_10px_rgba(0,0,0,0.5)] object-contain transition-all duration-300";
-    const delay = getCardDelay(isDealer, index, handIdx);
+    const isInitialDeal = gameState?.playerHands?.length === 1 && gameState?.playerHands[0].length <= 2;
     
-    const animStyle = {
-      animation: `dealCard 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`,
-      animationDelay: delay,
+    // Timing calculations for the initial 4-card spread
+    let flyDelay = 0;
+    let flipDelay = 50; 
+    
+    if (isInitialDeal) {
+      if (!isDealer && index === 0) { flyDelay = 0; flipDelay = 300; }
+      else if (isDealer && index === 0) { flyDelay = 300; flipDelay = 600; }
+      else if (!isDealer && index === 1) { flyDelay = 600; flipDelay = 900; }
+      else if (isDealer && index === 1) { flyDelay = 900; flipDelay = 0; } // Hole card stays down
+    } else {
+      // For hits, stagger them slightly
+      flyDelay = index * 200;
+      flipDelay = flyDelay + 200;
+    }
+
+    const wrapperStyle = {
+      animation: `flyIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`,
+      animationDelay: `${flyDelay}ms`,
       opacity: 0,
-      transform: 'translateY(-150px) rotateX(60deg) scale(0.8)'
+      transform: 'translateY(-200px) scale(0.6)'
     };
-    
-    if (hidden) return (
-      <div style={animStyle}>
-        <img src="/cards/card_back.png" alt="Hidden Card" className={cardStyles} />
-      </div>
-    );
-    
+
     const suitMap = ['s', 'h', 'd', 'c']; 
     const rankMap = ['2','3','4','5','6','7','8','9','10','j','q','k','a'];
-    
-    const rank = rankMap[val % 13];
-    const suit = suitMap[Math.floor(val / 13) % 4];
-    
+    const rank = val !== -1 ? rankMap[val % 13] : '';
+    const suit = val !== -1 ? suitMap[Math.floor(val / 13) % 4] : '';
+
     return (
-      <div style={animStyle}>
-        <img src={`/cards/${rank}-${suit}.png`} alt={`${rank} of ${suit}`} className={cardStyles} />
+      <div style={wrapperStyle} className="relative w-16 h-24 sm:w-20 sm:h-28 perspective-1000">
+        <div 
+          className="w-full h-full relative preserve-3d transition-transform duration-700 ease-out"
+          style={{ 
+            transform: hidden ? 'rotateY(0deg)' : 'rotateY(180deg)',
+            transitionDelay: !hidden && isInitialDeal ? `${flipDelay}ms` : '0ms'
+          }}
+        >
+          {/* FACE DOWN (Back) */}
+          <img 
+            src="/cards/card_back.png" 
+            alt="Card Back" 
+            className="absolute w-full h-full backface-hidden rounded-md shadow-[2px_4px_10px_rgba(0,0,0,0.5)] object-contain" 
+          />
+          {/* FACE UP (Front) */}
+          {val !== -1 && (
+            <img 
+              src={`/cards/${rank}-${suit}.png`} 
+              alt="Card Face" 
+              className="absolute w-full h-full backface-hidden rounded-md shadow-[2px_4px_10px_rgba(0,0,0,0.5)] object-contain [transform:rotateY(180deg)]" 
+            />
+          )}
+        </div>
       </div>
     );
   };
@@ -91,7 +123,8 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     
     setLoading(true);
     setError(null);
-    setGameState(null); // Clear table for new deal
+    setGameState(null);
+    setShowOutcome(false);
 
     try {
       const seedRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3005'}/api/blackjack/seed`, {
@@ -103,7 +136,6 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
       if (!seedData.success) throw new Error("Failed to generate provably fair seed.");
 
       const hashBytes = Array.from(Buffer.from(seedData.serverSeedHash, 'hex'));
-
       const clientSeed = "mcpepe_" + Math.random().toString(36).substring(2, 10);
       const [gamePda] = PublicKey.findProgramAddressSync([Buffer.from("blackjack"), publicKey.toBuffer()], PROGRAM_ID);
       const [vaultPDA] = PublicKey.findProgramAddressSync([Buffer.from("vault")], PROGRAM_ID);
@@ -142,7 +174,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
 
-      // Force a tiny delay so React correctly mounts the new table state to trigger keyframes
+      // Brief delay to ensure React clears the old DOM completely
       setTimeout(() => {
         setGameState(data);
         if (data.status === "resolved") {
@@ -238,18 +270,27 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
   const allBust = gameState?.playerHands?.every((hand: number[]) => calculateHandTotal(hand) > 21) ?? false;
   const showDealerHoleCard = gameState?.status === "resolved" && !allBust;
 
+  // Build the array of dealer cards to show. Always ensure at least 2 cards exist.
+  let displayDealerCards = gameState ? [...gameState.dealerCards] : [];
+  if (gameState && gameState.status === "playing" && displayDealerCards.length === 1) {
+    displayDealerCards.push(-1); // -1 acts as our hidden hole card
+  }
+
+  // Determine precise Win logic
+  const isNaturalBlackjack = gameState?.playerHands?.length === 1 && gameState.playerHands[0].length === 2 && calculateHandTotal(gameState.playerHands[0]) === 21;
+
   return (
     <div className="flex flex-col items-center justify-center w-full max-w-4xl mx-auto p-4 animate-fade-in relative">
       
+      {/* 3D Utility Classes */}
       <style dangerouslySetInnerHTML={{__html: `
-        @keyframes dealCard {
-          0% { opacity: 0; transform: translateY(-150px) rotateX(60deg) scale(0.8); }
-          100% { opacity: 1; transform: translateY(0) rotateX(0deg) scale(1); }
+        @keyframes flyIn {
+          0% { opacity: 0; transform: translateY(-200px) scale(0.6); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
         }
-        @keyframes pulseGlow {
-          0%, 100% { box-shadow: 0 0 20px rgba(51, 153, 51, 0.4); }
-          50% { box-shadow: 0 0 40px rgba(51, 153, 51, 0.8); }
-        }
+        .perspective-1000 { perspective: 1000px; }
+        .preserve-3d { transform-style: preserve-3d; }
+        .backface-hidden { backface-visibility: hidden; }
       `}} />
 
       <div className="w-full bg-[#0a0f0c] border border-[#339933] rounded-2xl p-6 shadow-[0_0_30px_rgba(51,153,51,0.2)]">
@@ -265,7 +306,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
 
         {error && <div className="bg-red-900/50 border border-red-500 text-red-200 p-3 rounded-lg mb-6 text-center text-sm font-bold shadow-lg">{error}</div>}
 
-        <div className="relative w-full min-h-[400px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-900/40 via-[#0a0f0c] to-[#050806] rounded-xl border border-green-900/30 p-6 flex flex-col justify-between mb-6 overflow-hidden">
+        <div className="relative w-full min-h-[420px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-900/40 via-[#0a0f0c] to-[#050806] rounded-xl border border-green-900/30 p-6 flex flex-col justify-between mb-6 overflow-hidden">
           
           {/* DEALER AREA */}
           <div className="flex flex-col items-center z-10">
@@ -280,26 +321,25 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
             
             <div className="flex gap-[-20px] relative h-28 sm:h-32">
               {gameState ? (
-                gameState.dealerCards.map((c: number, i: number) => {
+                displayDealerCards.map((c: number, i: number) => {
                   const isHidden = !showDealerHoleCard && i >= 1;
-                  // Critical: Key must be stable (dealer-0, dealer-1) so React doesn't remount the DOM node when the hole card reveals.
                   return (
-                    <div key={`dealer-${i}`} className={`${i > 0 ? '-ml-10' : ''} transition-transform hover:-translate-y-3`} style={{ zIndex: i }}>
+                    <div key={`dealer-${i}`} className={`${i > 0 ? '-ml-10' : ''}`} style={{ zIndex: i }}>
                       {renderCard(c, isHidden, true, i)}
                     </div>
                   );
                 })
               ) : (
                 <div className="flex gap-[-20px] opacity-40">
-                  <div style={{ zIndex: 0 }}>{renderCard(0, true, true, 0)}</div>
-                  <div className="-ml-10" style={{ zIndex: 1 }}>{renderCard(0, true, true, 1)}</div>
+                  <div style={{ zIndex: 0 }}>{renderCard(-1, true, true, 0)}</div>
+                  <div className="-ml-10" style={{ zIndex: 1 }}>{renderCard(-1, true, true, 1)}</div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* SLEEK OUTCOME PLAQUE (Replaces massive overlay) */}
-          {gameState?.status === "resolved" && (
+          {/* SLEEK OUTCOME PLAQUE (Delayed via state) */}
+          {showOutcome && gameState?.status === "resolved" && (
              <div className="flex flex-col items-center justify-center my-4 z-20 animate-fade-in drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]">
                 <div className={`px-8 py-2 rounded-lg border-2 flex flex-col sm:flex-row items-center gap-2 sm:gap-4
                   ${gameState.payout > betAmount ? 'bg-green-900/90 border-[#339933] text-[#339933]' : 
@@ -307,7 +347,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
                     'bg-red-900/90 border-red-500 text-red-500'}`}
                 >
                   <span className="text-2xl sm:text-3xl font-black uppercase tracking-widest drop-shadow-md">
-                    {gameState.payout > betAmount * 2 ? 'BLACKJACK!' : 
+                    {isNaturalBlackjack && gameState.payout > betAmount ? 'BLACKJACK!' : 
                      gameState.payout > betAmount ? 'YOU WIN!' : 
                      gameState.payout === betAmount ? 'PUSH' : 'BUSTED'}
                   </span>
@@ -322,7 +362,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
 
           {/* PLAYER AREA */}
           <div className="flex flex-col items-center z-10 mt-auto">
-            <div className="text-xs font-bold text-[#FFC72C] mb-2 uppercase tracking-widest">Player</div>
+            <div className="text-xs font-bold text-[#FFC72C] mb-2 uppercase tracking-widest">You</div>
             <div className="flex gap-12">
               {gameState ? (
                 gameState.playerHands.map((hand: number[], handIdx: number) => (
@@ -334,8 +374,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
 
                     <div className={`flex relative h-28 sm:h-32 ${gameState.currentHandIndex === handIdx && gameState.status === 'playing' ? 'ring-4 ring-[#FFC72C] ring-offset-4 ring-offset-[#0a0f0c] rounded-xl p-2 bg-yellow-900/10' : ''}`}>
                       {hand.map((c: number, i: number) => (
-                        // Stable keys for player cards
-                        <div key={`player-${handIdx}-${i}`} className={`${i > 0 ? '-ml-10' : ''} transition-transform hover:-translate-y-3`} style={{ zIndex: i }}>
+                        <div key={`player-${handIdx}-${i}`} className={`${i > 0 ? '-ml-10' : ''}`} style={{ zIndex: i }}>
                           {renderCard(c, false, false, i, handIdx)}
                         </div>
                       ))}
@@ -344,8 +383,8 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
                 ))
               ) : (
                 <div className="flex gap-[-20px] opacity-40">
-                  <div style={{ zIndex: 0 }}>{renderCard(0, true, false, 0)}</div>
-                  <div className="-ml-10" style={{ zIndex: 1 }}>{renderCard(0, true, false, 1)}</div>
+                  <div style={{ zIndex: 0 }}>{renderCard(-1, true, false, 0)}</div>
+                  <div className="-ml-10" style={{ zIndex: 1 }}>{renderCard(-1, true, false, 1)}</div>
                 </div>
               )}
             </div>
@@ -371,7 +410,6 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
                   onClick={startGame} disabled={loading}
                   className="w-full sm:w-auto bg-[#339933] text-white px-12 py-4 rounded-xl font-black text-xl uppercase tracking-widest transition-all 
                   border-b-8 border-green-900 active:border-b-0 active:translate-y-[8px] hover:bg-[#297a29] hover:brightness-110 disabled:opacity-50 disabled:pointer-events-none"
-                  style={{ animation: !loading ? 'pulseGlow 2s infinite' : 'none' }}
                 >
                   {loading ? 'Dealing...' : 'Deal Hand'}
                 </button>
