@@ -27,11 +27,9 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
   const [error, setError] = useState<string | null>(null);
   const [showOutcome, setShowOutcome] = useState<boolean>(false);
 
-  // Synchronize the outcome banner delay with the dealer's draw time
   useEffect(() => {
     if (gameState?.status === "resolved") {
       const dealerExtraCards = Math.max(0, gameState.dealerCards.length - 2);
-      // Wait 1.5s for initial flip, plus 600ms per extra card the dealer has to draw
       const delay = 1500 + (dealerExtraCards * 600);
       const timer = setTimeout(() => setShowOutcome(true), delay);
       return () => clearTimeout(timer);
@@ -45,7 +43,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     let total = 0;
     let aces = 0;
     for (let card of hand) {
-      if (card === -1) continue; // Ignore hidden cards in calculations
+      if (card === -1) continue; 
       let rank = card % 13;
       if (rank < 9) total += rank + 2; 
       else if (rank < 12) total += 10; 
@@ -58,11 +56,9 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     return total;
   };
 
-  // 3D Physics & Deal Sequencer
   const renderCard = (val: number, hidden = false, isDealer = false, index = 0, handIdx = 0) => {
     const isInitialDeal = gameState?.playerHands?.length === 1 && gameState?.playerHands[0].length <= 2;
     
-    // Timing calculations for the initial 4-card spread
     let flyDelay = 0;
     let flipDelay = 50; 
     
@@ -70,9 +66,8 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
       if (!isDealer && index === 0) { flyDelay = 0; flipDelay = 300; }
       else if (isDealer && index === 0) { flyDelay = 300; flipDelay = 600; }
       else if (!isDealer && index === 1) { flyDelay = 600; flipDelay = 900; }
-      else if (isDealer && index === 1) { flyDelay = 900; flipDelay = 0; } // Hole card stays down
+      else if (isDealer && index === 1) { flyDelay = 900; flipDelay = 0; } 
     } else {
-      // For hits, stagger them slightly
       flyDelay = index * 200;
       flipDelay = flyDelay + 200;
     }
@@ -98,13 +93,11 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
             transitionDelay: !hidden && isInitialDeal ? `${flipDelay}ms` : '0ms'
           }}
         >
-          {/* FACE DOWN (Back) */}
           <img 
             src="/cards/card_back.png" 
             alt="Card Back" 
             className="absolute w-full h-full backface-hidden rounded-md shadow-[2px_4px_10px_rgba(0,0,0,0.5)] object-contain" 
           />
-          {/* FACE UP (Front) */}
           {val !== -1 && (
             <img 
               src={`/cards/${rank}-${suit}.png`} 
@@ -174,7 +167,6 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
 
-      // Brief delay to ensure React clears the old DOM completely
       setTimeout(() => {
         setGameState(data);
         if (data.status === "resolved") {
@@ -267,22 +259,34 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     setLoading(false);
   };
 
+  // State Variables
   const allBust = gameState?.playerHands?.every((hand: number[]) => calculateHandTotal(hand) > 21) ?? false;
   const showDealerHoleCard = gameState?.status === "resolved" && !allBust;
+  
+  // 🐛 FIX: Safeguard against undefined currentHandIndex from initial backend response
+  const currentHandIdx = gameState?.currentHandIndex || 0;
 
-  // Build the array of dealer cards to show. Always ensure at least 2 cards exist.
+  // Build dealer array
   let displayDealerCards = gameState ? [...gameState.dealerCards] : [];
   if (gameState && gameState.status === "playing" && displayDealerCards.length === 1) {
-    displayDealerCards.push(-1); // -1 acts as our hidden hole card
+    displayDealerCards.push(-1); 
   }
 
-  // Determine precise Win logic
-  const isNaturalBlackjack = gameState?.playerHands?.length === 1 && gameState.playerHands[0].length === 2 && calculateHandTotal(gameState.playerHands[0]) === 21;
+  // 🐛 FIX: Corrected text logic for Bust vs Dealer Win
+  let outcomeText = "";
+  if (gameState?.status === "resolved") {
+    const isNaturalBlackjack = gameState.playerHands?.length === 1 && gameState.playerHands[0].length === 2 && calculateHandTotal(gameState.playerHands[0]) === 21;
+    
+    if (isNaturalBlackjack && gameState.payout > betAmount) outcomeText = "BLACKJACK!";
+    else if (gameState.payout > betAmount) outcomeText = "YOU WIN!";
+    else if (gameState.payout === betAmount) outcomeText = "PUSH";
+    else if (allBust) outcomeText = "BUSTED";
+    else outcomeText = "DEALER WINS";
+  }
 
   return (
     <div className="flex flex-col items-center justify-center w-full max-w-4xl mx-auto p-4 animate-fade-in relative">
       
-      {/* 3D Utility Classes */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes flyIn {
           0% { opacity: 0; transform: translateY(-200px) scale(0.6); }
@@ -338,7 +342,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
             </div>
           </div>
 
-          {/* SLEEK OUTCOME PLAQUE (Delayed via state) */}
+          {/* SLEEK OUTCOME PLAQUE */}
           {showOutcome && gameState?.status === "resolved" && (
              <div className="flex flex-col items-center justify-center my-4 z-20 animate-fade-in drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]">
                 <div className={`px-8 py-2 rounded-lg border-2 flex flex-col sm:flex-row items-center gap-2 sm:gap-4
@@ -347,9 +351,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
                     'bg-red-900/90 border-red-500 text-red-500'}`}
                 >
                   <span className="text-2xl sm:text-3xl font-black uppercase tracking-widest drop-shadow-md">
-                    {isNaturalBlackjack && gameState.payout > betAmount ? 'BLACKJACK!' : 
-                     gameState.payout > betAmount ? 'YOU WIN!' : 
-                     gameState.payout === betAmount ? 'PUSH' : 'BUSTED'}
+                    {outcomeText}
                   </span>
                   {gameState.payout > 0 && (
                     <span className="text-lg sm:text-xl font-bold text-[#FFC72C] bg-black/60 px-3 py-1 rounded-md">
@@ -372,7 +374,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
                       {calculateHandTotal(hand)}
                     </div>
 
-                    <div className={`flex relative h-28 sm:h-32 ${gameState.currentHandIndex === handIdx && gameState.status === 'playing' ? 'ring-4 ring-[#FFC72C] ring-offset-4 ring-offset-[#0a0f0c] rounded-xl p-2 bg-yellow-900/10' : ''}`}>
+                    <div className={`flex relative h-28 sm:h-32 ${currentHandIdx === handIdx && gameState.status === 'playing' ? 'ring-4 ring-[#FFC72C] ring-offset-4 ring-offset-[#0a0f0c] rounded-xl p-2 bg-yellow-900/10' : ''}`}>
                       {hand.map((c: number, i: number) => (
                         <div key={`player-${handIdx}-${i}`} className={`${i > 0 ? '-ml-10' : ''}`} style={{ zIndex: i }}>
                           {renderCard(c, false, false, i, handIdx)}
@@ -439,7 +441,8 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
                 Stand
               </button>
               
-              {gameState.playerHands[gameState.currentHandIndex]?.length === 2 && (
+              {/* 🐛 FIX: currentHandIdx now safely mapped from backend or default 0 */}
+              {gameState.playerHands[currentHandIdx]?.length === 2 && (
                 <button 
                   onClick={() => handleAction('double')} disabled={loading} 
                   className="bg-[#FFC72C] text-black px-8 py-3 rounded-xl font-black text-lg uppercase tracking-wider transition-all 
