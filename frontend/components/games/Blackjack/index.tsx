@@ -5,7 +5,6 @@ import { PublicKey, SystemProgram } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import idl from '../../../idl.json';
 
-// Bypass TypeScript IDL strictness
 const PROGRAM_ID_STRING = "7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw";
 const PROGRAM_ID = new PublicKey(PROGRAM_ID_STRING);
 
@@ -27,6 +26,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
   const [error, setError] = useState<string | null>(null);
   const [showOutcome, setShowOutcome] = useState<boolean>(false);
 
+  // Sync outcome banner delay with dealer's draw time
   useEffect(() => {
     if (gameState?.status === "resolved") {
       const dealerExtraCards = Math.max(0, gameState.dealerCards.length - 2);
@@ -85,7 +85,7 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     const suit = val !== -1 ? suitMap[Math.floor(val / 13) % 4] : '';
 
     return (
-      <div style={wrapperStyle} className="relative w-16 h-24 sm:w-20 sm:h-28 perspective-1000">
+      <div style={wrapperStyle} className="relative w-14 h-20 sm:w-20 sm:h-28 perspective-1000">
         <div 
           className="w-full h-full relative preserve-3d transition-transform duration-700 ease-out"
           style={{ 
@@ -96,13 +96,13 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
           <img 
             src="/cards/card_back.png" 
             alt="Card Back" 
-            className="absolute w-full h-full backface-hidden rounded-md shadow-[2px_4px_10px_rgba(0,0,0,0.5)] object-contain" 
+            className="absolute w-full h-full backface-hidden rounded-md shadow-[2px_4px_10px_rgba(0,0,0,0.8)] object-contain" 
           />
           {val !== -1 && (
             <img 
               src={`/cards/${rank}-${suit}.png`} 
               alt="Card Face" 
-              className="absolute w-full h-full backface-hidden rounded-md shadow-[2px_4px_10px_rgba(0,0,0,0.5)] object-contain [transform:rotateY(180deg)]" 
+              className="absolute w-full h-full backface-hidden rounded-md shadow-[2px_4px_10px_rgba(0,0,0,0.8)] object-contain [transform:rotateY(180deg)]" 
             />
           )}
         </div>
@@ -259,33 +259,36 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     setLoading(false);
   };
 
-  // State Variables
+  // Safe mapping of state
+  const currentHandIdx = gameState?.currentHandIndex || 0;
   const allBust = gameState?.playerHands?.every((hand: number[]) => calculateHandTotal(hand) > 21) ?? false;
   const showDealerHoleCard = gameState?.status === "resolved" && !allBust;
-  
-  // 🐛 FIX: Safeguard against undefined currentHandIndex from initial backend response
-  const currentHandIdx = gameState?.currentHandIndex || 0;
 
-  // Build dealer array
   let displayDealerCards = gameState ? [...gameState.dealerCards] : [];
   if (gameState && gameState.status === "playing" && displayDealerCards.length === 1) {
     displayDealerCards.push(-1); 
   }
 
-  // 🐛 FIX: Corrected text logic for Bust vs Dealer Win
+  // Precise Outcome Text Logic
   let outcomeText = "";
   if (gameState?.status === "resolved") {
     const isNaturalBlackjack = gameState.playerHands?.length === 1 && gameState.playerHands[0].length === 2 && calculateHandTotal(gameState.playerHands[0]) === 21;
     
-    if (isNaturalBlackjack && gameState.payout > betAmount) outcomeText = "BLACKJACK!";
-    else if (gameState.payout > betAmount) outcomeText = "YOU WIN!";
-    else if (gameState.payout === betAmount) outcomeText = "PUSH";
-    else if (allBust) outcomeText = "BUSTED";
-    else outcomeText = "DEALER WINS";
+    if (allBust) {
+      outcomeText = "BUSTED";
+    } else if (isNaturalBlackjack && gameState.payout > betAmount) {
+      outcomeText = "BLACKJACK!";
+    } else if (gameState.payout > betAmount) {
+      outcomeText = "YOU WIN!";
+    } else if (gameState.payout === betAmount) {
+      outcomeText = "PUSH";
+    } else {
+      outcomeText = "DEALER WINS";
+    }
   }
 
   return (
-    <div className="flex flex-col items-center justify-center w-full max-w-4xl mx-auto p-4 animate-fade-in relative">
+    <div className="flex flex-col items-center justify-center w-full max-w-5xl mx-auto p-4 animate-fade-in relative">
       
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes flyIn {
@@ -310,12 +313,23 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
 
         {error && <div className="bg-red-900/50 border border-red-500 text-red-200 p-3 rounded-lg mb-6 text-center text-sm font-bold shadow-lg">{error}</div>}
 
-        <div className="relative w-full min-h-[420px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-900/40 via-[#0a0f0c] to-[#050806] rounded-xl border border-green-900/30 p-6 flex flex-col justify-between mb-6 overflow-hidden">
-          
-          {/* DEALER AREA */}
-          <div className="flex flex-col items-center z-10">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">Dealer</div>
+        {/* CUSTOM CASINO TABLE BACKGROUND */}
+        <div 
+          className="relative w-full aspect-[4/3] sm:aspect-[16/9] rounded-2xl border-4 border-green-900/50 shadow-2xl overflow-hidden mb-6"
+          style={{ 
+            backgroundImage: "url('/cards/blackjack_bg.png')", // IMPORTANT: Ensure file is .png or rename the asset locally
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          }}
+        >
+          {/* Slight dark overlay to make cards pop against the felt */}
+          <div className="absolute inset-0 bg-black/20 pointer-events-none"></div>
+
+          {/* ABSOLUTE POSITIONED DEALER AREA (Top Center) */}
+          <div className="absolute top-[10%] sm:top-[15%] left-1/2 -translate-x-1/2 flex flex-col items-center z-10 w-full">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="text-[10px] sm:text-xs font-bold text-gray-300/80 uppercase tracking-widest bg-black/60 px-3 py-1 rounded-full">Dealer</div>
               {gameState && (
                 <div className="bg-black/90 border border-gray-700 text-white font-black text-sm px-3 py-1 rounded-md shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
                   {calculateHandTotal(showDealerHoleCard ? gameState.dealerCards : [gameState.dealerCards[0]])}
@@ -323,38 +337,38 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
               )}
             </div>
             
-            <div className="flex gap-[-20px] relative h-28 sm:h-32">
+            <div className="flex gap-[-25px] sm:gap-[-40px] relative h-24 sm:h-32">
               {gameState ? (
                 displayDealerCards.map((c: number, i: number) => {
                   const isHidden = !showDealerHoleCard && i >= 1;
                   return (
-                    <div key={`dealer-${i}`} className={`${i > 0 ? '-ml-10' : ''}`} style={{ zIndex: i }}>
+                    <div key={`dealer-${i}`} className={`${i > 0 ? '-ml-8 sm:-ml-12' : ''}`} style={{ zIndex: i }}>
                       {renderCard(c, isHidden, true, i)}
                     </div>
                   );
                 })
               ) : (
-                <div className="flex gap-[-20px] opacity-40">
+                <div className="flex gap-[-25px] sm:gap-[-40px] opacity-40">
                   <div style={{ zIndex: 0 }}>{renderCard(-1, true, true, 0)}</div>
-                  <div className="-ml-10" style={{ zIndex: 1 }}>{renderCard(-1, true, true, 1)}</div>
+                  <div className="-ml-8 sm:-ml-12" style={{ zIndex: 1 }}>{renderCard(-1, true, true, 1)}</div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* SLEEK OUTCOME PLAQUE */}
+          {/* SLEEK OUTCOME PLAQUE (Dead Center) */}
           {showOutcome && gameState?.status === "resolved" && (
-             <div className="flex flex-col items-center justify-center my-4 z-20 animate-fade-in drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]">
-                <div className={`px-8 py-2 rounded-lg border-2 flex flex-col sm:flex-row items-center gap-2 sm:gap-4
-                  ${gameState.payout > betAmount ? 'bg-green-900/90 border-[#339933] text-[#339933]' : 
-                    gameState.payout === betAmount ? 'bg-gray-800/90 border-gray-400 text-white' : 
-                    'bg-red-900/90 border-red-500 text-red-500'}`}
+             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 animate-fade-in drop-shadow-[0_0_30px_rgba(0,0,0,1)] w-11/12 sm:w-auto">
+                <div className={`px-6 sm:px-10 py-3 sm:py-4 rounded-xl border-4 flex flex-col items-center justify-center gap-2
+                  ${gameState.payout > betAmount ? 'bg-green-900/95 border-[#339933] text-[#339933]' : 
+                    gameState.payout === betAmount ? 'bg-gray-800/95 border-gray-400 text-white' : 
+                    'bg-red-900/95 border-red-600 text-red-500'}`}
                 >
-                  <span className="text-2xl sm:text-3xl font-black uppercase tracking-widest drop-shadow-md">
+                  <span className="text-3xl sm:text-4xl font-black uppercase tracking-widest drop-shadow-lg text-center">
                     {outcomeText}
                   </span>
                   {gameState.payout > 0 && (
-                    <span className="text-lg sm:text-xl font-bold text-[#FFC72C] bg-black/60 px-3 py-1 rounded-md">
+                    <span className="text-xl sm:text-2xl font-black text-[#FFC72C] bg-black/80 px-4 py-1 rounded-lg">
                       +{Number(gameState.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(2)} SOL
                     </span>
                   )}
@@ -362,31 +376,33 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
              </div>
           )}
 
-          {/* PLAYER AREA */}
-          <div className="flex flex-col items-center z-10 mt-auto">
-            <div className="text-xs font-bold text-[#FFC72C] mb-2 uppercase tracking-widest">You</div>
-            <div className="flex gap-12">
+          {/* ABSOLUTE POSITIONED PLAYER AREA (Bottom Center) */}
+          <div className="absolute bottom-[5%] sm:bottom-[10%] left-1/2 -translate-x-1/2 flex flex-col items-center z-10 w-full">
+            <div className="flex gap-6 sm:gap-16">
               {gameState ? (
                 gameState.playerHands.map((hand: number[], handIdx: number) => (
                   <div key={`player-hand-${handIdx}`} className="flex flex-col items-center">
                     
-                    <div className="bg-black/90 border-2 border-[#339933] text-[#FFC72C] font-black text-sm px-4 py-1 rounded-md shadow-[0_2px_8px_rgba(51,153,51,0.4)] mb-4">
-                      {calculateHandTotal(hand)}
-                    </div>
-
-                    <div className={`flex relative h-28 sm:h-32 ${currentHandIdx === handIdx && gameState.status === 'playing' ? 'ring-4 ring-[#FFC72C] ring-offset-4 ring-offset-[#0a0f0c] rounded-xl p-2 bg-yellow-900/10' : ''}`}>
+                    <div className={`flex relative h-24 sm:h-32 mb-3 ${currentHandIdx === handIdx && gameState.status === 'playing' ? 'ring-4 ring-[#FFC72C] ring-offset-4 ring-offset-black/50 rounded-xl p-1 bg-yellow-900/30' : ''}`}>
                       {hand.map((c: number, i: number) => (
-                        <div key={`player-${handIdx}-${i}`} className={`${i > 0 ? '-ml-10' : ''}`} style={{ zIndex: i }}>
+                        <div key={`player-${handIdx}-${i}`} className={`${i > 0 ? '-ml-8 sm:-ml-12' : ''}`} style={{ zIndex: i }}>
                           {renderCard(c, false, false, i, handIdx)}
                         </div>
                       ))}
                     </div>
+
+                    <div className="bg-black/90 border-2 border-[#339933] text-[#FFC72C] font-black text-sm px-4 py-1 rounded-md shadow-[0_4px_10px_rgba(0,0,0,0.8)] mt-2">
+                      {calculateHandTotal(hand)}
+                    </div>
                   </div>
                 ))
               ) : (
-                <div className="flex gap-[-20px] opacity-40">
-                  <div style={{ zIndex: 0 }}>{renderCard(-1, true, false, 0)}</div>
-                  <div className="-ml-10" style={{ zIndex: 1 }}>{renderCard(-1, true, false, 1)}</div>
+                <div className="flex flex-col items-center opacity-40">
+                  <div className="flex gap-[-25px] sm:gap-[-40px]">
+                    <div style={{ zIndex: 0 }}>{renderCard(-1, true, false, 0)}</div>
+                    <div className="-ml-8 sm:-ml-12" style={{ zIndex: 1 }}>{renderCard(-1, true, false, 1)}</div>
+                  </div>
+                  <div className="text-[10px] sm:text-xs font-bold text-gray-300/80 uppercase tracking-widest bg-black/60 px-3 py-1 rounded-full mt-4">You</div>
                 </div>
               )}
             </div>
@@ -441,7 +457,6 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
                 Stand
               </button>
               
-              {/* 🐛 FIX: currentHandIdx now safely mapped from backend or default 0 */}
               {gameState.playerHands[currentHandIdx]?.length === 2 && (
                 <button 
                   onClick={() => handleAction('double')} disabled={loading} 
