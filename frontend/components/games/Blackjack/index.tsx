@@ -96,13 +96,15 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
           <img 
             src="/cards/card_back.png" 
             alt="Card Back" 
-            className="absolute w-full h-full backface-hidden rounded-md shadow-[2px_4px_10px_rgba(0,0,0,0.8)] object-contain" 
+            // 🐛 FIX: Replaced rectangular box-shadow with alpha-hugging drop-shadow filter
+            className="absolute w-full h-full backface-hidden drop-shadow-[2px_4px_6px_rgba(0,0,0,0.6)] object-contain" 
           />
           {val !== -1 && (
             <img 
               src={`/cards/${rank}-${suit}.png`} 
               alt="Card Face" 
-              className="absolute w-full h-full backface-hidden rounded-md shadow-[2px_4px_10px_rgba(0,0,0,0.8)] object-contain [transform:rotateY(180deg)]" 
+              // 🐛 FIX: Replaced rectangular box-shadow with alpha-hugging drop-shadow filter
+              className="absolute w-full h-full backface-hidden drop-shadow-[2px_4px_6px_rgba(0,0,0,0.6)] object-contain [transform:rotateY(180deg)]" 
             />
           )}
         </div>
@@ -259,7 +261,6 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     setLoading(false);
   };
 
-  // Safe mapping of state
   const currentHandIdx = gameState?.currentHandIndex || 0;
   const allBust = gameState?.playerHands?.every((hand: number[]) => calculateHandTotal(hand) > 21) ?? false;
   const showDealerHoleCard = gameState?.status === "resolved" && !allBust;
@@ -269,7 +270,6 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
     displayDealerCards.push(-1); 
   }
 
-  // Precise Outcome Text Logic
   let outcomeText = "";
   if (gameState?.status === "resolved") {
     const isNaturalBlackjack = gameState.playerHands?.length === 1 && gameState.playerHands[0].length === 2 && calculateHandTotal(gameState.playerHands[0]) === 21;
@@ -313,20 +313,18 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
 
         {error && <div className="bg-red-900/50 border border-red-500 text-red-200 p-3 rounded-lg mb-6 text-center text-sm font-bold shadow-lg">{error}</div>}
 
-        {/* CUSTOM CASINO TABLE BACKGROUND */}
         <div 
           className="relative w-full aspect-[4/3] sm:aspect-[16/9] rounded-2xl border-4 border-green-900/50 shadow-2xl overflow-hidden mb-6"
           style={{ 
-            backgroundImage: "url('/cards/blackjack_bg.png')", // IMPORTANT: Ensure file is .png or rename the asset locally
+            backgroundImage: "url('/cards/blackjack_bg.png')", 
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat'
           }}
         >
-          {/* Slight dark overlay to make cards pop against the felt */}
           <div className="absolute inset-0 bg-black/20 pointer-events-none"></div>
 
-          {/* ABSOLUTE POSITIONED DEALER AREA (Top Center) */}
+          {/* DEALER AREA */}
           <div className="absolute top-[10%] sm:top-[15%] left-1/2 -translate-x-1/2 flex flex-col items-center z-10 w-full">
             <div className="flex items-center gap-3 mb-2">
               <div className="text-[10px] sm:text-xs font-bold text-gray-300/80 uppercase tracking-widest bg-black/60 px-3 py-1 rounded-full">Dealer</div>
@@ -337,26 +335,28 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
               )}
             </div>
             
-            <div className="flex gap-[-25px] sm:gap-[-40px] relative h-24 sm:h-32">
+            {/* 🐛 FIX: Reduced negative margin from -ml-12 to -ml-8 for better spreading */}
+            <div className="flex relative h-24 sm:h-32">
               {gameState ? (
                 displayDealerCards.map((c: number, i: number) => {
                   const isHidden = !showDealerHoleCard && i >= 1;
                   return (
-                    <div key={`dealer-${i}`} className={`${i > 0 ? '-ml-8 sm:-ml-12' : ''}`} style={{ zIndex: i }}>
+                    <div key={`dealer-${i}`} className={`${i > 0 ? '-ml-5 sm:-ml-8' : ''}`} style={{ zIndex: i }}>
                       {renderCard(c, isHidden, true, i)}
                     </div>
                   );
                 })
               ) : (
-                <div className="flex gap-[-25px] sm:gap-[-40px] opacity-40">
+                // 🐛 FIX: Removed opacity-40 so cards sit completely solid on the table
+                <div className="flex">
                   <div style={{ zIndex: 0 }}>{renderCard(-1, true, true, 0)}</div>
-                  <div className="-ml-8 sm:-ml-12" style={{ zIndex: 1 }}>{renderCard(-1, true, true, 1)}</div>
+                  <div className="-ml-5 sm:-ml-8" style={{ zIndex: 1 }}>{renderCard(-1, true, true, 1)}</div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* SLEEK OUTCOME PLAQUE (Dead Center) */}
+          {/* SLEEK OUTCOME PLAQUE */}
           {showOutcome && gameState?.status === "resolved" && (
              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 animate-fade-in drop-shadow-[0_0_30px_rgba(0,0,0,1)] w-11/12 sm:w-auto">
                 <div className={`px-6 sm:px-10 py-3 sm:py-4 rounded-xl border-4 flex flex-col items-center justify-center gap-2
@@ -376,16 +376,17 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
              </div>
           )}
 
-          {/* ABSOLUTE POSITIONED PLAYER AREA (Bottom Center) */}
+          {/* PLAYER AREA */}
           <div className="absolute bottom-[5%] sm:bottom-[10%] left-1/2 -translate-x-1/2 flex flex-col items-center z-10 w-full">
-            <div className="flex gap-6 sm:gap-16">
+            <div className="flex gap-6 sm:gap-12">
               {gameState ? (
                 gameState.playerHands.map((hand: number[], handIdx: number) => (
                   <div key={`player-hand-${handIdx}`} className="flex flex-col items-center">
                     
+                    {/* 🐛 FIX: Reduced negative margin from -ml-12 to -ml-8 for better spreading */}
                     <div className={`flex relative h-24 sm:h-32 mb-3 ${currentHandIdx === handIdx && gameState.status === 'playing' ? 'ring-4 ring-[#FFC72C] ring-offset-4 ring-offset-black/50 rounded-xl p-1 bg-yellow-900/30' : ''}`}>
                       {hand.map((c: number, i: number) => (
-                        <div key={`player-${handIdx}-${i}`} className={`${i > 0 ? '-ml-8 sm:-ml-12' : ''}`} style={{ zIndex: i }}>
+                        <div key={`player-${handIdx}-${i}`} className={`${i > 0 ? '-ml-5 sm:-ml-8' : ''}`} style={{ zIndex: i }}>
                           {renderCard(c, false, false, i, handIdx)}
                         </div>
                       ))}
@@ -397,10 +398,11 @@ export default function BlackjackGame({ balance, setBalance, logWager, setShowPr
                   </div>
                 ))
               ) : (
-                <div className="flex flex-col items-center opacity-40">
-                  <div className="flex gap-[-25px] sm:gap-[-40px]">
+                // 🐛 FIX: Removed opacity-40 so cards sit completely solid on the table
+                <div className="flex flex-col items-center">
+                  <div className="flex">
                     <div style={{ zIndex: 0 }}>{renderCard(-1, true, false, 0)}</div>
-                    <div className="-ml-8 sm:-ml-12" style={{ zIndex: 1 }}>{renderCard(-1, true, false, 1)}</div>
+                    <div className="-ml-5 sm:-ml-8" style={{ zIndex: 1 }}>{renderCard(-1, true, false, 1)}</div>
                   </div>
                   <div className="text-[10px] sm:text-xs font-bold text-gray-300/80 uppercase tracking-widest bg-black/60 px-3 py-1 rounded-full mt-4">You</div>
                 </div>
