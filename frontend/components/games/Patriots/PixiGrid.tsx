@@ -34,59 +34,79 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
   useEffect(() => {
     if (!pixiContainer.current) return;
 
-    // 1. Initialize Pixi Application
-    const app = new PIXI.Application({
-      width: GRID_WIDTH,
-      height: GRID_HEIGHT,
-      backgroundAlpha: 0, // Transparent background
-      antialias: true,
-    });
-    
-    // @ts-ignore - Handle Pixi v7 appendChild
-    pixiContainer.current.appendChild(app.view);
-    appRef.current = app;
+    let isMounted = true;
+    const app = new PIXI.Application();
 
-    const mainContainer = new PIXI.Container();
-    app.stage.addChild(mainContainer);
+    const initPixi = async () => {
+      // 1. Initialize Pixi Application (v8 Async WebGPU/WebGL)
+      await app.init({
+        width: GRID_WIDTH,
+        height: GRID_HEIGHT,
+        backgroundAlpha: 0, // Transparent background
+        antialias: true,
+      });
 
-    // 2. Setup initial empty grid matrix
-    symbolsRef.current = Array.from({ length: COLS }, () => []);
+      if (!isMounted) {
+        app.destroy(true, { children: true, texture: true });
+        return;
+      }
 
-    // 3. Play the Animation Sequence
-    const playSequence = async () => {
-      const frames = playData.baseSpinFrames;
-      
-      for (let f = 0; f < frames.length; f++) {
-        const frame = frames[f];
-        const isFirstFrame = f === 0;
+      // @ts-ignore - Handle Pixi v8 Canvas mapping
+      pixiContainer.current.appendChild(app.canvas);
+      appRef.current = app;
 
-        await renderGridFrame(app, mainContainer, frame.grid, isFirstFrame);
+      const mainContainer = new PIXI.Container();
+      app.stage.addChild(mainContainer);
 
-        if (frame.winningSymbols && frame.winningSymbols.length > 0) {
-          // Wait for player to see the win
-          await new Promise(resolve => setTimeout(resolve, 600));
-          
-          // Animate Explosions
-          await explodeWinningSymbols(frame.winningSymbols, frame.grid);
-        } else {
-          // No wins, sequence over
-          await new Promise(resolve => setTimeout(resolve, 500));
+      // 2. Setup initial empty grid matrix
+      symbolsRef.current = Array.from({ length: COLS }, () => []);
+
+      // 3. Play the Animation Sequence
+      const playSequence = async () => {
+        const frames = playData.baseSpinFrames;
+        
+        for (let f = 0; f < frames.length; f++) {
+          if (!isMounted) break;
+
+          const frame = frames[f];
+          const isFirstFrame = f === 0;
+
+          await renderGridFrame(app, mainContainer, frame.grid, isFirstFrame);
+
+          if (frame.winningSymbols && frame.winningSymbols.length > 0) {
+            // Wait for player to see the win cluster
+            await new Promise(resolve => setTimeout(resolve, 600));
+            if (!isMounted) break;
+            
+            // Animate Explosions
+            await explodeWinningSymbols(frame.winningSymbols, frame.grid);
+          } else {
+            // No wins, sequence over
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
         }
-      }
 
-      // If bonus triggered, you would loop through playData.freeSpinsData here
-      if (playData.triggeredBonus) {
-         console.log("Free spins logic would play here!");
-      }
+        if (isMounted) {
+          if (playData.triggeredBonus) {
+             console.log("Free spins logic would play here!");
+          }
+          onAnimationComplete();
+        }
+      };
 
-      onAnimationComplete();
+      playSequence();
     };
 
-    playSequence();
+    initPixi();
 
-    // Cleanup on unmount
+    // Cleanup on component unmount
     return () => {
-      app.destroy(true, { children: true, texture: true } as any);
+      isMounted = false;
+      try {
+        app.destroy(true, { children: true, texture: true });
+      } catch (error) {
+        console.error("Cleanup error:", error);
+      }
     };
   }, [playData]);
 
@@ -109,14 +129,18 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                currentSprite.destroy();
             }
 
-            const text = new PIXI.Text(SYMBOL_MAP[targetSymbolType], {
-              fontSize: 60,
-              dropShadow: {
-                color: '#000000',
-                blur: 5,
-                distance: 2
+            const text = new PIXI.Text({
+              text: SYMBOL_MAP[targetSymbolType], 
+              style: {
+                fontSize: 60,
+                dropShadow: {
+                  color: '#000000',
+                  blur: 5,
+                  distance: 2
+                }
               }
             } as any);
+
             text.anchor.set(0.5);
             text.x = xPos;
             text.y = dropFromTop ? yPos - 600 : yPos - 200; // Drop from above
