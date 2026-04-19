@@ -718,6 +718,94 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "startPatriots",
+      "accounts": [
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "betAmount",
+          "type": "u64"
+        },
+        {
+          "name": "serverSeedHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "clientSeed",
+          "type": "string"
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "resolvePatriots",
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "house",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "unhashedServerSeed",
+          "type": "string"
+        },
+        {
+          "name": "payout",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -804,6 +892,43 @@
           {
             "name": "clientSeed",
             "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PatriotsState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "publicKey"
+          },
+          {
+            "name": "betAmount",
+            "type": "u64"
+          },
+          {
+            "name": "serverSeedHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "clientSeed",
+            "type": "string"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

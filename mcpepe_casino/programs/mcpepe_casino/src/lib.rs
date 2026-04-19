@@ -139,4 +139,23 @@ pub mod mcpepe_casino {
     pub fn cancel_blackjack(ctx: Context<CancelBlackjack>) -> Result<()> {
         blackjack::cancel_blackjack(ctx)
     }
+
+    // --- PATRIOTS ROUTES ---
+    pub fn start_patriots(
+        ctx: Context<StartPatriots>,
+        bet_amount: u64,
+        server_seed_hash: [u8; 32],
+        client_seed: String,
+        nonce: u64,
+    ) -> Result<()> {
+        patriots::start_patriots(ctx, bet_amount, server_seed_hash, client_seed, nonce)
+    }
+
+    pub fn resolve_patriots(
+        ctx: Context<ResolvePatriots>,
+        unhashed_server_seed: String,
+        payout: u64,
+    ) -> Result<()> {
+        patriots::resolve_patriots(ctx, unhashed_server_seed, payout)
+    }
 }
