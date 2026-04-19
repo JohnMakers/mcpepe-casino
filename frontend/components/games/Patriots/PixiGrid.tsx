@@ -17,6 +17,8 @@ const SYMBOL_MAP: Record<number, string> = {
   6: '🍉', // MELON
   7: '🍭', // SCATTER
   8: '💣', // BOMB
+  9: '🍇', // GRAPE
+  10: '🍌',// BANANA
 };
 
 const COLS = 6;
@@ -38,11 +40,10 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
     const app = new PIXI.Application();
 
     const initPixi = async () => {
-      // 1. Initialize Pixi Application (v8 Async WebGPU/WebGL)
       await app.init({
         width: GRID_WIDTH,
         height: GRID_HEIGHT,
-        backgroundAlpha: 0, // Transparent background
+        backgroundAlpha: 0, 
         antialias: true,
       });
 
@@ -51,47 +52,129 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         return;
       }
 
-      // @ts-ignore - Handle Pixi v8 Canvas mapping
+      // @ts-ignore
       pixiContainer.current.appendChild(app.canvas);
       appRef.current = app;
 
       const mainContainer = new PIXI.Container();
       app.stage.addChild(mainContainer);
 
-      // 2. Setup initial empty grid matrix
       symbolsRef.current = Array.from({ length: COLS }, () => []);
 
-      // 3. Play the Animation Sequence
-      const playSequence = async () => {
-        const frames = playData.baseSpinFrames;
-        
+      // --- NEW HELPER FUNCTIONS FOR BONUS ROUNDS ---
+
+      const clearBoard = () => {
+        return new Promise<void>((resolve) => {
+          let activeAnimations = 0;
+          for (let c = 0; c < COLS; c++) {
+            for (let r = 0; r < ROWS; r++) {
+              const sprite = symbolsRef.current[c][r];
+              if (sprite) {
+                activeAnimations++;
+                gsap.to(sprite, {
+                  y: sprite.y + 500,
+                  alpha: 0,
+                  duration: 0.3,
+                  ease: "power2.in",
+                  onComplete: () => {
+                    mainContainer.removeChild(sprite);
+                    sprite.destroy();
+                    activeAnimations--;
+                    if (activeAnimations === 0) resolve();
+                  }
+                });
+                // @ts-ignore
+                symbolsRef.current[c][r] = null;
+              }
+            }
+          }
+          if (activeAnimations === 0) resolve();
+        });
+      };
+
+      const showPopupText = (textStr: string) => {
+        return new Promise<void>((resolve) => {
+          const text = new PIXI.Text({
+            text: textStr,
+            style: {
+              fontSize: 75,
+              fontWeight: '900',
+              fill: '#facc15', // Vibrant Yellow
+              align: 'center',
+              stroke: { color: '#000000', width: 8 },
+              dropShadow: { color: '#000000', blur: 15, distance: 5 }
+            }
+          } as any);
+          
+          text.anchor.set(0.5);
+          text.x = GRID_WIDTH / 2;
+          text.y = GRID_HEIGHT / 2;
+          text.scale.set(0);
+          text.alpha = 0;
+          
+          app.stage.addChild(text);
+
+          const tl = gsap.timeline({ onComplete: () => {
+              app.stage.removeChild(text);
+              text.destroy();
+              resolve();
+          }});
+
+          tl.to(text.scale, { x: 1, y: 1, duration: 0.5, ease: "back.out(1.5)" })
+            .to(text, { alpha: 1, duration: 0.2 }, "<")
+            .to(text, { alpha: 0, y: text.y - 80, duration: 0.4, ease: "power2.in" }, "+=1.5");
+        });
+      };
+
+      const playSpinFrames = async (frames: any[]) => {
         for (let f = 0; f < frames.length; f++) {
           if (!isMounted) break;
-
           const frame = frames[f];
           const isFirstFrame = f === 0;
 
           await renderGridFrame(app, mainContainer, frame.grid, isFirstFrame);
 
           if (frame.winningSymbols && frame.winningSymbols.length > 0) {
-            // Wait for player to see the win cluster
             await new Promise(resolve => setTimeout(resolve, 600));
             if (!isMounted) break;
-            
-            // Animate Explosions
             await explodeWinningSymbols(frame.winningSymbols, frame.grid);
           } else {
-            // No wins, sequence over
             await new Promise(resolve => setTimeout(resolve, 500));
           }
         }
+      };
 
-        if (isMounted) {
-          if (playData.triggeredBonus) {
-             console.log("Free spins logic would play here!");
+      // --- MASTER DIRECTOR LOOP ---
+      const playSequence = async () => {
+        // 1. Render Base Spin
+        await playSpinFrames(playData.baseSpinFrames);
+
+        // 2. Render Free Spins (If triggered)
+        if (playData.triggeredBonus && isMounted) {
+          await showPopupText("10 FREE SPINS!");
+          
+          const freeSpins = playData.freeSpinsData || [];
+          for (let i = 0; i < freeSpins.length; i++) {
+            if (!isMounted) break;
+            
+            await clearBoard(); // Wipe grid for the next spin
+            
+            const fsSpin = freeSpins[i];
+            await playSpinFrames(fsSpin.frames);
+            
+            // 3. Render Bomb Multipliers
+            if (fsSpin.bombMultipliers && fsSpin.bombMultipliers.length > 0 && fsSpin.totalSpinPayout > 0) {
+              const multiString = fsSpin.bombMultipliers.map((m: number) => `${m}x`).join(" + ");
+              await showPopupText(`BOMBS: ${multiString}\nTOTAL MULT: ${fsSpin.finalSpinMultiplier}x!`);
+            }
           }
-          onAnimationComplete();
+          
+          if (isMounted) {
+            await showPopupText("BONUS COMPLETE!");
+          }
         }
+
+        if (isMounted) onAnimationComplete();
       };
 
       playSequence();
@@ -99,7 +182,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
     initPixi();
 
-    // Cleanup on component unmount
     return () => {
       isMounted = false;
       try {
@@ -122,7 +204,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
           let currentSprite = symbolsRef.current[c][r];
 
-          // If there's no sprite here (initial drop or after tumble), create it
           if (!currentSprite || currentSprite.text !== SYMBOL_MAP[targetSymbolType]) {
             if (currentSprite) {
                container.removeChild(currentSprite);
@@ -143,22 +224,20 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
             text.anchor.set(0.5);
             text.x = xPos;
-            text.y = dropFromTop ? yPos - 600 : yPos - 200; // Drop from above
+            text.y = dropFromTop ? yPos - 600 : yPos - 200; 
             text.alpha = dropFromTop ? 0 : 1;
             
             container.addChild(text);
             symbolsRef.current[c][r] = text;
 
-            // Animate falling down
             tl.to(text, {
               y: yPos,
               alpha: 1,
               duration: 0.4,
               ease: "bounce.out",
-              delay: dropFromTop ? (c * 0.05) + (r * 0.02) : 0 // Staggered drop effect
+              delay: dropFromTop ? (c * 0.05) + (r * 0.02) : 0 
             }, 0);
           } else {
-            // Sprite already exists and matches (didn't explode), just ensure it's in the right place
             tl.to(currentSprite, { y: yPos, duration: 0.3, ease: "power2.out" }, 0);
           }
         }
@@ -176,11 +255,9 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           if (winningTypes.includes(symType)) {
             const sprite = symbolsRef.current[c][r];
             if (sprite) {
-              // The Explosion Animation
               tl.to(sprite.scale, { x: 1.5, y: 1.5, duration: 0.2, ease: "power2.out" }, 0);
               tl.to(sprite, { alpha: 0, y: sprite.y - 30, duration: 0.2, ease: "power2.in" }, 0.2);
               
-              // Mark as empty so the next frame drops a new symbol here
               // @ts-ignore
               symbolsRef.current[c][r] = null; 
             }

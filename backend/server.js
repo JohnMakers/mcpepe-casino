@@ -814,9 +814,9 @@ app.post('/api/patriots/seed', (req, res) => {
 
 const PATRIOTS_SYMBOLS = {
     GOLDEN_MCPEPE: 0, PEPE_HEART: 1, PURPLE_DIAMOND: 2, BLUE_OVAL: 3, 
-    GREEN_GEM: 4, APPLE: 5, MELON: 6, SCATTER: 7, BOMB: 8
+    GREEN_GEM: 4, APPLE: 5, MELON: 6, SCATTER: 7, BOMB: 8, 
+    GRAPE: 9, BANANA: 10 
 };
-
 // Paytable Multipliers (Base: 1 Unit)
 const PAYTABLE = {
     [PATRIOTS_SYMBOLS.GOLDEN_MCPEPE]: { 8: 10, 10: 25, 12: 50 },
@@ -825,7 +825,9 @@ const PAYTABLE = {
     [PATRIOTS_SYMBOLS.BLUE_OVAL]: { 8: 1.5, 10: 2.5, 12: 12 },
     [PATRIOTS_SYMBOLS.GREEN_GEM]: { 8: 1, 10: 1.5, 12: 10 },
     [PATRIOTS_SYMBOLS.APPLE]: { 8: 0.8, 10: 1.2, 12: 8 },
-    [PATRIOTS_SYMBOLS.MELON]: { 8: 0.25, 10: 0.75, 12: 2 }
+    [PATRIOTS_SYMBOLS.MELON]: { 8: 0.5, 10: 1, 12: 5 },
+    [PATRIOTS_SYMBOLS.GRAPE]: { 8: 0.4, 10: 0.9, 12: 4 },
+    [PATRIOTS_SYMBOLS.BANANA]: { 8: 0.25, 10: 0.75, 12: 2 }
 };
 
 // Provably Fair RNG for individual symbols
@@ -837,19 +839,25 @@ function getDeterministicFloat(serverSeed, clientSeed, nonce, counter) {
 }
 
 function generateSymbol(randomFloat, isFreeSpins) {
-    // Basic weight distribution (can be tweaked for exact 96.5% RTP profiling)
+    // Sweet Bonanza High-Volatility Math Profile (Sum = 1000 base)
+    // Hit Frequency ~33%, Bonus Trigger ~1 in 180 spins
     const weights = [
-        { symbol: PATRIOTS_SYMBOLS.MELON, weight: 35 },
-        { symbol: PATRIOTS_SYMBOLS.APPLE, weight: 25 },
-        { symbol: PATRIOTS_SYMBOLS.GREEN_GEM, weight: 15 },
-        { symbol: PATRIOTS_SYMBOLS.BLUE_OVAL, weight: 10 },
-        { symbol: PATRIOTS_SYMBOLS.PURPLE_DIAMOND, weight: 8 },
-        { symbol: PATRIOTS_SYMBOLS.PEPE_HEART, weight: 4 },
-        { symbol: PATRIOTS_SYMBOLS.GOLDEN_MCPEPE, weight: 2 },
-        { symbol: PATRIOTS_SYMBOLS.SCATTER, weight: 1 } // ~1% chance per tile
+        { symbol: PATRIOTS_SYMBOLS.BANANA, weight: 180 },       // 18% (P >= 8 is ~14%)
+        { symbol: PATRIOTS_SYMBOLS.GRAPE, weight: 160 },        // 16% (P >= 8 is ~8.4%)
+        { symbol: PATRIOTS_SYMBOLS.MELON, weight: 140 },        // 14% 
+        { symbol: PATRIOTS_SYMBOLS.APPLE, weight: 130 },        // 13%
+        { symbol: PATRIOTS_SYMBOLS.GREEN_GEM, weight: 120 },    // 12%
+        { symbol: PATRIOTS_SYMBOLS.BLUE_OVAL, weight: 100 },    // 10%
+        { symbol: PATRIOTS_SYMBOLS.PURPLE_DIAMOND, weight: 80 },// 8%
+        { symbol: PATRIOTS_SYMBOLS.PEPE_HEART, weight: 55 },    // 5.5%
+        { symbol: PATRIOTS_SYMBOLS.GOLDEN_MCPEPE, weight: 20 }, // 2% (Very Rare)
+        { symbol: PATRIOTS_SYMBOLS.SCATTER, weight: 15 }        // 1.5% 
     ];
 
-    if (isFreeSpins) weights.push({ symbol: PATRIOTS_SYMBOLS.BOMB, weight: 3 });
+    if (isFreeSpins) {
+        // Add a 3.5% chance for a multiplier bomb to drop during bonus rounds
+        weights.push({ symbol: PATRIOTS_SYMBOLS.BOMB, weight: 35 });
+    }
 
     const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
     let rand = randomFloat * totalWeight;
@@ -858,16 +866,34 @@ function generateSymbol(randomFloat, isFreeSpins) {
         if (rand < w.weight) return w.symbol;
         rand -= w.weight;
     }
-    return PATRIOTS_SYMBOLS.MELON; // Fallback
+    return PATRIOTS_SYMBOLS.BANANA; // Fallback
 }
 
-function generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins) {
+function generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins, forceScatters = false) {
     let grid = [];
+    let scatterPositions = [];
+
+    // If Buy Bonus is triggered, guarantee exactly 4 Scatters randomly placed
+    if (forceScatters) {
+        while (scatterPositions.length < 4) {
+            // Use RNG to pick a tile index from 0 to 29
+            let posFloat = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+            let pos = Math.floor(posFloat * 30);
+            if (!scatterPositions.includes(pos)) scatterPositions.push(pos);
+        }
+    }
+
     for (let col = 0; col < 6; col++) {
         let column = [];
         for (let row = 0; row < 5; row++) {
-            const floatStr = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
-            column.push(generateSymbol(floatStr, isFreeSpins));
+            let tileIndex = col * 5 + row;
+            // Place the guaranteed scatters
+            if (forceScatters && scatterPositions.includes(tileIndex)) {
+                column.push(PATRIOTS_SYMBOLS.SCATTER);
+            } else {
+                const floatStr = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+                column.push(generateSymbol(floatStr, isFreeSpins));
+            }
         }
         grid.push(column);
     }
@@ -929,7 +955,7 @@ function processTumble(grid, winningSymbols, serverSeed, clientSeed, nonce, coun
 
 function runSpinCycle(betAmount, serverSeed, clientSeed, nonce, startCounter, isFreeSpins) {
     let counterRef = { val: startCounter };
-    let grid = generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins);
+    let grid = generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins, forceScatters);
     
     let frames = [];
     let totalSpinPayout = 0;
@@ -994,33 +1020,36 @@ function runSpinCycle(betAmount, serverSeed, clientSeed, nonce, startCounter, is
 // THE NEW PLAY ENDPOINT
 app.post('/api/patriots/play', async (req, res) => {
     try {
-        const { playerPubkey, gamePubkey, clientSeed, nonce, betAmount } = req.body;
+        // ADDED isBonusBuy to the request
+        const { playerPubkey, gamePubkey, clientSeed, nonce, betAmount, isBonusBuy } = req.body;
 
         const game = activePatriotsGames.get(playerPubkey);
         if (!game || game.status !== "waiting_for_tx") {
             return res.status(400).json({ error: "No active session. Fetch seed first." });
         }
 
-        // Run the Base Spin
+        // If Bonus Buy, the mathematical base bet is 100x smaller than the escrowed wager
+        const actualBaseBet = isBonusBuy ? Number(betAmount) / 100 : Number(betAmount);
+
         let currentCounter = 0;
-        const baseSpin = runSpinCycle(Number(betAmount), game.serverSeed, clientSeed, nonce, currentCounter, false);
+        // Pass 'isBonusBuy' as the forceScatters parameter to guarantee the drop
+        const baseSpin = runSpinCycle(actualBaseBet, game.serverSeed, clientSeed, nonce, currentCounter, false, isBonusBuy);
         currentCounter = baseSpin.finalCounter;
 
         let totalGamePayout = baseSpin.totalSpinPayout;
         let freeSpinsData = [];
         
-        // Did we hit 4+ Scatters? Trigger Pepe's Frenzy!
         if (baseSpin.triggeredBonus) {
             let spinsRemaining = 10;
             
             while (spinsRemaining > 0) {
-                const fsSpin = runSpinCycle(Number(betAmount), game.serverSeed, clientSeed, nonce, currentCounter, true);
+                // Free spins do not force scatters
+                const fsSpin = runSpinCycle(actualBaseBet, game.serverSeed, clientSeed, nonce, currentCounter, true, false);
                 currentCounter = fsSpin.finalCounter;
                 totalGamePayout += fsSpin.totalSpinPayout;
                 
                 freeSpinsData.push(fsSpin);
 
-                // Check for Retriggers (3+ Scatters during FS)
                 if (evaluateGrid(fsSpin.frames[fsSpin.frames.length-1].grid).scatterCount >= 3) {
                     spinsRemaining += 5;
                 }
@@ -1028,7 +1057,6 @@ app.post('/api/patriots/play', async (req, res) => {
             }
         }
 
-        // Settle entirely on-chain with one verified Escrow payout
         await resolvePatriotsOnChain(playerPubkey, gamePubkey, game.serverSeed, totalGamePayout);
         activePatriotsGames.delete(playerPubkey);
 

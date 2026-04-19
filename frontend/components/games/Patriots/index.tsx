@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
-import idl from '../../../idl.json'; // Adjust path if needed
+import idl from '../../../idl.json'; 
 import PixiGrid from './PixiGrid';
 
 const PROGRAM_ID = new PublicKey(idl.metadata.address);
@@ -10,14 +10,13 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:300
 
 export default function Patriots() {
   const { connection } = useConnection();
-  // ADDED sendTransaction here:
   const { publicKey, signTransaction, sendTransaction } = useWallet();
   const [betAmount, setBetAmount] = useState<number>(0.1);
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [gameResult, setGameResult] = useState<any>(null);
 
-  const handleSpin = async () => {
+  const handleSpin = async (isBonusBuy: boolean = false) => {
     if (!publicKey || !signTransaction || !sendTransaction) {
       alert("Please connect your wallet first.");
       return;
@@ -40,7 +39,10 @@ export default function Patriots() {
       // 2. Generate Random Client Seed & Nonce
       const clientSeed = Math.random().toString(36).substring(2, 15);
       const nonce = Math.floor(Math.random() * 1000000);
-      const betLamports = betAmount * anchor.web3.LAMPORTS_PER_SOL;
+      
+      // Calculate 100x cost if buying the feature
+      const totalWager = isBonusBuy ? betAmount * 100 : betAmount;
+      const betLamports = totalWager * anchor.web3.LAMPORTS_PER_SOL;
 
       // 3. Prepare Smart Contract Transaction
       const serverSeedHashBuffer = Buffer.from(seedData.serverSeedHash, 'hex');
@@ -79,15 +81,13 @@ export default function Patriots() {
         .instruction()
       );
 
-      // UPDATED TRANSACTION SENDING LOGIC
       const latestBlockhash = await connection.getLatestBlockhash('confirmed');
       tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = publicKey;
 
-      // Use the wallet adapter's native sendTransaction instead of sign + sendRaw
+      // Native sendTransaction handles retries seamlessly
       const txId = await sendTransaction(tx, connection);
 
-      // Wait for network confirmation securely
       await connection.confirmTransaction({
         signature: txId,
         blockhash: latestBlockhash.blockhash,
@@ -105,7 +105,8 @@ export default function Patriots() {
           gamePubkey: gameStatePDA.toBase58(),
           clientSeed,
           nonce,
-          betAmount: betLamports
+          betAmount: betLamports,
+          isBonusBuy // Pass the flag to the backend
         })
       });
 
@@ -161,7 +162,7 @@ export default function Patriots() {
       {/* Control Panel */}
       <div className="flex gap-6 items-center bg-black border border-purple-900/30 p-4 rounded-xl">
         <div className="flex flex-col">
-          <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Bet Amount (SOL)</label>
+          <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Base Bet (SOL)</label>
           <input 
             type="number" 
             step="0.05"
@@ -172,8 +173,9 @@ export default function Patriots() {
           />
         </div>
 
+        {/* Normal Spin Button */}
         <button 
-          onClick={handleSpin}
+          onClick={() => handleSpin(false)}
           disabled={isSpinning || isAnimating}
           className={`px-12 py-4 rounded font-black text-xl uppercase tracking-widest transition-all ${
             (isSpinning || isAnimating)
@@ -183,14 +185,26 @@ export default function Patriots() {
         >
           {isSpinning ? 'Escrowing...' : isAnimating ? 'Tumbling...' : 'Spin'}
         </button>
+
+        {/* Buy Bonus Button */}
+        <button 
+          onClick={() => handleSpin(true)}
+          disabled={isSpinning || isAnimating}
+          className={`px-8 py-4 rounded font-black text-lg uppercase tracking-widest transition-all ${
+            (isSpinning || isAnimating)
+              ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
+              : 'bg-green-600 hover:bg-green-500 text-white shadow-[0_0_20px_rgba(22,163,74,0.4)] hover:shadow-[0_0_30px_rgba(22,163,74,0.6)] border-2 border-green-400'
+          }`}
+        >
+          Buy Feature ({Math.round(betAmount * 100 * 100) / 100} SOL)
+        </button>
       </div>
 
-      {/* Result Debugger (Temporary) */}
+      {/* Result Debugger */}
       {gameResult && !isAnimating && (
         <div className="mt-4 text-green-400 font-mono text-sm text-center">
-          <p>Payout: {gameResult.payout / anchor.web3.LAMPORTS_PER_SOL} SOL</p>
-          <p>Tumbles Hit: {gameResult.baseSpinFrames.length - 1}</p>
-          {gameResult.triggeredBonus && <p className="text-yellow-400 font-bold">🎉 FREE SPINS TRIGGERED! 🎉</p>}
+          <p>Total Payout: {gameResult.payout / anchor.web3.LAMPORTS_PER_SOL} SOL</p>
+          {gameResult.triggeredBonus && <p className="text-yellow-400 font-bold">🎉 FREE SPINS COMPLETED! 🎉</p>}
         </div>
       )}
     </div>
