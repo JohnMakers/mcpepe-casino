@@ -86,7 +86,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
     // Cleanup on unmount
     return () => {
-      app.destroy(true, { children: true, texture: true, baseTexture: true });
+      app.destroy(true, { children: true, texture: true } as any);
     };
   }, [playData]);
 
