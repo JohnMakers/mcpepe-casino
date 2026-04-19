@@ -789,6 +789,307 @@ async function resolveBlackjackOnChain(playerPubkeyStr, unhashedServerSeed, payo
         console.error("❌ [HOUSE] Failed to resolve Blackjack on-chain:", err.message);
     }
 }
+
+// ==========================================
+// MCPEPE'S PATRIOTS (SLOTS) ENDPOINTS
+// ==========================================
+const activePatriotsGames = new Map();
+
+app.post('/api/patriots/seed', (req, res) => {
+    try {
+        const { playerPubkey } = req.body;
+        const serverSeed = crypto.randomBytes(32).toString('hex');
+        const serverSeedHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
+
+        activePatriotsGames.set(playerPubkey, { serverSeed, serverSeedHash, status: "waiting_for_tx" });
+        res.json({ success: true, serverSeedHash });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ==========================================
+// MCPEPE'S PATRIOTS: GAME ENGINE MATH
+// ==========================================
+
+const PATRIOTS_SYMBOLS = {
+    GOLDEN_MCPEPE: 0, PEPE_HEART: 1, PURPLE_DIAMOND: 2, BLUE_OVAL: 3, 
+    GREEN_GEM: 4, APPLE: 5, MELON: 6, SCATTER: 7, BOMB: 8
+};
+
+// Paytable Multipliers (Base: 1 Unit)
+const PAYTABLE = {
+    [PATRIOTS_SYMBOLS.GOLDEN_MCPEPE]: { 8: 10, 10: 25, 12: 50 },
+    [PATRIOTS_SYMBOLS.PEPE_HEART]: { 8: 2.5, 10: 10, 12: 25 },
+    [PATRIOTS_SYMBOLS.PURPLE_DIAMOND]: { 8: 2, 10: 5, 12: 15 },
+    [PATRIOTS_SYMBOLS.BLUE_OVAL]: { 8: 1.5, 10: 2.5, 12: 12 },
+    [PATRIOTS_SYMBOLS.GREEN_GEM]: { 8: 1, 10: 1.5, 12: 10 },
+    [PATRIOTS_SYMBOLS.APPLE]: { 8: 0.8, 10: 1.2, 12: 8 },
+    [PATRIOTS_SYMBOLS.MELON]: { 8: 0.25, 10: 0.75, 12: 2 }
+};
+
+// Provably Fair RNG for individual symbols
+function getDeterministicFloat(serverSeed, clientSeed, nonce, counter) {
+    const hash = crypto.createHmac('sha256', serverSeed)
+                       .update(`${clientSeed}:${nonce}:${counter}`)
+                       .digest('hex');
+    return parseInt(hash.substring(0, 8), 16) / 0xffffffff; 
+}
+
+function generateSymbol(randomFloat, isFreeSpins) {
+    // Basic weight distribution (can be tweaked for exact 96.5% RTP profiling)
+    const weights = [
+        { symbol: PATRIOTS_SYMBOLS.MELON, weight: 35 },
+        { symbol: PATRIOTS_SYMBOLS.APPLE, weight: 25 },
+        { symbol: PATRIOTS_SYMBOLS.GREEN_GEM, weight: 15 },
+        { symbol: PATRIOTS_SYMBOLS.BLUE_OVAL, weight: 10 },
+        { symbol: PATRIOTS_SYMBOLS.PURPLE_DIAMOND, weight: 8 },
+        { symbol: PATRIOTS_SYMBOLS.PEPE_HEART, weight: 4 },
+        { symbol: PATRIOTS_SYMBOLS.GOLDEN_MCPEPE, weight: 2 },
+        { symbol: PATRIOTS_SYMBOLS.SCATTER, weight: 1 } // ~1% chance per tile
+    ];
+
+    if (isFreeSpins) weights.push({ symbol: PATRIOTS_SYMBOLS.BOMB, weight: 3 });
+
+    const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
+    let rand = randomFloat * totalWeight;
+
+    for (let w of weights) {
+        if (rand < w.weight) return w.symbol;
+        rand -= w.weight;
+    }
+    return PATRIOTS_SYMBOLS.MELON; // Fallback
+}
+
+function generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins) {
+    let grid = [];
+    for (let col = 0; col < 6; col++) {
+        let column = [];
+        for (let row = 0; row < 5; row++) {
+            const floatStr = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+            column.push(generateSymbol(floatStr, isFreeSpins));
+        }
+        grid.push(column);
+    }
+    return grid;
+}
+
+function evaluateGrid(grid) {
+    let counts = {};
+    let winningSymbols = [];
+    let scatterCount = 0;
+    let bombsOnScreen = [];
+
+    // Count symbols
+    for (let c = 0; c < 6; c++) {
+        for (let r = 0; r < 5; r++) {
+            let sym = grid[c][r];
+            if (sym === PATRIOTS_SYMBOLS.SCATTER) scatterCount++;
+            else if (sym === PATRIOTS_SYMBOLS.BOMB) bombsOnScreen.push({c, r});
+            else {
+                counts[sym] = (counts[sym] || 0) + 1;
+            }
+        }
+    }
+
+    // Determine wins based on "Pay Anywhere 8+"
+    for (const [sym, count] of Object.entries(counts)) {
+        if (count >= 8) {
+            winningSymbols.push(parseInt(sym));
+        }
+    }
+
+    return { winningSymbols, scatterCount, bombsOnScreen, counts };
+}
+
+function calculatePayout(winningSymbols, counts, betAmount) {
+    let payout = 0;
+    for (let sym of winningSymbols) {
+        let count = counts[sym];
+        let tier = count >= 12 ? 12 : (count >= 10 ? 10 : 8);
+        let mult = PAYTABLE[sym][tier];
+        payout += Math.floor(betAmount * mult);
+    }
+    return payout;
+}
+
+function processTumble(grid, winningSymbols, serverSeed, clientSeed, nonce, counterRef, isFreeSpins) {
+    // Remove winning symbols
+    for (let c = 0; c < 6; c++) {
+        grid[c] = grid[c].filter(sym => !winningSymbols.includes(sym));
+        
+        // Fill from top
+        while (grid[c].length < 5) {
+            const floatStr = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+            grid[c].unshift(generateSymbol(floatStr, isFreeSpins)); // Unshift to drop from top
+        }
+    }
+    return grid;
+}
+
+function runSpinCycle(betAmount, serverSeed, clientSeed, nonce, startCounter, isFreeSpins) {
+    let counterRef = { val: startCounter };
+    let grid = generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins);
+    
+    let frames = [];
+    let totalSpinPayout = 0;
+    let activeTumble = true;
+    let bombMultipliers = [];
+
+    while (activeTumble) {
+        let { winningSymbols, scatterCount, bombsOnScreen, counts } = evaluateGrid(grid);
+        
+        if (winningSymbols.length > 0) {
+            let tumblePayout = calculatePayout(winningSymbols, counts, betAmount);
+            totalSpinPayout += tumblePayout;
+
+            // Deep copy grid for the frame history
+            frames.push({
+                grid: JSON.parse(JSON.stringify(grid)),
+                winningSymbols,
+                tumblePayout
+            });
+
+            // If it's free spins, collect bombs for the END of the tumble sequence
+            if (isFreeSpins && bombsOnScreen.length > 0) {
+                for (let b of bombsOnScreen) {
+                    // Random bomb multiplier (2x to 100x)
+                    const bFloat = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+                    const mults = [2, 3, 5, 8, 10, 15, 20, 25, 50, 100];
+                    const selectedMult = mults[Math.floor(bFloat * mults.length)];
+                    bombMultipliers.push(selectedMult);
+                }
+            }
+
+            // Execute Tumble
+            grid = processTumble(grid, winningSymbols, serverSeed, clientSeed, nonce, counterRef, isFreeSpins);
+        } else {
+            // No more wins, tumble sequence ends
+            frames.push({
+                grid: JSON.parse(JSON.stringify(grid)),
+                winningSymbols: [],
+                tumblePayout: 0
+            });
+            activeTumble = false;
+        }
+    }
+
+    // Apply Bomb Multipliers at the end of the tumble sequence
+    let finalSpinMultiplier = 1;
+    if (bombMultipliers.length > 0 && totalSpinPayout > 0) {
+        finalSpinMultiplier = bombMultipliers.reduce((a, b) => a + b, 0);
+        totalSpinPayout = totalSpinPayout * finalSpinMultiplier;
+    }
+
+    return { 
+        totalSpinPayout, 
+        frames, 
+        finalCounter: counterRef.val,
+        triggeredBonus: !isFreeSpins && evaluateGrid(grid).scatterCount >= 4,
+        bombMultipliers,
+        finalSpinMultiplier
+    };
+}
+
+// THE NEW PLAY ENDPOINT
+app.post('/api/patriots/play', async (req, res) => {
+    try {
+        const { playerPubkey, gamePubkey, clientSeed, nonce, betAmount } = req.body;
+
+        const game = activePatriotsGames.get(playerPubkey);
+        if (!game || game.status !== "waiting_for_tx") {
+            return res.status(400).json({ error: "No active session. Fetch seed first." });
+        }
+
+        // Run the Base Spin
+        let currentCounter = 0;
+        const baseSpin = runSpinCycle(Number(betAmount), game.serverSeed, clientSeed, nonce, currentCounter, false);
+        currentCounter = baseSpin.finalCounter;
+
+        let totalGamePayout = baseSpin.totalSpinPayout;
+        let freeSpinsData = [];
+        
+        // Did we hit 4+ Scatters? Trigger Pepe's Frenzy!
+        if (baseSpin.triggeredBonus) {
+            let spinsRemaining = 10;
+            
+            while (spinsRemaining > 0) {
+                const fsSpin = runSpinCycle(Number(betAmount), game.serverSeed, clientSeed, nonce, currentCounter, true);
+                currentCounter = fsSpin.finalCounter;
+                totalGamePayout += fsSpin.totalSpinPayout;
+                
+                freeSpinsData.push(fsSpin);
+
+                // Check for Retriggers (3+ Scatters during FS)
+                if (evaluateGrid(fsSpin.frames[fsSpin.frames.length-1].grid).scatterCount >= 3) {
+                    spinsRemaining += 5;
+                }
+                spinsRemaining--;
+            }
+        }
+
+        // Settle entirely on-chain with one verified Escrow payout
+        await resolvePatriotsOnChain(playerPubkey, gamePubkey, game.serverSeed, totalGamePayout);
+        activePatriotsGames.delete(playerPubkey);
+
+        res.json({ 
+            success: true, 
+            payout: totalGamePayout, 
+            serverSeed: game.serverSeed, 
+            baseSpinFrames: baseSpin.frames,
+            triggeredBonus: baseSpin.triggeredBonus,
+            freeSpinsData: freeSpinsData 
+        });
+
+    } catch (error) {
+        console.error("❌ Patriots Play Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+async function resolvePatriotsOnChain(playerPubkeyStr, gamePubkeyStr, unhashedServerSeed, payoutAmount) {
+    try {
+        console.log(`[HOUSE] Resolving Patriots for ${playerPubkeyStr}. Payout: ${payoutAmount}`);
+
+        const playerPubkey = new anchor.web3.PublicKey(playerPubkeyStr);
+        const gamePubkey = new anchor.web3.PublicKey(gamePubkeyStr);
+        const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("vault")], PROGRAM_ID);
+
+        const sighash = crypto.createHash('sha256').update("global:resolve_patriots").digest().slice(0, 8);
+        const seedBuffer = Buffer.from(unhashedServerSeed, 'utf8');
+        const seedLengthBuffer = Buffer.alloc(4);
+        seedLengthBuffer.writeUInt32LE(seedBuffer.length, 0);
+        
+        const payoutBuffer = Buffer.alloc(8);
+        payoutBuffer.writeBigUInt64LE(BigInt(payoutAmount));
+
+        const ixData = Buffer.concat([sighash, seedLengthBuffer, seedBuffer, payoutBuffer]);
+        const resolveIx = new anchor.web3.TransactionInstruction({
+            programId: PROGRAM_ID,
+            keys: [
+                { pubkey: gamePubkey, isSigner: false, isWritable: true },
+                { pubkey: houseKeypair.publicKey, isSigner: true, isWritable: true },
+                { pubkey: vaultPDA, isSigner: false, isWritable: true },
+                { pubkey: playerPubkey, isSigner: false, isWritable: true },
+                { pubkey: anchor.web3.SystemProgram.programId, isSigner: false, isWritable: false },
+            ],
+            data: ixData
+        });
+
+        const tx = new anchor.web3.Transaction().add(resolveIx);
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = houseKeypair.publicKey;
+        tx.sign(houseKeypair);
+
+        const txSig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+        await connection.confirmTransaction({ signature: txSig, blockhash, lastValidBlockHeight }, "confirmed");
+        console.log(`✅ [HOUSE] Patriots Resolved! TX: ${txSig}`);
+    } catch (err) {
+        console.error("❌ [HOUSE] Failed to resolve Patriots:", err.message);
+    }
+}
+
 // ==========================================
 
 setInterval(() => {}, 1000 * 60 * 60);

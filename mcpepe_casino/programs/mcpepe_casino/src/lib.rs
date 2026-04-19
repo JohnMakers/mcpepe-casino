@@ -7,6 +7,8 @@ pub mod rps;
 pub mod roulette;
 pub mod pumpit;
 pub mod blackjack;
+pub mod patriots;
+
 
 use coinflip::*;
 use whackd::*;  
@@ -14,6 +16,7 @@ use rps::*;
 use roulette::*;
 use pumpit::*;
 use blackjack::*;
+use patriots::*; 
 
 declare_id!("7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw");
 
