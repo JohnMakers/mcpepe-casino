@@ -10,14 +10,15 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:300
 
 export default function Patriots() {
   const { connection } = useConnection();
-  const { publicKey, signTransaction } = useWallet();
+  // ADDED sendTransaction here:
+  const { publicKey, signTransaction, sendTransaction } = useWallet();
   const [betAmount, setBetAmount] = useState<number>(0.1);
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [gameResult, setGameResult] = useState<any>(null);
 
   const handleSpin = async () => {
-    if (!publicKey || !signTransaction) {
+    if (!publicKey || !signTransaction || !sendTransaction) {
       alert("Please connect your wallet first.");
       return;
     }
@@ -78,13 +79,20 @@ export default function Patriots() {
         .instruction()
       );
 
-      const { blockhash } = await connection.getLatestBlockhash('confirmed');
-      tx.recentBlockhash = blockhash;
+      // UPDATED TRANSACTION SENDING LOGIC
+      const latestBlockhash = await connection.getLatestBlockhash('confirmed');
+      tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = publicKey;
 
-      const signedTx = await signTransaction(tx);
-      const txId = await connection.sendRawTransaction(signedTx.serialize());
-      await connection.confirmTransaction(txId, 'confirmed');
+      // Use the wallet adapter's native sendTransaction instead of sign + sendRaw
+      const txId = await sendTransaction(tx, connection);
+
+      // Wait for network confirmation securely
+      await connection.confirmTransaction({
+        signature: txId,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
+      }, 'confirmed');
 
       console.log("On-chain wager secured! Tx:", txId);
 
