@@ -111,11 +111,12 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
             const text = new PIXI.Text(SYMBOL_MAP[targetSymbolType], {
               fontSize: 60,
-              dropShadow: true,
-              dropShadowColor: '#000000',
-              dropShadowBlur: 5,
-              dropShadowDistance: 2,
-            });
+              dropShadow: {
+                color: '#000000',
+                blur: 5,
+                distance: 2
+              }
+            } as any);
             text.anchor.set(0.5);
             text.x = xPos;
             text.y = dropFromTop ? yPos - 600 : yPos - 200; // Drop from above
