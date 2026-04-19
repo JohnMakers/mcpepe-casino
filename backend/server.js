@@ -876,7 +876,6 @@ function generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins, fo
     // If Buy Bonus is triggered, guarantee exactly 4 Scatters randomly placed
     if (forceScatters) {
         while (scatterPositions.length < 4) {
-            // Use RNG to pick a tile index from 0 to 29
             let posFloat = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
             let pos = Math.floor(posFloat * 30);
             if (!scatterPositions.includes(pos)) scatterPositions.push(pos);
@@ -899,6 +898,7 @@ function generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins, fo
     }
     return grid;
 }
+
 
 function evaluateGrid(grid) {
     let counts = {};
@@ -953,7 +953,37 @@ function processTumble(grid, winningSymbols, serverSeed, clientSeed, nonce, coun
     return grid;
 }
 
-function runSpinCycle(betAmount, serverSeed, clientSeed, nonce, startCounter, isFreeSpins) {
+function generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins, forceScatters = false) {
+    let grid = [];
+    let scatterPositions = [];
+
+    // If Buy Bonus is triggered, guarantee exactly 4 Scatters randomly placed
+    if (forceScatters) {
+        while (scatterPositions.length < 4) {
+            let posFloat = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+            let pos = Math.floor(posFloat * 30);
+            if (!scatterPositions.includes(pos)) scatterPositions.push(pos);
+        }
+    }
+
+    for (let col = 0; col < 6; col++) {
+        let column = [];
+        for (let row = 0; row < 5; row++) {
+            let tileIndex = col * 5 + row;
+            // Place the guaranteed scatters
+            if (forceScatters && scatterPositions.includes(tileIndex)) {
+                column.push(PATRIOTS_SYMBOLS.SCATTER);
+            } else {
+                const floatStr = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+                column.push(generateSymbol(floatStr, isFreeSpins));
+            }
+        }
+        grid.push(column);
+    }
+    return grid;
+}
+
+function runSpinCycle(betAmount, serverSeed, clientSeed, nonce, startCounter, isFreeSpins, forceScatters = false) {
     let counterRef = { val: startCounter };
     let grid = generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins, forceScatters);
     
