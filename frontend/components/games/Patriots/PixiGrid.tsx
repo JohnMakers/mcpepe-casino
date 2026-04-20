@@ -7,18 +7,19 @@ interface PixiGridProps {
   onAnimationComplete: () => void;
 }
 
+// 1. UPDATED SYMBOL MAP TO POINT TO YOUR CUSTOM IMAGES
 const SYMBOL_MAP: Record<number, string> = {
-  0: '🐸', // GOLDEN_MCPEPE
-  1: '💖', // PEPE_HEART
-  2: '💎', // PURPLE_DIAMOND
-  3: '🔵', // BLUE_OVAL
-  4: '🟩', // GREEN_GEM
-  5: '🍎', // APPLE
-  6: '🍉', // MELON
-  7: '🍭', // SCATTER
-  8: '💣', // BOMB
-  9: '🍇', // GRAPE
-  10: '🍌',// BANANA
+  0: '/patriots/patriots_beer.png',       // GOLDEN_MCPEPE
+  1: '/patriots/patriots_torch.png',      // PEPE_HEART
+  2: '/patriots/patriots_musket.png',     // PURPLE_DIAMOND
+  3: '/patriots/patriots_waveflag.png',   // BLUE_OVAL
+  4: '/patriots/patriots_truck.png',      // GREEN_GEM
+  5: '/patriots/patriots_salute.png',     // APPLE
+  6: '/patriots/patriots_lincoln.png',    // MELON
+  7: '/patriots/patriots_bell.png',       // SCATTER
+  8: '/patriots/patriots_bomb.png',       // BOMB (Ensure you have this image!)
+  9: '/patriots/patriots_eagle.png',      // GRAPE
+  10: '/patriots/patriots_limo.png',      // BANANA
 };
 
 const COLS = 6;
@@ -31,7 +32,7 @@ const GRID_HEIGHT = ROWS * (SYMBOL_SIZE + PADDING);
 export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProps) {
   const pixiContainer = useRef<HTMLDivElement>(null);
   const appRef = useRef<PIXI.Application | null>(null);
-  const symbolsRef = useRef<PIXI.Text[][]>([]);
+  const symbolsRef = useRef<any[][]>([]); // Changed to any[][] to hold Sprites
 
   useEffect(() => {
     if (!pixiContainer.current) return;
@@ -47,6 +48,9 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         antialias: true,
       });
 
+      // 2. PRELOAD ASSETS: Ensures buttery smooth drops without visual pop-in
+      await PIXI.Assets.load(Object.values(SYMBOL_MAP));
+
       if (!isMounted) {
         app.destroy(true, { children: true, texture: true });
         return;
@@ -60,8 +64,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       app.stage.addChild(mainContainer);
 
       symbolsRef.current = Array.from({ length: COLS }, () => []);
-
-      // --- NEW HELPER FUNCTIONS FOR BONUS ROUNDS ---
 
       const clearBoard = () => {
         return new Promise<void>((resolve) => {
@@ -83,7 +85,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                     if (activeAnimations === 0) resolve();
                   }
                 });
-                // @ts-ignore
                 symbolsRef.current[c][r] = null;
               }
             }
@@ -99,7 +100,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             style: {
               fontSize: 75,
               fontWeight: '900',
-              fill: '#facc15', // Vibrant Yellow
+              fill: '#facc15', 
               align: 'center',
               stroke: { color: '#000000', width: 8 },
               dropShadow: { color: '#000000', blur: 15, distance: 5 }
@@ -144,12 +145,9 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         }
       };
 
-      // --- MASTER DIRECTOR LOOP ---
       const playSequence = async () => {
-        // 1. Render Base Spin
         await playSpinFrames(playData.baseSpinFrames);
 
-        // 2. Render Free Spins (If triggered)
         if (playData.triggeredBonus && isMounted) {
           await showPopupText("10 FREE SPINS!");
           
@@ -157,12 +155,11 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           for (let i = 0; i < freeSpins.length; i++) {
             if (!isMounted) break;
             
-            await clearBoard(); // Wipe grid for the next spin
+            await clearBoard(); 
             
             const fsSpin = freeSpins[i];
             await playSpinFrames(fsSpin.frames);
             
-            // 3. Render Bomb Multipliers
             if (fsSpin.bombMultipliers && fsSpin.bombMultipliers.length > 0 && fsSpin.totalSpinPayout > 0) {
               const multiString = fsSpin.bombMultipliers.map((m: number) => `${m}x`).join(" + ");
               await showPopupText(`BOMBS: ${multiString}\nTOTAL MULT: ${fsSpin.finalSpinMultiplier}x!`);
@@ -204,33 +201,30 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
           let currentSprite = symbolsRef.current[c][r];
 
-          if (!currentSprite || currentSprite.text !== SYMBOL_MAP[targetSymbolType]) {
+          // 3. RENDER SPRITE INSTEAD OF TEXT
+          if (!currentSprite || currentSprite.symbolType !== targetSymbolType) {
             if (currentSprite) {
                container.removeChild(currentSprite);
                currentSprite.destroy();
             }
 
-            const text = new PIXI.Text({
-              text: SYMBOL_MAP[targetSymbolType], 
-              style: {
-                fontSize: 60,
-                dropShadow: {
-                  color: '#000000',
-                  blur: 5,
-                  distance: 2
-                }
-              }
-            } as any);
-
-            text.anchor.set(0.5);
-            text.x = xPos;
-            text.y = dropFromTop ? yPos - 600 : yPos - 200; 
-            text.alpha = dropFromTop ? 0 : 1;
+            const sprite = PIXI.Sprite.from(SYMBOL_MAP[targetSymbolType]);
             
-            container.addChild(text);
-            symbolsRef.current[c][r] = text;
+            // Size them to 80x80 to fit inside the 90px grid cell perfectly
+            sprite.width = 80;
+            sprite.height = 80;
+            sprite.anchor.set(0.5);
+            sprite.x = xPos;
+            sprite.y = dropFromTop ? yPos - 600 : yPos - 200; 
+            sprite.alpha = dropFromTop ? 0 : 1;
+            
+            // Tag the sprite with its ID so we know if it exploded
+            (sprite as any).symbolType = targetSymbolType;
+            
+            container.addChild(sprite);
+            symbolsRef.current[c][r] = sprite;
 
-            tl.to(text, {
+            tl.to(sprite, {
               y: yPos,
               alpha: 1,
               duration: 0.4,
@@ -255,10 +249,10 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           if (winningTypes.includes(symType)) {
             const sprite = symbolsRef.current[c][r];
             if (sprite) {
-              tl.to(sprite.scale, { x: 1.5, y: 1.5, duration: 0.2, ease: "power2.out" }, 0);
+              // 4. ANIMATE EXPLOSION (Scale from Current Width/Height)
+              tl.to(sprite, { width: 120, height: 120, duration: 0.2, ease: "power2.out" }, 0);
               tl.to(sprite, { alpha: 0, y: sprite.y - 30, duration: 0.2, ease: "power2.in" }, 0.2);
               
-              // @ts-ignore
               symbolsRef.current[c][r] = null; 
             }
           }
