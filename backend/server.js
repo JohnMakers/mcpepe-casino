@@ -869,6 +869,32 @@ function generateSymbol(randomFloat, isFreeSpins) {
     return PATRIOTS_SYMBOLS.BANANA; // Fallback
 }
 
+function getBombMultiplier(randomFloat) {
+    // True High-Volatility Distribution (Sum = 1000)
+    const bombWeights = [
+        { mult: 2, weight: 250 },   // 25% chance
+        { mult: 3, weight: 200 },   // 20% chance
+        { mult: 5, weight: 150 },   // 15% chance
+        { mult: 8, weight: 120 },   // 12% chance
+        { mult: 10, weight: 100 },  // 10% chance
+        { mult: 15, weight: 60 },   // 6% chance
+        { mult: 20, weight: 45 },   // 4.5% chance
+        { mult: 25, weight: 45 },   // 4.5% chance
+        { mult: 50, weight: 20 },   // 2% chance
+        { mult: 100, weight: 10 }   // 1% chance (Rare Jackpot)
+    ];
+    
+    let totalWeight = bombWeights.reduce((sum, w) => sum + w.weight, 0);
+    let rand = randomFloat * totalWeight;
+    
+    for (let bw of bombWeights) {
+        if (rand < bw.weight) return bw.mult;
+        rand -= bw.weight;
+    }
+    return 2; // Fallback
+}
+
+
 function generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins, forceScatters = false) {
     let grid = [];
     let scatterPositions = [];
@@ -1009,10 +1035,9 @@ function runSpinCycle(betAmount, serverSeed, clientSeed, nonce, startCounter, is
             // If it's free spins, collect bombs for the END of the tumble sequence
             if (isFreeSpins && bombsOnScreen.length > 0) {
                 for (let b of bombsOnScreen) {
-                    // Random bomb multiplier (2x to 100x)
                     const bFloat = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
-                    const mults = [2, 3, 5, 8, 10, 15, 20, 25, 50, 100];
-                    const selectedMult = mults[Math.floor(bFloat * mults.length)];
+                    // USE THE NEW WEIGHTED FUNCTION HERE
+                    const selectedMult = getBombMultiplier(bFloat);
                     bombMultipliers.push(selectedMult);
                 }
             }
@@ -1085,6 +1110,15 @@ app.post('/api/patriots/play', async (req, res) => {
                 }
                 spinsRemaining--;
             }
+        }
+
+        // Enforce the 21,100x Maximum Win Cap
+        const MAX_WIN_MULTIPLIER = 21100;
+        const hardCapLamports = actualBaseBet * MAX_WIN_MULTIPLIER;
+        
+        if (totalGamePayout > hardCapLamports) {
+            totalGamePayout = hardCapLamports;
+            console.log(`🏆 MAX WIN HIT by ${playerPubkey}! Capped at 21,100x.`);
         }
 
         await resolvePatriotsOnChain(playerPubkey, gamePubkey, game.serverSeed, totalGamePayout);
