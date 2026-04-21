@@ -55,7 +55,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       await app.init({
         width: CANVAS_WIDTH,
         height: CANVAS_HEIGHT,
-        backgroundAlpha: 0, // TRANSPARENT
+        backgroundAlpha: 0, 
         antialias: true,
       });
 
@@ -66,11 +66,11 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         return;
       }
 
-      // 📱 BULLETPROOF CANVAS CSS FIX 
+      // 📱 Strict stretch to bounds, without object-fit overrides
       const style = app.canvas.style as CSSStyleDeclaration;
       style.width = '100%';
       style.height = '100%';
-      style.display = 'block'; // 👈 THIS kills the bottom/right inline gap bug
+      style.display = 'block'; 
       style.position = 'absolute';
       style.top = '0px';
       style.left = '0px';
