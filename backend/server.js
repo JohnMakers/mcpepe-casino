@@ -1095,20 +1095,20 @@ app.post('/api/patriots/play', async (req, res) => {
         let freeSpinsData = [];
         
         if (baseSpin.triggeredBonus) {
-            let spinsRemaining = 10;
+            let totalSpins = 10; // Start with the base 10 spins
             
-            while (spinsRemaining > 0) {
-                // Free spins do not force scatters
+            for (let i = 0; i < totalSpins; i++) {
                 const fsSpin = runSpinCycle(actualBaseBet, game.serverSeed, clientSeed, nonce, currentCounter, true, false);
                 currentCounter = fsSpin.finalCounter;
                 totalGamePayout += fsSpin.totalSpinPayout;
                 
                 freeSpinsData.push(fsSpin);
 
-                if (evaluateGrid(fsSpin.frames[fsSpin.frames.length-1].grid).scatterCount >= 3) {
-                    spinsRemaining += 5;
+                // RETRIGGER: If 3 or more scatters land during a free spin, add +3 spins to the total limit
+                // We check frames[0] so we only count them once before they potentially tumble
+                if (evaluateGrid(fsSpin.frames[0].grid).scatterCount >= 3) {
+                    totalSpins += 3; 
                 }
-                spinsRemaining--;
             }
         }
 
