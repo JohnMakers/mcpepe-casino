@@ -40,7 +40,6 @@ export default function Patriots() {
       const clientSeed = Math.random().toString(36).substring(2, 15);
       const nonce = Math.floor(Math.random() * 1000000);
       
-      // Calculate 100x cost if buying the feature
       const totalWager = isBonusBuy ? betAmount * 100 : betAmount;
       const betLamports = totalWager * anchor.web3.LAMPORTS_PER_SOL;
 
@@ -85,7 +84,6 @@ export default function Patriots() {
       tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = publicKey;
 
-      // Native sendTransaction handles retries seamlessly
       const txId = await sendTransaction(tx, connection);
 
       await connection.confirmTransaction({
@@ -137,36 +135,48 @@ export default function Patriots() {
         <p className="text-gray-500 text-sm font-bold tracking-widest">Pay Anywhere • Tumble Mechanism</p>
       </div>
 
-      {/* The 6x5 Grid Area - 🔨 THE 100% SLEDGEHAMMER CSS FIX */}
-      <div 
-        className="w-[800px] h-[600px] border-4 border-purple-900/50 rounded-xl mb-8 flex items-center justify-center relative overflow-hidden shadow-[0_0_30px_rgba(168,85,247,0.1)]"
-        style={{
-          backgroundImage: "url('/patriots/patriots_bg.png')",
-          backgroundSize: "100% 100%", // 👈 Forces the image to stretch exactly to the borders
-          backgroundPosition: "top left",
-          backgroundRepeat: "no-repeat"
-        }}
-      >
-        
-        {/* Overlay to dim background while waiting for play so text is readable */}
+      {/* 1. 'box-content' guarantees the interior is exactly 800x600
+        2. 'overflow-hidden' clips everything exactly at the border
+      */}
+      <div className="box-content w-[800px] h-[600px] border-4 border-purple-900/50 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(168,85,247,0.1)] bg-[#0a0f0c]">
+
+        {/* 3. 'scale-[1.03]' slightly zooms the background image, physically cropping out 
+          any black lines baked into the edges of the patriots_bg.png file 
+        */}
+        <div 
+          className="absolute inset-0 z-0 scale-[1.03]"
+          style={{
+            backgroundImage: "url('/patriots/patriots_bg.png')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat"
+          }}
+        />
+
+        {/* Overlay to dim background while waiting for play */}
         {!gameResult && (
-          <div className="absolute inset-0 bg-black/60 z-0"></div>
+          <div className="absolute inset-0 bg-black/60 z-10 pointer-events-none"></div>
         )}
 
         {!isSpinning && !gameResult && (
-          <div className="text-purple-400 font-black text-2xl uppercase tracking-widest opacity-80 z-10 relative">
-            Waiting for Spin
+          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+            <span className="text-purple-400 font-black text-2xl uppercase tracking-widest opacity-80 drop-shadow-lg">
+              Waiting for Spin
+            </span>
           </div>
         )}
         
         {isSpinning && !gameResult && (
-          <div className="text-purple-400 font-black text-2xl uppercase tracking-widest animate-pulse z-10 relative">
-            Escrowing Wager...
+          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+            <span className="text-purple-400 font-black text-2xl uppercase tracking-widest animate-pulse drop-shadow-lg">
+              Escrowing Wager...
+            </span>
           </div>
         )}
 
+        {/* PIXI Canvas Layer */}
         {gameResult && (
-          <div className="absolute inset-0 z-10 w-full h-full">
+          <div className="absolute inset-0 z-30">
             <PixiGrid 
               playData={gameResult} 
               onAnimationComplete={() => setIsAnimating(false)} 

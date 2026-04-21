@@ -74,7 +74,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       style.top = '0px';
       style.left = '0px';
 
-      // ✅ FIX: Safely check if the container still exists before appending
+      // Safe Type Check for Vercel
       if (pixiContainer.current) {
         pixiContainer.current.appendChild(app.canvas);
       }
