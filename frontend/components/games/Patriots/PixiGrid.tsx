@@ -28,31 +28,28 @@ const CANVAS_HEIGHT = 600;
 const SYMBOL_SIZE = 76;
 
 // ============================================================================
-// 🛠️ MANUAL GRID CALIBRATION
+// 🛠️ ABSOLUTE PIXEL CALIBRATION MATRIX
 // ============================================================================
-// If a specific column is misaligned, adjust its exact X center-point here:
-const COL_X = [
-  38,   // Col 0 (Far Left)
-  128,  // Col 1
-  218,  // Col 2
-  308,  // Col 3
-  398,  // Col 4
-  488   // Col 5 (Far Right)
-];
-
-// If a specific row is misaligned, adjust its exact Y center-point here:
-const ROW_Y = [
-  38,   // Row 0 (Top)
-  128,  // Row 1
-  218,  // Row 2
-  308,  // Row 3
-  398   // Row 4 (Bottom)
-];
-
 // Master offset for the entire grid container. 
-// Move these to shift the entire block of symbols at once.
 const GRID_OFFSET_X = 138; 
 const GRID_OFFSET_Y = 78;
+
+// Edit the exact { x, y } for ANY specific tile. 
+// Example: If Column 5, Row 1 is too far right, change its x from 488 to 484.
+const TILE_POSITIONS = [
+  // COLUMN 0 (Far Left)
+  [ { x: 38, y: 38 }, { x: 38, y: 128 }, { x: 38, y: 218 }, { x: 38, y: 308 }, { x: 38, y: 398 } ],
+  // COLUMN 1
+  [ { x: 128, y: 38 }, { x: 128, y: 128 }, { x: 128, y: 218 }, { x: 128, y: 308 }, { x: 128, y: 398 } ],
+  // COLUMN 2
+  [ { x: 218, y: 38 }, { x: 218, y: 128 }, { x: 218, y: 218 }, { x: 218, y: 308 }, { x: 218, y: 398 } ],
+  // COLUMN 3
+  [ { x: 308, y: 38 }, { x: 308, y: 128 }, { x: 308, y: 218 }, { x: 308, y: 308 }, { x: 308, y: 398 } ],
+  // COLUMN 4
+  [ { x: 398, y: 38 }, { x: 398, y: 128 }, { x: 398, y: 218 }, { x: 398, y: 308 }, { x: 398, y: 398 } ],
+  // COLUMN 5 (Far Right) - *TWEAK THE X VALUES IN THE FIRST 4 BRACKETS HERE*
+  [ { x: 488, y: 38 }, { x: 488, y: 128 }, { x: 488, y: 218 }, { x: 488, y: 308 }, { x: 488, y: 398 } ],
+];
 // ============================================================================
 
 const COLS = 6;
@@ -84,16 +81,14 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         return;
       }
 
-      // 📱 MOBILE RESPONSIVENESS
-      // Force the canvas to scale down via CSS while maintaining its internal 800x600 resolution
+      // 📱 ADVANCED MOBILE RESPONSIVENESS & BACKGROUND COVERAGE
+      // Forces canvas to maintain its 800x600 ratio while filling the parent container perfectly
       // @ts-ignore
       app.canvas.style.width = '100%';
       // @ts-ignore
-      app.canvas.style.height = 'auto';
+      app.canvas.style.height = '100%';
       // @ts-ignore
-      app.canvas.style.maxWidth = `${CANVAS_WIDTH}px`;
-      // @ts-ignore
-      app.canvas.style.aspectRatio = `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}`;
+      app.canvas.style.objectFit = 'contain'; 
 
       // @ts-ignore
       pixiContainer.current.appendChild(app.canvas);
@@ -112,9 +107,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       mainContainer.y = GRID_OFFSET_Y;
       app.stage.addChild(mainContainer);
 
-      // The Clipping Mask (Ceiling)
       const mask = new PIXI.Graphics()
-        // Expanded width/height to cover the manual array spreads
         .rect(-50, -10, CANVAS_WIDTH, CANVAS_HEIGHT) 
         .fill(0xffffff);
       mainContainer.addChild(mask);
@@ -254,9 +247,10 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         for (let r = 0; r < ROWS; r++) {
           const targetSymbolType = targetGrid[c][r];
           
-          // 🎯 USING THE NEW MANUAL COORDINATE ARRAYS
-          const xPos = COL_X[c];
-          const yPos = ROW_Y[r];
+          // 🎯 USING THE 2D CALIBRATION MATRIX
+          const targetPos = TILE_POSITIONS[c][r];
+          const xPos = targetPos.x;
+          const yPos = targetPos.y;
 
           let currentSprite = symbolsRef.current[c][r];
 
@@ -336,8 +330,9 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
   };
 
   return (
-    <div className="flex justify-center items-center w-full h-full">
-      <div ref={pixiContainer} className="overflow-hidden rounded-xl shadow-[0_0_40px_rgba(168,85,247,0.3)] w-full max-w-[800px]" />
+    <div className="flex justify-center items-center w-full h-full max-w-[800px] aspect-[4/3] mx-auto relative">
+      {/* Container is now locked to a 4:3 aspect ratio matching the 800x600 canvas */}
+      <div ref={pixiContainer} className="absolute inset-0 overflow-hidden rounded-xl shadow-[0_0_40px_rgba(168,85,247,0.3)]" />
     </div>
   );
 }
