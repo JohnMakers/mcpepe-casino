@@ -30,12 +30,10 @@ const SYMBOL_SIZE = 76;
 // ============================================================================
 // 🛠️ ABSOLUTE PIXEL CALIBRATION MATRIX
 // ============================================================================
-// Master offset for the entire grid container. 
 const GRID_OFFSET_X = 138; 
 const GRID_OFFSET_Y = 78;
 
-// Edit the exact { x, y } for ANY specific tile. 
-// Example: If Column 5, Row 1 is too far right, change its x from 488 to 484.
+// Tweak these { x, y } coordinates to nudge individual tiles into their painted slots
 const TILE_POSITIONS = [
   // COLUMN 0 (Far Left)
   [ { x: 38, y: 38 }, { x: 38, y: 128 }, { x: 38, y: 218 }, { x: 38, y: 308 }, { x: 38, y: 398 } ],
@@ -47,7 +45,7 @@ const TILE_POSITIONS = [
   [ { x: 308, y: 38 }, { x: 308, y: 128 }, { x: 308, y: 218 }, { x: 308, y: 308 }, { x: 308, y: 398 } ],
   // COLUMN 4
   [ { x: 398, y: 38 }, { x: 398, y: 128 }, { x: 398, y: 218 }, { x: 398, y: 308 }, { x: 398, y: 398 } ],
-  // COLUMN 5 (Far Right) - *TWEAK THE X VALUES IN THE FIRST 4 BRACKETS HERE*
+  // COLUMN 5 (Far Right)
   [ { x: 488, y: 38 }, { x: 488, y: 128 }, { x: 488, y: 218 }, { x: 488, y: 308 }, { x: 488, y: 398 } ],
 ];
 // ============================================================================
@@ -74,6 +72,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         antialias: true,
       });
 
+      // Load all textures including background
       await PIXI.Assets.load([...Object.values(SYMBOL_MAP), BACKGROUND_IMAGE]);
 
       if (!isMounted) {
@@ -81,22 +80,33 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         return;
       }
 
-      // 📱 ADVANCED MOBILE RESPONSIVENESS & BACKGROUND COVERAGE
-      // Forces canvas to maintain its 800x600 ratio while filling the parent container perfectly
+      // 📱 FORCE HTML CANVAS TO COVER ENTIRE COMPONENT BOUNDS
       // @ts-ignore
       app.canvas.style.width = '100%';
       // @ts-ignore
       app.canvas.style.height = '100%';
       // @ts-ignore
-      app.canvas.style.objectFit = 'contain'; 
+      app.canvas.style.objectFit = 'cover'; 
+      // @ts-ignore
+      app.canvas.style.position = 'absolute';
+      // @ts-ignore
+      app.canvas.style.top = '0';
+      // @ts-ignore
+      app.canvas.style.left = '0';
 
       // @ts-ignore
       pixiContainer.current.appendChild(app.canvas);
       appRef.current = app;
 
-      const bgSprite = PIXI.Sprite.from(BACKGROUND_IMAGE);
-      bgSprite.width = CANVAS_WIDTH;
-      bgSprite.height = CANVAS_HEIGHT;
+      // 🖼️ PROPORTIONALLY SCALE BACKGROUND TO PREVENT SLOTS FROM WARPING
+      const bgTexture = PIXI.Texture.from(BACKGROUND_IMAGE);
+      const bgSprite = new PIXI.Sprite(bgTexture);
+      
+      const scaleX = CANVAS_WIDTH / bgTexture.width;
+      const scaleY = CANVAS_HEIGHT / bgTexture.height;
+      const scale = Math.max(scaleX, scaleY); // Matches "cover" logic internally
+      
+      bgSprite.scale.set(scale);
       bgSprite.anchor.set(0.5);
       bgSprite.x = CANVAS_WIDTH / 2;
       bgSprite.y = CANVAS_HEIGHT / 2;
@@ -247,7 +257,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         for (let r = 0; r < ROWS; r++) {
           const targetSymbolType = targetGrid[c][r];
           
-          // 🎯 USING THE 2D CALIBRATION MATRIX
           const targetPos = TILE_POSITIONS[c][r];
           const xPos = targetPos.x;
           const yPos = targetPos.y;
@@ -330,8 +339,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
   };
 
   return (
-    <div className="flex justify-center items-center w-full h-full max-w-[800px] aspect-[4/3] mx-auto relative">
-      {/* Container is now locked to a 4:3 aspect ratio matching the 800x600 canvas */}
+    <div className="relative w-full h-full">
       <div ref={pixiContainer} className="absolute inset-0 overflow-hidden rounded-xl shadow-[0_0_40px_rgba(168,85,247,0.3)]" />
     </div>
   );
