@@ -28,6 +28,7 @@ const SYMBOL_SIZE = 76;
 const GRID_OFFSET_X = 138; 
 const GRID_OFFSET_Y = 78;
 
+// YOUR CUSTOM PRESERVED COORDINATES
 const TILE_POSITIONS = [
   [ { x: 20, y: 19 }, { x: 20, y: 121 }, { x: 20, y: 216.8 }, { x: 20, y: 311.5 }, { x: 20, y: 408 } ],
   [ { x: 115, y: 18 }, { x: 115, y: 121 }, { x: 115, y: 216.8 }, { x: 115, y: 311.5 }, { x: 115, y: 408 } ],
@@ -74,7 +75,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       style.top = '0px';
       style.left = '0px';
 
-      // Safe Type Check for Vercel
       if (pixiContainer.current) {
         pixiContainer.current.appendChild(app.canvas);
       }
@@ -86,8 +86,9 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       mainContainer.y = GRID_OFFSET_Y;
       app.stage.addChild(mainContainer);
 
+      // 🔨 THE FIX: Started the mask at -40 instead of -10 so it clears the top row symbols
       const mask = new PIXI.Graphics()
-        .rect(-50, -10, CANVAS_WIDTH, CANVAS_HEIGHT) 
+        .rect(-50, -40, CANVAS_WIDTH, CANVAS_HEIGHT + 40) 
         .fill(0xffffff);
       mainContainer.addChild(mask);
       mainContainer.mask = mask; 
