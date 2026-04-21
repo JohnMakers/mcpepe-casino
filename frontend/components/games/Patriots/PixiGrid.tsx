@@ -21,8 +21,6 @@ const SYMBOL_MAP: Record<number, string> = {
   10: '/patriots/patriots_limo.png',      
 };
 
-const BACKGROUND_IMAGE = '/patriots/patriots_bg.png';
-
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 const SYMBOL_SIZE = 76;
@@ -35,17 +33,11 @@ const GRID_OFFSET_Y = 78;
 
 // Tweak these { x, y } coordinates to nudge individual tiles into their painted slots
 const TILE_POSITIONS = [
-  // COLUMN 0 (Far Left)
   [ { x: 38, y: 38 }, { x: 38, y: 128 }, { x: 38, y: 218 }, { x: 38, y: 308 }, { x: 38, y: 398 } ],
-  // COLUMN 1
   [ { x: 128, y: 38 }, { x: 128, y: 128 }, { x: 128, y: 218 }, { x: 128, y: 308 }, { x: 128, y: 398 } ],
-  // COLUMN 2
   [ { x: 218, y: 38 }, { x: 218, y: 128 }, { x: 218, y: 218 }, { x: 218, y: 308 }, { x: 218, y: 398 } ],
-  // COLUMN 3
   [ { x: 308, y: 38 }, { x: 308, y: 128 }, { x: 308, y: 218 }, { x: 308, y: 308 }, { x: 308, y: 398 } ],
-  // COLUMN 4
   [ { x: 398, y: 38 }, { x: 398, y: 128 }, { x: 398, y: 218 }, { x: 398, y: 308 }, { x: 398, y: 398 } ],
-  // COLUMN 5 (Far Right)
   [ { x: 488, y: 38 }, { x: 488, y: 128 }, { x: 488, y: 218 }, { x: 488, y: 308 }, { x: 488, y: 398 } ],
 ];
 // ============================================================================
@@ -68,12 +60,12 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       await app.init({
         width: CANVAS_WIDTH,
         height: CANVAS_HEIGHT,
-        backgroundAlpha: 1, 
+        backgroundAlpha: 0, // TRANSPARENT to let Tailwind background show through
         antialias: true,
       });
 
-      // Load all textures including background
-      await PIXI.Assets.load([...Object.values(SYMBOL_MAP), BACKGROUND_IMAGE]);
+      // Load all symbol textures
+      await PIXI.Assets.load([...Object.values(SYMBOL_MAP)]);
 
       if (!isMounted) {
         app.destroy(true, { children: true, texture: true });
@@ -97,20 +89,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       // @ts-ignore
       pixiContainer.current.appendChild(app.canvas);
       appRef.current = app;
-
-      // 🖼️ PROPORTIONALLY SCALE BACKGROUND TO PREVENT SLOTS FROM WARPING
-      const bgTexture = PIXI.Texture.from(BACKGROUND_IMAGE);
-      const bgSprite = new PIXI.Sprite(bgTexture);
-      
-      const scaleX = CANVAS_WIDTH / bgTexture.width;
-      const scaleY = CANVAS_HEIGHT / bgTexture.height;
-      const scale = Math.max(scaleX, scaleY); // Matches "cover" logic internally
-      
-      bgSprite.scale.set(scale);
-      bgSprite.anchor.set(0.5);
-      bgSprite.x = CANVAS_WIDTH / 2;
-      bgSprite.y = CANVAS_HEIGHT / 2;
-      app.stage.addChild(bgSprite);
 
       const mainContainer = new PIXI.Container();
       mainContainer.x = GRID_OFFSET_X;
@@ -340,7 +318,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
   return (
     <div className="relative w-full h-full">
-      <div ref={pixiContainer} className="absolute inset-0 overflow-hidden rounded-xl shadow-[0_0_40px_rgba(168,85,247,0.3)]" />
+      <div ref={pixiContainer} className="absolute inset-0 overflow-hidden rounded-xl" />
     </div>
   );
 }

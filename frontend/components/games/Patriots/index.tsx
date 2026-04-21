@@ -137,25 +137,33 @@ export default function Patriots() {
         <p className="text-gray-500 text-sm font-bold tracking-widest">Pay Anywhere • Tumble Mechanism</p>
       </div>
 
-      {/* The 6x5 Grid Area */}
-      <div className="w-[800px] h-[600px] border-4 border-purple-900/50 bg-black/50 rounded-xl mb-8 flex items-center justify-center relative overflow-hidden shadow-[0_0_30px_rgba(168,85,247,0.1)]">
+      {/* The 6x5 Grid Area - NOW WITH TAILWIND BACKGROUND */}
+      <div className="w-[800px] h-[600px] border-4 border-purple-900/50 bg-[url('/patriots/patriots_bg.png')] bg-cover bg-center bg-no-repeat rounded-xl mb-8 flex items-center justify-center relative overflow-hidden shadow-[0_0_30px_rgba(168,85,247,0.1)]">
+        
+        {/* Overlay to dim background while waiting for play so text is readable */}
+        {!gameResult && (
+          <div className="absolute inset-0 bg-black/60 z-0"></div>
+        )}
+
         {!isSpinning && !gameResult && (
-          <div className="text-purple-700 font-black text-2xl uppercase tracking-widest opacity-50">
+          <div className="text-purple-400 font-black text-2xl uppercase tracking-widest opacity-80 z-10">
             Waiting for Spin
           </div>
         )}
         
         {isSpinning && !gameResult && (
-          <div className="text-purple-400 font-black text-2xl uppercase tracking-widest animate-pulse">
+          <div className="text-purple-400 font-black text-2xl uppercase tracking-widest animate-pulse z-10">
             Escrowing Wager...
           </div>
         )}
 
         {gameResult && (
-          <PixiGrid 
-            playData={gameResult} 
-            onAnimationComplete={() => setIsAnimating(false)} 
-          />
+          <div className="absolute inset-0 z-10 w-full h-full">
+            <PixiGrid 
+              playData={gameResult} 
+              onAnimationComplete={() => setIsAnimating(false)} 
+            />
+          </div>
         )}
       </div>
 
