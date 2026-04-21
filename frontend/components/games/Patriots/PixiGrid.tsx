@@ -28,7 +28,6 @@ const SYMBOL_SIZE = 76;
 const GRID_OFFSET_X = 138; 
 const GRID_OFFSET_Y = 78;
 
-// YOUR CUSTOM PRESERVED COORDINATES
 const TILE_POSITIONS = [
   [ { x: 20, y: 23 }, { x: 20, y: 121 }, { x: 20, y: 216.8 }, { x: 20, y: 311.5 }, { x: 20, y: 408 } ],
   [ { x: 115, y: 23 }, { x: 115, y: 121 }, { x: 115, y: 216.8 }, { x: 115, y: 311.5 }, { x: 115, y: 408 } ],
@@ -60,7 +59,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         antialias: true,
       });
 
-      // Load all symbols PLUS the new cook modal image
       await PIXI.Assets.load([...Object.values(SYMBOL_MAP), '/patriots/patriots_cook.png']);
 
       if (!isMounted) {
@@ -95,21 +93,38 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
       symbolsRef.current = Array.from({ length: COLS }, () => []);
 
-      // Bonus Tracking Text (Bottom Center)
+      // ✨ UI ALIGNMENT: Moved Free Spins Tracker to the Top Right
       const trackerText = new PIXI.Text({
         text: "",
         style: {
-          fontSize: 22,
+          fontSize: 20,
           fontWeight: '900',
           fill: '#ffffff',
           stroke: { color: '#000000', width: 4 },
           dropShadow: { color: '#000000', blur: 4, distance: 2 }
         }
       });
-      trackerText.anchor.set(0.5, 1);
-      trackerText.x = CANVAS_WIDTH / 2;
-      trackerText.y = CANVAS_HEIGHT - 10;
+      trackerText.anchor.set(1, 0); 
+      trackerText.x = CANVAS_WIDTH - 20;
+      trackerText.y = 15;
       app.stage.addChild(trackerText);
+
+      // ✨ REAL-TIME TOTAL WIN UI (Bottom Center)
+      const spinWinText = new PIXI.Text({
+        text: "",
+        style: {
+          fontSize: 45,
+          fontWeight: '900',
+          fill: '#facc15', // Tailwind Yellow-400
+          stroke: { color: '#000000', width: 7 },
+          dropShadow: { color: '#000000', blur: 8, distance: 4 }
+        }
+      });
+      spinWinText.anchor.set(0.5);
+      spinWinText.x = CANVAS_WIDTH / 2;
+      spinWinText.y = CANVAS_HEIGHT - 60;
+      spinWinText.alpha = 0;
+      app.stage.addChild(spinWinText);
 
       const clearBoard = () => {
         return new Promise<void>((resolve) => {
@@ -173,7 +188,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         });
       };
 
-      // ✨ FEATURE 1: The Clickable Bonus Modal
       const showBonusModal = () => {
         return new Promise<void>((resolve) => {
           const modal = new PIXI.Container();
@@ -184,39 +198,22 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           overlay.eventMode = 'static'; 
           modal.addChild(overlay);
 
-          // 🔨 THE FIX: Bulletproof Image Scaling 
           const img = PIXI.Sprite.from('/patriots/patriots_cook.png');
           img.anchor.set(0.5);
           img.x = CANVAS_WIDTH / 2;
-          img.y = CANVAS_HEIGHT / 2 - 40;
-          
-          // Force it to a maximum width of 350px so it fits safely, then preserve the aspect ratio
-          img.width = 350;
+          img.y = CANVAS_HEIGHT / 2 - 20;
+          img.width = 450;
           img.scale.y = img.scale.x; 
-          
           modal.addChild(img);
-
-          const title = new PIXI.Text({
-            text: "CONGRATS!\nYOU WON 10 FREE SPINS!",
-            style: {
-              fontSize: 40, fontWeight: '900', fill: '#facc15', align: 'center',
-              stroke: { color: '#000000', width: 6 },
-              dropShadow: { color: '#000000', blur: 10, distance: 4 }
-            }
-          });
-          title.anchor.set(0.5);
-          title.x = CANVAS_WIDTH / 2;
-          title.y = CANVAS_HEIGHT / 2 + 150;
-          modal.addChild(title);
 
           const btnContainer = new PIXI.Container();
           btnContainer.x = CANVAS_WIDTH / 2;
-          btnContainer.y = CANVAS_HEIGHT / 2 + 240;
+          btnContainer.y = CANVAS_HEIGHT / 2 + 180;
           
-          const btnBg = new PIXI.Graphics().roundRect(-120, -30, 240, 60, 15).fill(0x16a34a);
+          const btnBg = new PIXI.Graphics().roundRect(-100, -25, 200, 50, 10).fill(0x16a34a);
           const btnText = new PIXI.Text({
             text: "CONTINUE",
-            style: { fontSize: 24, fontWeight: '900', fill: '#ffffff' }
+            style: { fontSize: 22, fontWeight: '900', fill: '#ffffff' }
           });
           btnText.anchor.set(0.5);
           
@@ -246,6 +243,10 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       };
 
       const playSpinFrames = async (frames: any[]) => {
+        let currentSpinWin = 0;
+        spinWinText.alpha = 0; 
+        spinWinText.text = "";
+
         for (let f = 0; f < frames.length; f++) {
           if (!isMounted) break;
           const frame = frames[f];
@@ -254,14 +255,36 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           await renderGridFrame(app, mainContainer, frame.grid, isFirstFrame);
 
           if (frame.winningSymbols && frame.winningSymbols.length > 0) {
-            await new Promise(resolve => setTimeout(resolve, 900)); 
+            await new Promise(resolve => setTimeout(resolve, 800)); 
             if (!isMounted) break;
             
-            const framePayout = frame.payout || frame.stepPayout || frame.winAmount || 0;
+            // 🔥 FIXED: Reading the exact variable the server sends
+            const framePayout = frame.tumblePayout || 0;
+            
+            // Fire Explosions and Floating SOL text
             await explodeWinningSymbols(frame.winningSymbols, frame.grid, framePayout);
+
+            // ✨ REAL-TIME UPDATE LOGIC
+            if (framePayout > 0) {
+              currentSpinWin += framePayout;
+              spinWinText.text = `WIN: ${(currentSpinWin / 1e9).toFixed(2)}`;
+              
+              if (spinWinText.alpha === 0) {
+                gsap.to(spinWinText, { alpha: 1, duration: 0.2 });
+              }
+              // Bounce the total win text
+              gsap.fromTo(spinWinText.scale, { x: 1.4, y: 1.4 }, { x: 1, y: 1, duration: 0.4, ease: "back.out(2)" });
+            }
+
           } else {
-            await new Promise(resolve => setTimeout(resolve, 750)); 
+            await new Promise(resolve => setTimeout(resolve, 600)); 
           }
+        }
+
+        // Fade out the tumble win text when the chain finishes
+        if (currentSpinWin > 0) {
+           await new Promise(resolve => setTimeout(resolve, 800));
+           gsap.to(spinWinText, { alpha: 0, duration: 0.4 });
         }
       };
 
@@ -278,21 +301,31 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           for (let i = 0; i < freeSpins.length; i++) {
             if (!isMounted) break;
             
-            // Updates tracker with precise spin count math
-            trackerText.text = `SPINS LEFT: ${freeSpins.length - i}   |   TOTAL EARNED: ${(runningBonusTotal / 1e9).toFixed(2)} SOL`;
+            trackerText.text = `SPINS: ${freeSpins.length - i}  |  TOTAL: ${(runningBonusTotal / 1e9).toFixed(2)} SOL`;
             
             await clearBoard(); 
             
             const fsSpin = freeSpins[i];
             await playSpinFrames(fsSpin.frames);
             
+            // If bombs dropped, visually apply the multiplier to the Spin Win Text!
             if (fsSpin.bombMultipliers && fsSpin.bombMultipliers.length > 0 && fsSpin.totalSpinPayout > 0) {
               const multiString = fsSpin.bombMultipliers.map((m: number) => `${m}x`).join(" + ");
               await showPopupText(`BOMBS: ${multiString}\nTOTAL MULT: ${fsSpin.finalSpinMultiplier}x!`);
+
+              // Flash the central Win UI in green to show the multiplier hitting
+              spinWinText.text = `WIN: ${(fsSpin.totalSpinPayout / 1e9).toFixed(2)}`;
+              spinWinText.style.fill = '#4ade80';
+              spinWinText.alpha = 1;
+              gsap.fromTo(spinWinText.scale, { x: 1.8, y: 1.8 }, { x: 1, y: 1, duration: 0.6, ease: "elastic.out(1, 0.3)" });
+              
+              await new Promise(resolve => setTimeout(resolve, 1200));
+              spinWinText.style.fill = '#facc15'; // revert color
+              gsap.to(spinWinText, { alpha: 0, duration: 0.4 });
             }
 
             runningBonusTotal += (fsSpin.totalSpinPayout || 0);
-            trackerText.text = `SPINS LEFT: ${freeSpins.length - i - 1}   |   TOTAL EARNED: ${(runningBonusTotal / 1e9).toFixed(2)} SOL`;
+            trackerText.text = `SPINS: ${freeSpins.length - i - 1}  |  TOTAL: ${(runningBonusTotal / 1e9).toFixed(2)} SOL`;
             
             await new Promise(resolve => setTimeout(resolve, 800));
           }
@@ -420,35 +453,40 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         }
       }
 
+      // ✨ TIMING FIX: Spawn the floating text right as the tiles vanish
       if (foundWin && framePayout > 0) {
         const floatText = new PIXI.Text({
           text: `+${(framePayout / 1e9).toFixed(2)} SOL`,
           style: {
-            fontSize: 34,
+            fontSize: 48, 
             fontWeight: '900',
             fill: '#4ade80', 
-            stroke: { color: '#000000', width: 5 },
-            dropShadow: { color: '#000000', blur: 6, distance: 3 }
+            stroke: { color: '#000000', width: 6 },
+            dropShadow: { color: '#000000', blur: 8, distance: 4 }
           }
         });
         
         floatText.anchor.set(0.5);
         floatText.x = (minX + maxX) / 2;
-        floatText.y = (minY + maxY) / 2 - 20; 
+        floatText.y = (minY + maxY) / 2; 
         floatText.alpha = 0;
+        floatText.scale.set(0.5); // Start small for pop effect
         
         if (appRef.current) {
           appRef.current.stage.addChild(floatText);
         }
         
-        tl.to(floatText, { alpha: 1, y: floatText.y - 30, duration: 0.3, ease: "power2.out" }, 0);
+        // Pop exactly at 0.45s (when explosion fade is almost done)
+        tl.to(floatText.scale, { x: 1, y: 1, duration: 0.4, ease: "back.out(2)" }, 0.45);
+        tl.to(floatText, { alpha: 1, duration: 0.2 }, 0.45);
+        
+        // Float upwards
+        tl.to(floatText, { y: floatText.y - 60, duration: 0.8, ease: "power1.out" }, 0.6);
         tl.to(floatText, { 
           alpha: 0, 
-          y: floatText.y - 80, 
-          duration: 0.6, 
-          ease: "power2.in", 
+          duration: 0.4, 
           onComplete: () => floatText.destroy() 
-        }, 0.5);
+        }, 1.0);
       }
     });
   };
