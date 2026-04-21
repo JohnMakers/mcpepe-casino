@@ -66,7 +66,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         return;
       }
 
-      // 📱 Strict stretch to bounds, without object-fit overrides
       const style = app.canvas.style as CSSStyleDeclaration;
       style.width = '100%';
       style.height = '100%';
@@ -75,7 +74,11 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       style.top = '0px';
       style.left = '0px';
 
-      pixiContainer.current.appendChild(app.canvas);
+      // ✅ FIX: Safely check if the container still exists before appending
+      if (pixiContainer.current) {
+        pixiContainer.current.appendChild(app.canvas);
+      }
+      
       appRef.current = app;
 
       const mainContainer = new PIXI.Container();
