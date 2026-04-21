@@ -28,13 +28,14 @@ const SYMBOL_SIZE = 76;
 const GRID_OFFSET_X = 138; 
 const GRID_OFFSET_Y = 78;
 
+// Preserved perfectly!
 const TILE_POSITIONS = [
-  [ { x: 20, y: 23 }, { x: 20, y: 120.8 }, { x: 20, y: 216.8 }, { x: 20, y: 311.7 }, { x: 20, y: 408 } ],
-  [ { x: 115, y: 23 }, { x: 115, y: 120.8 }, { x: 115, y: 216.8 }, { x: 115, y: 311.7 }, { x: 115, y: 408 } ],
-  [ { x: 211.5, y: 23 }, { x: 211.5, y: 120.8 }, { x: 211.5, y: 216.8 }, { x: 211.5, y: 311.7 }, { x: 211.5, y: 408 } ],
-  [ { x: 308, y: 23 }, { x: 308, y: 120.8 }, { x: 308, y: 216.8 }, { x: 308, y: 311.7 }, { x: 308, y: 408 } ],
-  [ { x: 403, y: 23 }, { x: 403, y: 120.8 }, { x: 403, y: 216.8 }, { x: 403, y: 311.7 }, { x: 403, y: 408 } ],
-  [ { x: 500, y: 23 }, { x: 500, y: 120.8 }, { x: 500, y: 216.8 }, { x: 500, y: 311.7 }, { x: 500, y: 408 } ],
+  [ { x: 20, y: 23 }, { x: 20, y: 121 }, { x: 20, y: 216.8 }, { x: 20, y: 311.5 }, { x: 20, y: 408 } ],
+  [ { x: 115, y: 22 }, { x: 115, y: 121 }, { x: 115, y: 216.8 }, { x: 115, y: 311.5 }, { x: 115, y: 408 } ],
+  [ { x: 211.5, y: 21 }, { x: 211.5, y: 121 }, { x: 211.5, y: 216.8 }, { x: 211.5, y: 311.5 }, { x: 211.5, y: 408 } ],
+  [ { x: 308, y: 20 }, { x: 308, y: 121 }, { x: 308, y: 216.8 }, { x: 308, y: 311.5 }, { x: 308, y: 408 } ],
+  [ { x: 403, y: 19 }, { x: 403, y: 121 }, { x: 403, y: 216.8 }, { x: 403, y: 311.5 }, { x: 403, y: 408 } ],
+  [ { x: 500, y: 18 }, { x: 500, y: 121 }, { x: 500, y: 216.8 }, { x: 500, y: 311.5 }, { x: 500, y: 408 } ],
 ];
 
 const COLS = 6;
@@ -44,7 +45,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
   const pixiContainer = useRef<HTMLDivElement>(null);
   const appRef = useRef<PIXI.Application | null>(null);
   const symbolsRef = useRef<any[][]>([]); 
-  const currentBombMults = useRef<number[]>([]); // 🔥 FIX: Global state to track multipliers perfectly
+  const currentBombMults = useRef<number[]>([]); 
 
   useEffect(() => {
     if (!pixiContainer.current) return;
@@ -262,7 +263,8 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
             if (framePayout > 0) {
               currentSpinWin += framePayout;
-              spinWinText.text = `WIN: ${(currentSpinWin / 1e9).toFixed(2)}`;
+              // ✨ FIX: 4 Decimals
+              spinWinText.text = `WIN: ${(currentSpinWin / 1e9).toFixed(4)}`;
               
               if (spinWinText.alpha === 0) {
                 gsap.to(spinWinText, { alpha: 1, duration: 0.2 });
@@ -282,7 +284,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       };
 
       const playSequence = async () => {
-        currentBombMults.current = []; // Clear for base spin
+        currentBombMults.current = []; 
         await playSpinFrames(playData.baseSpinFrames);
 
         if (playData.triggeredBonus && isMounted) {
@@ -295,13 +297,12 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           for (let i = 0; i < freeSpins.length; i++) {
             if (!isMounted) break;
             
-            trackerText.text = `SPINS: ${freeSpins.length - i}  |  TOTAL: ${(runningBonusTotal / 1e9).toFixed(2)} SOL`;
+            // ✨ FIX: 4 Decimals
+            trackerText.text = `SPINS: ${freeSpins.length - i}  |  TOTAL: ${(runningBonusTotal / 1e9).toFixed(4)} SOL`;
             
             await clearBoard(); 
             
             const fsSpin = freeSpins[i];
-            
-            // 🔥 FIX: Load the correct multipliers for this specific free spin into the queue
             currentBombMults.current = [...(fsSpin.bombMultipliers || [])];
             
             await playSpinFrames(fsSpin.frames);
@@ -310,7 +311,8 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
               const multiString = fsSpin.bombMultipliers.map((m: number) => `${m}x`).join(" + ");
               await showPopupText(`BOMBS: ${multiString}\nTOTAL MULT: ${fsSpin.finalSpinMultiplier}x!`);
 
-              spinWinText.text = `WIN: ${(fsSpin.totalSpinPayout / 1e9).toFixed(2)}`;
+              // ✨ FIX: 4 Decimals
+              spinWinText.text = `WIN: ${(fsSpin.totalSpinPayout / 1e9).toFixed(4)}`;
               spinWinText.style.fill = '#4ade80';
               spinWinText.alpha = 1;
               gsap.fromTo(spinWinText.scale, { x: 1.8, y: 1.8 }, { x: 1, y: 1, duration: 0.6, ease: "elastic.out(1, 0.3)" });
@@ -321,7 +323,8 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             }
 
             runningBonusTotal += (fsSpin.totalSpinPayout || 0);
-            trackerText.text = `SPINS: ${freeSpins.length - i - 1}  |  TOTAL: ${(runningBonusTotal / 1e9).toFixed(2)} SOL`;
+            // ✨ FIX: 4 Decimals
+            trackerText.text = `SPINS: ${freeSpins.length - i - 1}  |  TOTAL: ${(runningBonusTotal / 1e9).toFixed(4)} SOL`;
             
             await new Promise(resolve => setTimeout(resolve, 800));
           }
@@ -370,7 +373,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                currentSymbolContainer.destroy({ children: true });
             }
 
-            // 🔥 FIX: We now use a container to hold BOTH the image and the dynamic text
             const symbolContainer = new PIXI.Container();
             symbolContainer.x = xPos;
             symbolContainer.y = dropFromTop ? yPos - 800 : yPos - 300; 
@@ -383,9 +385,28 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             sprite.anchor.set(0.5);
             symbolContainer.addChild(sprite);
 
-            // ✨ FEATURE: Attach dynamic multiplier text to bombs
+            // ✨ FEATURE: Bell (Scatter) Shaking Effect
+            if (targetSymbolType === 7) {
+                // Pulse size
+                gsap.to(sprite.scale, {
+                    x: 1.15, y: 1.15,
+                    duration: 0.4,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: "sine.inOut"
+                });
+                // Wobble rotation
+                gsap.to(sprite, {
+                    rotation: 0.15,
+                    duration: 0.12,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: "sine.inOut"
+                });
+            }
+
+            // Feature: Bomb Text
             if (targetSymbolType === 8) {
-                // Pop the next assigned multiplier for this spin, fallback to 2 if something goes wrong
                 const multValue = currentBombMults.current.shift() || 2; 
                 
                 const multText = new PIXI.Text({
@@ -393,15 +414,18 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                     style: {
                         fontSize: 28,
                         fontWeight: '900',
-                        fill: '#facc15', // Gold / Yellow
+                        fill: '#facc15', 
                         stroke: { color: '#000000', width: 6 },
                         dropShadow: { color: '#000000', blur: 4, distance: 2 }
                     }
                 });
                 multText.anchor.set(0.5);
+                
+                // ✨ FIX: Move text exactly 30% lower
+                multText.y = 22; 
+                
                 symbolContainer.addChild(multText);
                 
-                // Add a cool pulsating effect to make the bomb feel active!
                 gsap.to(multText.scale, { 
                   x: 1.15, y: 1.15, 
                   duration: 0.5, 
@@ -457,7 +481,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
               const randomTwist = (Math.random() - 0.5) * 0.5; 
               
-              // We now scale the container instead of the width/height
               tl.to(symbolContainer.scale, { 
                 x: 1.4, 
                 y: 1.4, 
@@ -485,8 +508,9 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       }
 
       if (foundWin && framePayout > 0) {
+        // ✨ FIX: 4 Decimals
         const floatText = new PIXI.Text({
-          text: `+${(framePayout / 1e9).toFixed(2)} SOL`,
+          text: `+${(framePayout / 1e9).toFixed(4)} SOL`,
           style: {
             fontSize: 48, 
             fontWeight: '900',

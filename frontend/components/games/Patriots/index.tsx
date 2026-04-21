@@ -127,22 +127,17 @@ export default function Patriots() {
 
   return (
     <div className="flex flex-col items-center justify-center h-full w-full bg-[#0a0f0c] p-6 relative">
-      {/* Game Window Header */}
+      {/* ✨ THEME FIX: Red Title with Red Glow */}
       <div className="absolute top-4 left-4">
-        <h1 className="text-3xl font-black text-purple-400 uppercase tracking-widest drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]">
+        <h1 className="text-3xl font-black text-red-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.6)]">
           McPepe's Patriots
         </h1>
         <p className="text-gray-500 text-sm font-bold tracking-widest">Pay Anywhere • Tumble Mechanism</p>
       </div>
 
-      {/* 1. 'box-content' guarantees the interior is exactly 800x600
-          2. 'overflow-hidden' clips everything exactly at the border
-      */}
-      <div className="box-content w-[800px] h-[600px] border-4 border-purple-900/50 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(168,85,247,0.1)] bg-[#0a0f0c]">
+      {/* ✨ THEME FIX: Blue Border with subtle Red Shadow for American Vibe */}
+      <div className="box-content w-[800px] h-[600px] border-4 border-blue-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(220,38,38,0.2)] bg-[#0a0f0c]">
 
-        {/* 3. Anchored to top-left and sized to overshoot the right/bottom slightly. 
-            This safely crops out the baked-in black edges without cutting off the left details. 
-        */}
         <div 
           className="absolute inset-0 z-0"
           style={{
@@ -153,14 +148,13 @@ export default function Patriots() {
           }}
         />
 
-        {/* Overlay to dim background while waiting for play */}
         {!gameResult && (
           <div className="absolute inset-0 bg-black/60 z-10 pointer-events-none"></div>
         )}
 
         {!isSpinning && !gameResult && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-            <span className="text-purple-400 font-black text-2xl uppercase tracking-widest opacity-80 drop-shadow-lg">
+            <span className="text-blue-400 font-black text-2xl uppercase tracking-widest opacity-80 drop-shadow-lg">
               Waiting for Spin
             </span>
           </div>
@@ -168,13 +162,12 @@ export default function Patriots() {
         
         {isSpinning && !gameResult && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-            <span className="text-purple-400 font-black text-2xl uppercase tracking-widest animate-pulse drop-shadow-lg">
+            <span className="text-red-400 font-black text-2xl uppercase tracking-widest animate-pulse drop-shadow-lg">
               Escrowing Wager...
             </span>
           </div>
         )}
 
-        {/* PIXI Canvas Layer */}
         {gameResult && (
           <div className="absolute inset-0 z-30">
             <PixiGrid 
@@ -185,8 +178,8 @@ export default function Patriots() {
         )}
       </div>
 
-      {/* Control Panel */}
-      <div className="flex gap-6 items-center bg-black border border-purple-900/30 p-4 rounded-xl">
+      {/* ✨ THEME FIX: Control Panel Updates */}
+      <div className="flex gap-6 items-center bg-black border border-blue-900/40 p-4 rounded-xl">
         <div className="flex flex-col">
           <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Base Bet (SOL)</label>
           <input 
@@ -194,18 +187,19 @@ export default function Patriots() {
             step="0.05"
             value={betAmount}
             onChange={(e) => setBetAmount(Number(e.target.value))}
-            className="bg-[#0a0f0c] border border-gray-800 rounded p-2 text-white font-bold w-32 focus:border-purple-500 focus:outline-none"
+            className="bg-[#0a0f0c] border border-gray-800 rounded p-2 text-white font-bold w-32 focus:border-blue-500 focus:outline-none"
             disabled={isSpinning || isAnimating}
           />
         </div>
 
+        {/* Spin Button: Deep Blue */}
         <button 
           onClick={() => handleSpin(false)}
           disabled={isSpinning || isAnimating}
           className={`px-12 py-4 rounded font-black text-xl uppercase tracking-widest transition-all ${
             (isSpinning || isAnimating)
               ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
-              : 'bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:shadow-[0_0_30px_rgba(168,85,247,0.6)]'
+              : 'bg-blue-700 hover:bg-blue-600 text-white shadow-[0_0_20px_rgba(29,78,216,0.4)] hover:shadow-[0_0_30px_rgba(29,78,216,0.6)]'
           }`}
         >
           {isSpinning ? 'Escrowing...' : isAnimating ? 'Tumbling...' : 'Spin'}
@@ -226,7 +220,7 @@ export default function Patriots() {
 
       {gameResult && !isAnimating && (
         <div className="mt-4 text-green-400 font-mono text-sm text-center">
-          <p>Total Payout: {gameResult.payout / anchor.web3.LAMPORTS_PER_SOL} SOL</p>
+          <p>Total Payout: {(gameResult.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(4)} SOL</p>
           {gameResult.triggeredBonus && <p className="text-yellow-400 font-bold">🎉 FREE SPINS COMPLETED! 🎉</p>}
         </div>
       )}
