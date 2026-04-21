@@ -930,28 +930,24 @@ function evaluateGrid(grid) {
     let counts = {};
     let winningSymbols = [];
     let scatterCount = 0;
-    let bombsOnScreen = [];
 
-    // Count symbols
     for (let c = 0; c < 6; c++) {
         for (let r = 0; r < 5; r++) {
             let sym = grid[c][r];
             if (sym === PATRIOTS_SYMBOLS.SCATTER) scatterCount++;
-            else if (sym === PATRIOTS_SYMBOLS.BOMB) bombsOnScreen.push({c, r});
             else {
                 counts[sym] = (counts[sym] || 0) + 1;
             }
         }
     }
 
-    // Determine wins based on "Pay Anywhere 8+"
     for (const [sym, count] of Object.entries(counts)) {
-        if (count >= 8) {
+        if (count >= 8 && parseInt(sym) !== PATRIOTS_SYMBOLS.BOMB) {
             winningSymbols.push(parseInt(sym));
         }
     }
 
-    return { winningSymbols, scatterCount, bombsOnScreen, counts };
+    return { winningSymbols, scatterCount, counts };
 }
 
 function calculatePayout(winningSymbols, counts, betAmount) {
@@ -966,17 +962,24 @@ function calculatePayout(winningSymbols, counts, betAmount) {
 }
 
 function processTumble(grid, winningSymbols, serverSeed, clientSeed, nonce, counterRef, isFreeSpins) {
-    // Remove winning symbols
+    let newBombs = [];
+    
     for (let c = 0; c < 6; c++) {
         grid[c] = grid[c].filter(sym => !winningSymbols.includes(sym));
         
-        // Fill from top
         while (grid[c].length < 5) {
             const floatStr = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
-            grid[c].unshift(generateSymbol(floatStr, isFreeSpins)); // Unshift to drop from top
+            const sym = generateSymbol(floatStr, isFreeSpins);
+            
+            // Generate multiplier perfectly synced with the bomb's spawn
+            if (isFreeSpins && sym === PATRIOTS_SYMBOLS.BOMB) {
+                const bFloat = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+                newBombs.push(getBombMultiplier(bFloat));
+            }
+            grid[c].unshift(sym); 
         }
     }
-    return grid;
+    return { grid, newBombs };
 }
 
 function generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins, forceScatters = false) {
@@ -1018,34 +1021,40 @@ function runSpinCycle(betAmount, serverSeed, clientSeed, nonce, startCounter, is
     let activeTumble = true;
     let bombMultipliers = [];
 
+    // Capture multipliers for bombs generated in the initial grid
+    if (isFreeSpins) {
+        for (let c = 0; c < 6; c++) {
+            for (let r = 0; r < 5; r++) {
+                if (grid[c][r] === PATRIOTS_SYMBOLS.BOMB) {
+                    const bFloat = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+                    bombMultipliers.push(getBombMultiplier(bFloat));
+                }
+            }
+        }
+    }
+
     while (activeTumble) {
-        let { winningSymbols, scatterCount, bombsOnScreen, counts } = evaluateGrid(grid);
+        let { winningSymbols, scatterCount, counts } = evaluateGrid(grid);
         
         if (winningSymbols.length > 0) {
             let tumblePayout = calculatePayout(winningSymbols, counts, betAmount);
             totalSpinPayout += tumblePayout;
 
-            // Deep copy grid for the frame history
             frames.push({
                 grid: JSON.parse(JSON.stringify(grid)),
                 winningSymbols,
                 tumblePayout
             });
 
-            // If it's free spins, collect bombs for the END of the tumble sequence
-            if (isFreeSpins && bombsOnScreen.length > 0) {
-                for (let b of bombsOnScreen) {
-                    const bFloat = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
-                    // USE THE NEW WEIGHTED FUNCTION HERE
-                    const selectedMult = getBombMultiplier(bFloat);
-                    bombMultipliers.push(selectedMult);
-                }
+            // Tumble the board and grab any newly dropped bomb multipliers
+            let tumbleResult = processTumble(grid, winningSymbols, serverSeed, clientSeed, nonce, counterRef, isFreeSpins);
+            grid = tumbleResult.grid;
+            
+            if (isFreeSpins && tumbleResult.newBombs.length > 0) {
+                bombMultipliers.push(...tumbleResult.newBombs);
             }
-
-            // Execute Tumble
-            grid = processTumble(grid, winningSymbols, serverSeed, clientSeed, nonce, counterRef, isFreeSpins);
+            
         } else {
-            // No more wins, tumble sequence ends
             frames.push({
                 grid: JSON.parse(JSON.stringify(grid)),
                 winningSymbols: [],
@@ -1055,7 +1064,6 @@ function runSpinCycle(betAmount, serverSeed, clientSeed, nonce, startCounter, is
         }
     }
 
-    // Apply Bomb Multipliers at the end of the tumble sequence
     let finalSpinMultiplier = 1;
     if (bombMultipliers.length > 0 && totalSpinPayout > 0) {
         finalSpinMultiplier = bombMultipliers.reduce((a, b) => a + b, 0);
