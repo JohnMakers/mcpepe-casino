@@ -30,12 +30,12 @@ const GRID_OFFSET_Y = 78;
 
 // YOUR CUSTOM PRESERVED COORDINATES
 const TILE_POSITIONS = [
-  [ { x: 20, y: 21 }, { x: 20, y: 121 }, { x: 20, y: 216.8 }, { x: 20, y: 311.5 }, { x: 20, y: 408 } ],
-  [ { x: 115, y: 22 }, { x: 115, y: 121 }, { x: 115, y: 216.8 }, { x: 115, y: 311.5 }, { x: 115, y: 408 } ],
-  [ { x: 211.5, y: 21 }, { x: 211.5, y: 121 }, { x: 211.5, y: 216.8 }, { x: 211.5, y: 311.5 }, { x: 211.5, y: 408 } ],
-  [ { x: 308, y: 21 }, { x: 308, y: 121 }, { x: 308, y: 216.8 }, { x: 308, y: 311.5 }, { x: 308, y: 408 } ],
-  [ { x: 403, y: 21 }, { x: 403, y: 121 }, { x: 403, y: 216.8 }, { x: 403, y: 311.5 }, { x: 403, y: 408 } ],
-  [ { x: 500, y: 23 }, { x: 500, y: 121 }, { x: 500, y: 216.8 }, { x: 500, y: 311.5 }, { x: 500, y: 408 } ],
+  [ { x: 20, y: 19 }, { x: 20, y: 121 }, { x: 20, y: 216.8 }, { x: 20, y: 311.5 }, { x: 20, y: 408 } ],
+  [ { x: 115, y: 18 }, { x: 115, y: 121 }, { x: 115, y: 216.8 }, { x: 115, y: 311.5 }, { x: 115, y: 408 } ],
+  [ { x: 211.5, y: 17 }, { x: 211.5, y: 121 }, { x: 211.5, y: 216.8 }, { x: 211.5, y: 311.5 }, { x: 211.5, y: 408 } ],
+  [ { x: 308, y: 16 }, { x: 308, y: 121 }, { x: 308, y: 216.8 }, { x: 308, y: 311.5 }, { x: 308, y: 408 } ],
+  [ { x: 403, y: 15 }, { x: 403, y: 121 }, { x: 403, y: 216.8 }, { x: 403, y: 311.5 }, { x: 403, y: 408 } ],
+  [ { x: 500, y: 14 }, { x: 500, y: 121 }, { x: 500, y: 216.8 }, { x: 500, y: 311.5 }, { x: 500, y: 408 } ],
 ];
 
 const COLS = 6;
@@ -60,7 +60,8 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         antialias: true,
       });
 
-      await PIXI.Assets.load([...Object.values(SYMBOL_MAP)]);
+      // Load all symbols PLUS the new cook modal image
+      await PIXI.Assets.load([...Object.values(SYMBOL_MAP), '/patriots/patriots_cook.png']);
 
       if (!isMounted) {
         app.destroy(true, { children: true, texture: true });
@@ -86,7 +87,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       mainContainer.y = GRID_OFFSET_Y;
       app.stage.addChild(mainContainer);
 
-      // 🔨 THE FIX: Started the mask at -40 instead of -10 so it clears the top row symbols
       const mask = new PIXI.Graphics()
         .rect(-50, -40, CANVAS_WIDTH, CANVAS_HEIGHT + 40) 
         .fill(0xffffff);
@@ -94,6 +94,22 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       mainContainer.mask = mask; 
 
       symbolsRef.current = Array.from({ length: COLS }, () => []);
+
+      // Bonus Tracking Text (Bottom Center)
+      const trackerText = new PIXI.Text({
+        text: "",
+        style: {
+          fontSize: 22,
+          fontWeight: '900',
+          fill: '#ffffff',
+          stroke: { color: '#000000', width: 4 },
+          dropShadow: { color: '#000000', blur: 4, distance: 2 }
+        }
+      });
+      trackerText.anchor.set(0.5, 1);
+      trackerText.x = CANVAS_WIDTH / 2;
+      trackerText.y = CANVAS_HEIGHT - 10;
+      app.stage.addChild(trackerText);
 
       const clearBoard = () => {
         return new Promise<void>((resolve) => {
@@ -157,6 +173,76 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         });
       };
 
+      // ✨ FEATURE 1: The Clickable Bonus Modal
+      const showBonusModal = () => {
+        return new Promise<void>((resolve) => {
+          const modal = new PIXI.Container();
+          
+          // Darken background
+          const overlay = new PIXI.Graphics()
+            .rect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+            .fill({ color: 0x000000, alpha: 0.85 });
+          overlay.eventMode = 'static'; 
+          modal.addChild(overlay);
+
+          // The Cook Image
+          const img = PIXI.Sprite.from('/patriots/patriots_cook.png');
+          img.anchor.set(0.5);
+          img.x = CANVAS_WIDTH / 2;
+          img.y = CANVAS_HEIGHT / 2 - 40;
+          img.scale.set(0.8); // Adjust scale if image is massive
+          modal.addChild(img);
+
+          const title = new PIXI.Text({
+            text: "CONGRATS!\nYOU WON 10 FREE SPINS!",
+            style: {
+              fontSize: 40, fontWeight: '900', fill: '#facc15', align: 'center',
+              stroke: { color: '#000000', width: 6 },
+              dropShadow: { color: '#000000', blur: 10, distance: 4 }
+            }
+          });
+          title.anchor.set(0.5);
+          title.x = CANVAS_WIDTH / 2;
+          title.y = CANVAS_HEIGHT / 2 + 130;
+          modal.addChild(title);
+
+          // Interactive Button
+          const btnContainer = new PIXI.Container();
+          btnContainer.x = CANVAS_WIDTH / 2;
+          btnContainer.y = CANVAS_HEIGHT / 2 + 220;
+          
+          const btnBg = new PIXI.Graphics().roundRect(-120, -30, 240, 60, 15).fill(0x16a34a);
+          const btnText = new PIXI.Text({
+            text: "CONTINUE",
+            style: { fontSize: 24, fontWeight: '900', fill: '#ffffff' }
+          });
+          btnText.anchor.set(0.5);
+          
+          btnContainer.addChild(btnBg, btnText);
+          btnContainer.eventMode = 'static';
+          btnContainer.cursor = 'pointer';
+          
+          btnContainer.on('pointerdown', () => {
+            gsap.to(modal, {
+              alpha: 0, duration: 0.3,
+              onComplete: () => {
+                app.stage.removeChild(modal);
+                modal.destroy({ children: true });
+                resolve();
+              }
+            });
+          });
+          
+          btnContainer.on('pointerover', () => { btnBg.tint = 0x22c55e; });
+          btnContainer.on('pointerout', () => { btnBg.tint = 0xffffff; });
+
+          modal.addChild(btnContainer);
+          modal.alpha = 0;
+          app.stage.addChild(modal);
+          gsap.to(modal, { alpha: 1, duration: 0.4 });
+        });
+      };
+
       const playSpinFrames = async (frames: any[]) => {
         for (let f = 0; f < frames.length; f++) {
           if (!isMounted) break;
@@ -168,7 +254,10 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           if (frame.winningSymbols && frame.winningSymbols.length > 0) {
             await new Promise(resolve => setTimeout(resolve, 900)); 
             if (!isMounted) break;
-            await explodeWinningSymbols(frame.winningSymbols, frame.grid);
+            
+            // Extract the payout from the frame if available
+            const framePayout = frame.payout || frame.stepPayout || frame.winAmount || 0;
+            await explodeWinningSymbols(frame.winningSymbols, frame.grid, framePayout);
           } else {
             await new Promise(resolve => setTimeout(resolve, 750)); 
           }
@@ -179,11 +268,18 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         await playSpinFrames(playData.baseSpinFrames);
 
         if (playData.triggeredBonus && isMounted) {
-          await showPopupText("10 FREE SPINS!");
+          
+          // Trigger the new interactive modal instead of simple text
+          await showBonusModal();
           
           const freeSpins = playData.freeSpinsData || [];
+          let runningBonusTotal = 0;
+
           for (let i = 0; i < freeSpins.length; i++) {
             if (!isMounted) break;
+            
+            // ✨ FEATURE 3: Update Tracker before spin begins
+            trackerText.text = `SPINS LEFT: ${freeSpins.length - i}   |   TOTAL EARNED: ${(runningBonusTotal / 1e9).toFixed(2)} SOL`;
             
             await clearBoard(); 
             
@@ -194,9 +290,16 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
               const multiString = fsSpin.bombMultipliers.map((m: number) => `${m}x`).join(" + ");
               await showPopupText(`BOMBS: ${multiString}\nTOTAL MULT: ${fsSpin.finalSpinMultiplier}x!`);
             }
+
+            // Update tracker with new total after spin concludes
+            runningBonusTotal += (fsSpin.totalSpinPayout || 0);
+            trackerText.text = `SPINS LEFT: ${freeSpins.length - i - 1}   |   TOTAL EARNED: ${(runningBonusTotal / 1e9).toFixed(2)} SOL`;
+            
+            await new Promise(resolve => setTimeout(resolve, 800));
           }
           
           if (isMounted) {
+            trackerText.text = ""; // clear the tracker
             await showPopupText("BONUS COMPLETE!");
           }
         }
@@ -273,9 +376,13 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
     });
   };
 
-  const explodeWinningSymbols = (winningTypes: number[], currentGrid: number[][]) => {
+  // ✨ FEATURE 2: Added framePayout to show floating SOL value
+  const explodeWinningSymbols = (winningTypes: number[], currentGrid: number[][], framePayout: number) => {
     return new Promise<void>((resolve) => {
       const tl = gsap.timeline({ onComplete: () => resolve() });
+
+      let minX = 9999, minY = 9999, maxX = -9999, maxY = -9999;
+      let foundWin = false;
 
       for (let c = 0; c < COLS; c++) {
         for (let r = 0; r < ROWS; r++) {
@@ -283,6 +390,16 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           if (winningTypes.includes(symType)) {
             const sprite = symbolsRef.current[c][r];
             if (sprite) {
+              
+              // Track boundaries to find the center point of the win
+              const globalX = sprite.x + GRID_OFFSET_X;
+              const globalY = sprite.y + GRID_OFFSET_Y;
+              if (globalX < minX) minX = globalX;
+              if (globalX > maxX) maxX = globalX;
+              if (globalY < minY) minY = globalY;
+              if (globalY > maxY) maxY = globalY;
+              foundWin = true;
+
               const randomTwist = (Math.random() - 0.5) * 0.5; 
               
               tl.to(sprite, { 
@@ -304,6 +421,40 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             }
           }
         }
+      }
+
+      // Spawn floating green text if there's a payout
+      if (foundWin && framePayout > 0) {
+        const floatText = new PIXI.Text({
+          text: `+${(framePayout / 1e9).toFixed(2)} SOL`,
+          style: {
+            fontSize: 34,
+            fontWeight: '900',
+            fill: '#4ade80', // Tailwind green-400
+            stroke: { color: '#000000', width: 5 },
+            dropShadow: { color: '#000000', blur: 6, distance: 3 }
+          }
+        });
+        
+        floatText.anchor.set(0.5);
+        // Center the text over the cluster of exploded symbols
+        floatText.x = (minX + maxX) / 2;
+        floatText.y = (minY + maxY) / 2 - 20; 
+        floatText.alpha = 0;
+        
+        if (appRef.current) {
+          appRef.current.stage.addChild(floatText);
+        }
+        
+        // Float up and fade out
+        tl.to(floatText, { alpha: 1, y: floatText.y - 30, duration: 0.3, ease: "power2.out" }, 0);
+        tl.to(floatText, { 
+          alpha: 0, 
+          y: floatText.y - 80, 
+          duration: 0.6, 
+          ease: "power2.in", 
+          onComplete: () => floatText.destroy() 
+        }, 0.5);
       }
     });
   };
