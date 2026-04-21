@@ -25,18 +25,38 @@ const BACKGROUND_IMAGE = '/patriots/patriots_bg.png';
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
+const SYMBOL_SIZE = 76;
 
-// 1. UPDATED SIZING: Smaller symbols, wider padding to fit the painted borders perfectly
+// ============================================================================
+// 🛠️ MANUAL GRID CALIBRATION
+// ============================================================================
+// If a specific column is misaligned, adjust its exact X center-point here:
+const COL_X = [
+  38,   // Col 0 (Far Left)
+  128,  // Col 1
+  218,  // Col 2
+  308,  // Col 3
+  398,  // Col 4
+  488   // Col 5 (Far Right)
+];
+
+// If a specific row is misaligned, adjust its exact Y center-point here:
+const ROW_Y = [
+  38,   // Row 0 (Top)
+  128,  // Row 1
+  218,  // Row 2
+  308,  // Row 3
+  398   // Row 4 (Bottom)
+];
+
+// Master offset for the entire grid container. 
+// Move these to shift the entire block of symbols at once.
+const GRID_OFFSET_X = 138; 
+const GRID_OFFSET_Y = 78;
+// ============================================================================
+
 const COLS = 6;
 const ROWS = 5;
-const SYMBOL_SIZE = 76; // Shrunk from 82
-const PADDING = 14;     // Increased from 8
-const GRID_WIDTH = COLS * (SYMBOL_SIZE + PADDING); // 540
-const GRID_HEIGHT = ROWS * (SYMBOL_SIZE + PADDING); // 450
-
-// 2. UPDATED OFFSETS: Shifted Right (+8) and Up (-12) based on the screenshot
-const GRID_OFFSET_X = (CANVAS_WIDTH - GRID_WIDTH) / 2 + 8;
-const GRID_OFFSET_Y = (CANVAS_HEIGHT - GRID_HEIGHT) / 2 - 12;
 
 export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProps) {
   const pixiContainer = useRef<HTMLDivElement>(null);
@@ -64,6 +84,17 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         return;
       }
 
+      // 📱 MOBILE RESPONSIVENESS
+      // Force the canvas to scale down via CSS while maintaining its internal 800x600 resolution
+      // @ts-ignore
+      app.canvas.style.width = '100%';
+      // @ts-ignore
+      app.canvas.style.height = 'auto';
+      // @ts-ignore
+      app.canvas.style.maxWidth = `${CANVAS_WIDTH}px`;
+      // @ts-ignore
+      app.canvas.style.aspectRatio = `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}`;
+
       // @ts-ignore
       pixiContainer.current.appendChild(app.canvas);
       appRef.current = app;
@@ -81,14 +112,13 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       mainContainer.y = GRID_OFFSET_Y;
       app.stage.addChild(mainContainer);
 
-      // 3. THE CLIPPING MASK
-      // This ensures symbols are invisible outside the grid bounds, preventing them from 
-      // overlapping the UI/art when falling from above.
+      // The Clipping Mask (Ceiling)
       const mask = new PIXI.Graphics()
-        .rect(0, -10, GRID_WIDTH, GRID_HEIGHT + 100) // Allow 10px breathing room at top
+        // Expanded width/height to cover the manual array spreads
+        .rect(-50, -10, CANVAS_WIDTH, CANVAS_HEIGHT) 
         .fill(0xffffff);
       mainContainer.addChild(mask);
-      mainContainer.mask = mask; // Apply the mask to the container
+      mainContainer.mask = mask; 
 
       symbolsRef.current = Array.from({ length: COLS }, () => []);
 
@@ -223,8 +253,10 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       for (let c = 0; c < COLS; c++) {
         for (let r = 0; r < ROWS; r++) {
           const targetSymbolType = targetGrid[c][r];
-          const xPos = c * (SYMBOL_SIZE + PADDING) + (SYMBOL_SIZE / 2);
-          const yPos = r * (SYMBOL_SIZE + PADDING) + (SYMBOL_SIZE / 2);
+          
+          // 🎯 USING THE NEW MANUAL COORDINATE ARRAYS
+          const xPos = COL_X[c];
+          const yPos = ROW_Y[r];
 
           let currentSprite = symbolsRef.current[c][r];
 
@@ -241,7 +273,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             sprite.anchor.set(0.5);
             sprite.x = xPos;
             
-            // Thanks to the mask, we can start them much higher for a longer, cleaner fall!
             sprite.y = dropFromTop ? yPos - 800 : yPos - 300; 
             sprite.alpha = dropFromTop ? 0 : 1;
             
@@ -279,8 +310,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           if (winningTypes.includes(symType)) {
             const sprite = symbolsRef.current[c][r];
             if (sprite) {
-              // 4. JUICY EXPLOSIONS: Adds a random slight twist/rotation while scaling up
-              const randomTwist = (Math.random() - 0.5) * 0.5; // Rotate slightly left or right
+              const randomTwist = (Math.random() - 0.5) * 0.5; 
               
               tl.to(sprite, { 
                 width: SYMBOL_SIZE * 1.4, 
@@ -307,7 +337,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
   return (
     <div className="flex justify-center items-center w-full h-full">
-      <div ref={pixiContainer} className="overflow-hidden rounded-xl shadow-[0_0_40px_rgba(168,85,247,0.3)]" />
+      <div ref={pixiContainer} className="overflow-hidden rounded-xl shadow-[0_0_40px_rgba(168,85,247,0.3)] w-full max-w-[800px]" />
     </div>
   );
 }
