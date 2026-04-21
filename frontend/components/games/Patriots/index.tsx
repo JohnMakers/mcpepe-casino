@@ -136,19 +136,19 @@ export default function Patriots() {
       </div>
 
       {/* 1. 'box-content' guarantees the interior is exactly 800x600
-        2. 'overflow-hidden' clips everything exactly at the border
+          2. 'overflow-hidden' clips everything exactly at the border
       */}
       <div className="box-content w-[800px] h-[600px] border-4 border-purple-900/50 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(168,85,247,0.1)] bg-[#0a0f0c]">
 
-        {/* 3. 'scale-[1.03]' slightly zooms the background image, physically cropping out 
-          any black lines baked into the edges of the patriots_bg.png file 
+        {/* 3. Anchored to top-left and sized to overshoot the right/bottom slightly. 
+            This safely crops out the baked-in black edges without cutting off the left details. 
         */}
         <div 
-          className="absolute inset-0 z-0 scale-[1.03]"
+          className="absolute inset-0 z-0"
           style={{
             backgroundImage: "url('/patriots/patriots_bg.png')",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
+            backgroundSize: "102% 102%",
+            backgroundPosition: "top left",
             backgroundRepeat: "no-repeat"
           }}
         />
