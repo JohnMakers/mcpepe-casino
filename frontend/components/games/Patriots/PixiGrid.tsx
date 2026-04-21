@@ -30,12 +30,12 @@ const GRID_OFFSET_Y = 78;
 
 // YOUR CUSTOM PRESERVED COORDINATES
 const TILE_POSITIONS = [
-  [ { x: 20, y: 19 }, { x: 20, y: 121 }, { x: 20, y: 216.8 }, { x: 20, y: 311.5 }, { x: 20, y: 408 } ],
-  [ { x: 115, y: 18 }, { x: 115, y: 121 }, { x: 115, y: 216.8 }, { x: 115, y: 311.5 }, { x: 115, y: 408 } ],
-  [ { x: 211.5, y: 17 }, { x: 211.5, y: 121 }, { x: 211.5, y: 216.8 }, { x: 211.5, y: 311.5 }, { x: 211.5, y: 408 } ],
-  [ { x: 308, y: 16 }, { x: 308, y: 121 }, { x: 308, y: 216.8 }, { x: 308, y: 311.5 }, { x: 308, y: 408 } ],
-  [ { x: 403, y: 15 }, { x: 403, y: 121 }, { x: 403, y: 216.8 }, { x: 403, y: 311.5 }, { x: 403, y: 408 } ],
-  [ { x: 500, y: 14 }, { x: 500, y: 121 }, { x: 500, y: 216.8 }, { x: 500, y: 311.5 }, { x: 500, y: 408 } ],
+  [ { x: 20, y: 23 }, { x: 20, y: 121 }, { x: 20, y: 216.8 }, { x: 20, y: 311.5 }, { x: 20, y: 408 } ],
+  [ { x: 115, y: 23 }, { x: 115, y: 121 }, { x: 115, y: 216.8 }, { x: 115, y: 311.5 }, { x: 115, y: 408 } ],
+  [ { x: 211.5, y: 23 }, { x: 211.5, y: 121 }, { x: 211.5, y: 216.8 }, { x: 211.5, y: 311.5 }, { x: 211.5, y: 408 } ],
+  [ { x: 308, y: 23 }, { x: 308, y: 121 }, { x: 308, y: 216.8 }, { x: 308, y: 311.5 }, { x: 308, y: 408 } ],
+  [ { x: 403, y: 23 }, { x: 403, y: 121 }, { x: 403, y: 216.8 }, { x: 403, y: 311.5 }, { x: 403, y: 408 } ],
+  [ { x: 500, y: 23 }, { x: 500, y: 121 }, { x: 500, y: 216.8 }, { x: 500, y: 311.5 }, { x: 500, y: 408 } ],
 ];
 
 const COLS = 6;
@@ -178,19 +178,22 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         return new Promise<void>((resolve) => {
           const modal = new PIXI.Container();
           
-          // Darken background
           const overlay = new PIXI.Graphics()
             .rect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
             .fill({ color: 0x000000, alpha: 0.85 });
           overlay.eventMode = 'static'; 
           modal.addChild(overlay);
 
-          // The Cook Image
+          // 🔨 THE FIX: Bulletproof Image Scaling 
           const img = PIXI.Sprite.from('/patriots/patriots_cook.png');
           img.anchor.set(0.5);
           img.x = CANVAS_WIDTH / 2;
           img.y = CANVAS_HEIGHT / 2 - 40;
-          img.scale.set(0.8); // Adjust scale if image is massive
+          
+          // Force it to a maximum width of 350px so it fits safely, then preserve the aspect ratio
+          img.width = 350;
+          img.scale.y = img.scale.x; 
+          
           modal.addChild(img);
 
           const title = new PIXI.Text({
@@ -203,13 +206,12 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           });
           title.anchor.set(0.5);
           title.x = CANVAS_WIDTH / 2;
-          title.y = CANVAS_HEIGHT / 2 + 130;
+          title.y = CANVAS_HEIGHT / 2 + 150;
           modal.addChild(title);
 
-          // Interactive Button
           const btnContainer = new PIXI.Container();
           btnContainer.x = CANVAS_WIDTH / 2;
-          btnContainer.y = CANVAS_HEIGHT / 2 + 220;
+          btnContainer.y = CANVAS_HEIGHT / 2 + 240;
           
           const btnBg = new PIXI.Graphics().roundRect(-120, -30, 240, 60, 15).fill(0x16a34a);
           const btnText = new PIXI.Text({
@@ -255,7 +257,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             await new Promise(resolve => setTimeout(resolve, 900)); 
             if (!isMounted) break;
             
-            // Extract the payout from the frame if available
             const framePayout = frame.payout || frame.stepPayout || frame.winAmount || 0;
             await explodeWinningSymbols(frame.winningSymbols, frame.grid, framePayout);
           } else {
@@ -269,7 +270,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
         if (playData.triggeredBonus && isMounted) {
           
-          // Trigger the new interactive modal instead of simple text
           await showBonusModal();
           
           const freeSpins = playData.freeSpinsData || [];
@@ -278,7 +278,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           for (let i = 0; i < freeSpins.length; i++) {
             if (!isMounted) break;
             
-            // ✨ FEATURE 3: Update Tracker before spin begins
+            // Updates tracker with precise spin count math
             trackerText.text = `SPINS LEFT: ${freeSpins.length - i}   |   TOTAL EARNED: ${(runningBonusTotal / 1e9).toFixed(2)} SOL`;
             
             await clearBoard(); 
@@ -291,7 +291,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
               await showPopupText(`BOMBS: ${multiString}\nTOTAL MULT: ${fsSpin.finalSpinMultiplier}x!`);
             }
 
-            // Update tracker with new total after spin concludes
             runningBonusTotal += (fsSpin.totalSpinPayout || 0);
             trackerText.text = `SPINS LEFT: ${freeSpins.length - i - 1}   |   TOTAL EARNED: ${(runningBonusTotal / 1e9).toFixed(2)} SOL`;
             
@@ -299,7 +298,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           }
           
           if (isMounted) {
-            trackerText.text = ""; // clear the tracker
+            trackerText.text = ""; 
             await showPopupText("BONUS COMPLETE!");
           }
         }
@@ -376,7 +375,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
     });
   };
 
-  // ✨ FEATURE 2: Added framePayout to show floating SOL value
   const explodeWinningSymbols = (winningTypes: number[], currentGrid: number[][], framePayout: number) => {
     return new Promise<void>((resolve) => {
       const tl = gsap.timeline({ onComplete: () => resolve() });
@@ -391,7 +389,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             const sprite = symbolsRef.current[c][r];
             if (sprite) {
               
-              // Track boundaries to find the center point of the win
               const globalX = sprite.x + GRID_OFFSET_X;
               const globalY = sprite.y + GRID_OFFSET_Y;
               if (globalX < minX) minX = globalX;
@@ -423,21 +420,19 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         }
       }
 
-      // Spawn floating green text if there's a payout
       if (foundWin && framePayout > 0) {
         const floatText = new PIXI.Text({
           text: `+${(framePayout / 1e9).toFixed(2)} SOL`,
           style: {
             fontSize: 34,
             fontWeight: '900',
-            fill: '#4ade80', // Tailwind green-400
+            fill: '#4ade80', 
             stroke: { color: '#000000', width: 5 },
             dropShadow: { color: '#000000', blur: 6, distance: 3 }
           }
         });
         
         floatText.anchor.set(0.5);
-        // Center the text over the cluster of exploded symbols
         floatText.x = (minX + maxX) / 2;
         floatText.y = (minY + maxY) / 2 - 20; 
         floatText.alpha = 0;
@@ -446,7 +441,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           appRef.current.stage.addChild(floatText);
         }
         
-        // Float up and fade out
         tl.to(floatText, { alpha: 1, y: floatText.y - 30, duration: 0.3, ease: "power2.out" }, 0);
         tl.to(floatText, { 
           alpha: 0, 
