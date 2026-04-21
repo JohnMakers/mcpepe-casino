@@ -7,20 +7,22 @@ interface PixiGridProps {
   onAnimationComplete: () => void;
 }
 
-// 1. UPDATED SYMBOL MAP TO POINT TO YOUR CUSTOM IMAGES
 const SYMBOL_MAP: Record<number, string> = {
-  0: '/patriots/patriots_beer.png',       // GOLDEN_MCPEPE
-  1: '/patriots/patriots_torch.png',      // PEPE_HEART
-  2: '/patriots/patriots_musket.png',     // PURPLE_DIAMOND
-  3: '/patriots/patriots_waveflag.png',   // BLUE_OVAL
-  4: '/patriots/patriots_truck.png',      // GREEN_GEM
-  5: '/patriots/patriots_salute.png',     // APPLE
-  6: '/patriots/patriots_lincoln.png',    // MELON
-  7: '/patriots/patriots_bell.png',       // SCATTER
-  8: '/patriots/patriots_bomb.png',       // BOMB (Ensure you have this image!)
-  9: '/patriots/patriots_eagle.png',      // GRAPE
-  10: '/patriots/patriots_limo.png',      // BANANA
+  0: '/patriots/patriots_beer.png',       
+  1: '/patriots/patriots_torch.png',      
+  2: '/patriots/patriots_musket.png',     
+  3: '/patriots/patriots_waveflag.png',   
+  4: '/patriots/patriots_truck.png',      
+  5: '/patriots/patriots_salute.png',     
+  6: '/patriots/patriots_lincoln.png',    
+  7: '/patriots/patriots_bell.png',       
+  8: '/patriots/patriots_bomb.png',       
+  9: '/patriots/patriots_eagle.png',      
+  10: '/patriots/patriots_limo.png',      
 };
+
+// 1. ADDED BACKGROUND CONSTANT
+const BACKGROUND_IMAGE = '/patriots/patriots_bg.png';
 
 const COLS = 6;
 const ROWS = 5;
@@ -32,7 +34,7 @@ const GRID_HEIGHT = ROWS * (SYMBOL_SIZE + PADDING);
 export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProps) {
   const pixiContainer = useRef<HTMLDivElement>(null);
   const appRef = useRef<PIXI.Application | null>(null);
-  const symbolsRef = useRef<any[][]>([]); // Changed to any[][] to hold Sprites
+  const symbolsRef = useRef<any[][]>([]); 
 
   useEffect(() => {
     if (!pixiContainer.current) return;
@@ -44,12 +46,12 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       await app.init({
         width: GRID_WIDTH,
         height: GRID_HEIGHT,
-        backgroundAlpha: 0, 
+        backgroundAlpha: 1, 
         antialias: true,
       });
 
-      // 2. PRELOAD ASSETS: Ensures buttery smooth drops without visual pop-in
-      await PIXI.Assets.load(Object.values(SYMBOL_MAP));
+      // 2. PRELOAD BACKGROUND ALONG WITH SYMBOLS
+      await PIXI.Assets.load([...Object.values(SYMBOL_MAP), BACKGROUND_IMAGE]);
 
       if (!isMounted) {
         app.destroy(true, { children: true, texture: true });
@@ -60,7 +62,25 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       pixiContainer.current.appendChild(app.canvas);
       appRef.current = app;
 
+      // 3. DRAW BACKGROUND FIRST (So it sits at the very back)
+      const bgSprite = PIXI.Sprite.from(BACKGROUND_IMAGE);
+      bgSprite.width = GRID_WIDTH;
+      bgSprite.height = GRID_HEIGHT;
+      // Center it perfectly
+      bgSprite.anchor.set(0.5);
+      bgSprite.x = GRID_WIDTH / 2;
+      bgSprite.y = GRID_HEIGHT / 2;
+      app.stage.addChild(bgSprite);
+
+      // 4. DRAW SYMBOL CONTAINER OVER IT
       const mainContainer = new PIXI.Container();
+      
+      // Optional: If your background has a specific "border" drawn on it, 
+      // you can shrink the symbol grid slightly to fit inside it perfectly.
+      // mainContainer.scale.set(0.95); 
+      // mainContainer.x = (GRID_WIDTH * 0.05) / 2;
+      // mainContainer.y = (GRID_HEIGHT * 0.05) / 2;
+
       app.stage.addChild(mainContainer);
 
       symbolsRef.current = Array.from({ length: COLS }, () => []);
@@ -76,7 +96,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                 gsap.to(sprite, {
                   y: sprite.y + 500,
                   alpha: 0,
-                  duration: 0.3,
+                  duration: 0.4, // Slowed down clear board
                   ease: "power2.in",
                   onComplete: () => {
                     mainContainer.removeChild(sprite);
@@ -136,11 +156,11 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           await renderGridFrame(app, mainContainer, frame.grid, isFirstFrame);
 
           if (frame.winningSymbols && frame.winningSymbols.length > 0) {
-            await new Promise(resolve => setTimeout(resolve, 600));
+            await new Promise(resolve => setTimeout(resolve, 800)); // Wait slightly longer before exploding to admire the hit
             if (!isMounted) break;
             await explodeWinningSymbols(frame.winningSymbols, frame.grid);
           } else {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 600));
           }
         }
       };
@@ -201,7 +221,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
           let currentSprite = symbolsRef.current[c][r];
 
-          // 3. RENDER SPRITE INSTEAD OF TEXT
           if (!currentSprite || currentSprite.symbolType !== targetSymbolType) {
             if (currentSprite) {
                container.removeChild(currentSprite);
@@ -210,7 +229,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
             const sprite = PIXI.Sprite.from(SYMBOL_MAP[targetSymbolType]);
             
-            // Size them to 80x80 to fit inside the 90px grid cell perfectly
             sprite.width = 80;
             sprite.height = 80;
             sprite.anchor.set(0.5);
@@ -218,21 +236,22 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             sprite.y = dropFromTop ? yPos - 600 : yPos - 200; 
             sprite.alpha = dropFromTop ? 0 : 1;
             
-            // Tag the sprite with its ID so we know if it exploded
             (sprite as any).symbolType = targetSymbolType;
             
             container.addChild(sprite);
             symbolsRef.current[c][r] = sprite;
 
+            // 5. ANIMATION SLOWDOWN: Increased duration and delay for initial drop
             tl.to(sprite, {
               y: yPos,
               alpha: 1,
-              duration: 0.4,
+              duration: 0.55, // ~30% Slower than 0.4
               ease: "bounce.out",
-              delay: dropFromTop ? (c * 0.05) + (r * 0.02) : 0 
+              delay: dropFromTop ? (c * 0.065) + (r * 0.025) : 0 // Slower stagger
             }, 0);
           } else {
-            tl.to(currentSprite, { y: yPos, duration: 0.3, ease: "power2.out" }, 0);
+            // 6. ANIMATION SLOWDOWN: Increased duration for cascading tumbles
+            tl.to(currentSprite, { y: yPos, duration: 0.45, ease: "power2.out" }, 0); // ~30% Slower than 0.3
           }
         }
       }
@@ -249,9 +268,9 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           if (winningTypes.includes(symType)) {
             const sprite = symbolsRef.current[c][r];
             if (sprite) {
-              // 4. ANIMATE EXPLOSION (Scale from Current Width/Height)
-              tl.to(sprite, { width: 120, height: 120, duration: 0.2, ease: "power2.out" }, 0);
-              tl.to(sprite, { alpha: 0, y: sprite.y - 30, duration: 0.2, ease: "power2.in" }, 0.2);
+              // Slower, more impactful explosion
+              tl.to(sprite, { width: 120, height: 120, duration: 0.25, ease: "power2.out" }, 0);
+              tl.to(sprite, { alpha: 0, y: sprite.y - 30, duration: 0.25, ease: "power2.in" }, 0.25);
               
               symbolsRef.current[c][r] = null; 
             }
@@ -263,7 +282,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
   return (
     <div className="flex justify-center items-center w-full h-full">
-      <div ref={pixiContainer} className="overflow-hidden rounded-xl shadow-[0_0_40px_rgba(168,85,247,0.2)]" />
+      <div ref={pixiContainer} className="overflow-hidden rounded-xl shadow-[0_0_40px_rgba(168,85,247,0.2)] border border-purple-900/50" />
     </div>
   );
 }
