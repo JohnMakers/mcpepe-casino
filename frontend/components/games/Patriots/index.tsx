@@ -4,6 +4,7 @@ import { PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import idl from '../../../idl.json'; 
 import PixiGrid from './PixiGrid';
+import Image from 'next/image'; // 👈 ADD THIS IMPORT
 
 const PROGRAM_ID = new PublicKey(idl.metadata.address);
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
@@ -106,7 +107,7 @@ export default function Patriots() {
           clientSeed,
           nonce,
           betAmount: betLamports,
-          isBonusBuy // Pass the flag to the backend
+          isBonusBuy 
         })
       });
 
@@ -137,22 +138,31 @@ export default function Patriots() {
         <p className="text-gray-500 text-sm font-bold tracking-widest">Pay Anywhere • Tumble Mechanism</p>
       </div>
 
-      {/* The 6x5 Grid Area - NOW WITH TAILWIND BACKGROUND */}
-      <div className="w-[800px] h-[600px] border-4 border-purple-900/50 bg-[url('/patriots/patriots_bg.png')] bg-cover bg-center bg-no-repeat rounded-xl mb-8 flex items-center justify-center relative overflow-hidden shadow-[0_0_30px_rgba(168,85,247,0.1)]">
+      {/* The 6x5 Grid Area - NATIVE NEXT.JS IMAGE FIX */}
+      <div className="w-[800px] h-[600px] border-4 border-purple-900/50 rounded-xl mb-8 flex items-center justify-center relative overflow-hidden shadow-[0_0_30px_rgba(168,85,247,0.1)]">
         
+        {/* Bulletproof Native Image Fill */}
+        <Image 
+          src="/patriots/patriots_bg.png"
+          alt="Patriots Game Background"
+          fill
+          className="object-cover z-0"
+          priority
+        />
+
         {/* Overlay to dim background while waiting for play so text is readable */}
         {!gameResult && (
           <div className="absolute inset-0 bg-black/60 z-0"></div>
         )}
 
         {!isSpinning && !gameResult && (
-          <div className="text-purple-400 font-black text-2xl uppercase tracking-widest opacity-80 z-10">
+          <div className="text-purple-400 font-black text-2xl uppercase tracking-widest opacity-80 z-10 relative">
             Waiting for Spin
           </div>
         )}
         
         {isSpinning && !gameResult && (
-          <div className="text-purple-400 font-black text-2xl uppercase tracking-widest animate-pulse z-10">
+          <div className="text-purple-400 font-black text-2xl uppercase tracking-widest animate-pulse z-10 relative">
             Escrowing Wager...
           </div>
         )}
@@ -181,7 +191,6 @@ export default function Patriots() {
           />
         </div>
 
-        {/* Normal Spin Button */}
         <button 
           onClick={() => handleSpin(false)}
           disabled={isSpinning || isAnimating}
@@ -194,7 +203,6 @@ export default function Patriots() {
           {isSpinning ? 'Escrowing...' : isAnimating ? 'Tumbling...' : 'Spin'}
         </button>
 
-        {/* Buy Bonus Button */}
         <button 
           onClick={() => handleSpin(true)}
           disabled={isSpinning || isAnimating}
@@ -208,7 +216,6 @@ export default function Patriots() {
         </button>
       </div>
 
-      {/* Result Debugger */}
       {gameResult && !isAnimating && (
         <div className="mt-4 text-green-400 font-mono text-sm text-center">
           <p>Total Payout: {gameResult.payout / anchor.web3.LAMPORTS_PER_SOL} SOL</p>

@@ -25,13 +25,9 @@ const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 const SYMBOL_SIZE = 76;
 
-// ============================================================================
-// 🛠️ ABSOLUTE PIXEL CALIBRATION MATRIX
-// ============================================================================
 const GRID_OFFSET_X = 138; 
 const GRID_OFFSET_Y = 78;
 
-// Tweak these { x, y } coordinates to nudge individual tiles into their painted slots
 const TILE_POSITIONS = [
   [ { x: 38, y: 38 }, { x: 38, y: 128 }, { x: 38, y: 218 }, { x: 38, y: 308 }, { x: 38, y: 398 } ],
   [ { x: 128, y: 38 }, { x: 128, y: 128 }, { x: 128, y: 218 }, { x: 128, y: 308 }, { x: 128, y: 398 } ],
@@ -40,7 +36,6 @@ const TILE_POSITIONS = [
   [ { x: 398, y: 38 }, { x: 398, y: 128 }, { x: 398, y: 218 }, { x: 398, y: 308 }, { x: 398, y: 398 } ],
   [ { x: 488, y: 38 }, { x: 488, y: 128 }, { x: 488, y: 218 }, { x: 488, y: 308 }, { x: 488, y: 398 } ],
 ];
-// ============================================================================
 
 const COLS = 6;
 const ROWS = 5;
@@ -60,11 +55,10 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       await app.init({
         width: CANVAS_WIDTH,
         height: CANVAS_HEIGHT,
-        backgroundAlpha: 0, // TRANSPARENT to let Tailwind background show through
+        backgroundAlpha: 0, // TRANSPARENT
         antialias: true,
       });
 
-      // Load all symbol textures
       await PIXI.Assets.load([...Object.values(SYMBOL_MAP)]);
 
       if (!isMounted) {
@@ -72,21 +66,15 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         return;
       }
 
-      // 📱 FORCE HTML CANVAS TO COVER ENTIRE COMPONENT BOUNDS
-      // @ts-ignore
-      app.canvas.style.width = '100%';
-      // @ts-ignore
-      app.canvas.style.height = '100%';
-      // @ts-ignore
-      app.canvas.style.objectFit = 'cover'; 
-      // @ts-ignore
-      app.canvas.style.position = 'absolute';
-      // @ts-ignore
-      app.canvas.style.top = '0';
-      // @ts-ignore
-      app.canvas.style.left = '0';
+      // 📱 BULLETPROOF CANVAS CSS FIX 
+      const style = app.canvas.style as CSSStyleDeclaration;
+      style.width = '100%';
+      style.height = '100%';
+      style.display = 'block'; // 👈 THIS kills the bottom/right inline gap bug
+      style.position = 'absolute';
+      style.top = '0px';
+      style.left = '0px';
 
-      // @ts-ignore
       pixiContainer.current.appendChild(app.canvas);
       appRef.current = app;
 
