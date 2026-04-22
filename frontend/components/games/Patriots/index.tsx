@@ -4,6 +4,8 @@ import { PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import idl from '../../../idl.json'; 
 import PixiGrid from './PixiGrid';
+import ProvablyFairModal from '../../modals/ProvablyFairModal';
+import InfoModal from './InfoModal';
 
 const PROGRAM_ID = new PublicKey(idl.metadata.address);
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
@@ -18,6 +20,11 @@ export default function Patriots() {
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [gameResult, setGameResult] = useState<any>(null);
+
+  // ✨ Modal States & Trackers
+  const [isInfoOpen, setIsInfoOpen] = useState<boolean>(false);
+  const [isPFOpen, setIsPFOpen] = useState<boolean>(false);
+  const [pfData, setPfData] = useState({ hash: '', seed: '' });
 
   const handleSpin = async (isBonusBuy: boolean = false) => {
     if (!publicKey || !signTransaction || !sendTransaction) {
@@ -43,6 +50,9 @@ export default function Patriots() {
       });
       const seedData = await seedRes.json();
       if (!seedData.success) throw new Error(seedData.error || "Failed to fetch seed");
+
+      // Update Provably Fair Hash State
+      setPfData(prev => ({ ...prev, hash: seedData.serverSeedHash, seed: '' }));
 
       // 2. Generate Random Client Seed & Nonce
       const clientSeed = Math.random().toString(36).substring(2, 15);
@@ -121,6 +131,9 @@ export default function Patriots() {
 
       console.log("Received Math Frames:", playData);
       
+      // Update Provably Fair Final Seed State
+      setPfData(prev => ({ ...prev, seed: playData.serverSeed }));
+
       // 5. Trigger the Animation sequence
       setGameResult(playData);
       setIsAnimating(true);
@@ -136,14 +149,47 @@ export default function Patriots() {
   return (
     <div className="flex flex-col items-center justify-start min-h-screen w-full bg-[#0a0f0c] p-6 pb-20 relative overflow-y-auto">
       
-      {/* ✨ TITLE FIX: Centered above the component, not absolute */}
-      <div className="flex flex-col items-center text-center mb-6 mt-4">
-        <h1 className="text-4xl font-black text-red-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.6)]">
-          McPepe's Patriots
-        </h1>
-        <p className="text-gray-400 text-sm font-bold tracking-widest mt-2 uppercase">
-          Pay Anywhere • Liberty Mechanism (Tumble)
-        </p>
+      <ProvablyFairModal 
+        isOpen={isPFOpen} 
+        onClose={() => setIsPFOpen(false)} 
+        serverSeed={pfData.seed} 
+        serverSeedHash={pfData.hash} 
+      />
+      
+      <InfoModal 
+        isOpen={isInfoOpen} 
+        onClose={() => setIsInfoOpen(false)} 
+      />
+
+      {/* ✨ HEADER FIX: Placed inline with title block */}
+      <div className="w-[800px] flex justify-between items-end mb-6 mt-4 shrink-0">
+        <div className="flex flex-col text-left">
+          <h1 className="text-4xl font-black text-red-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.6)]">
+            McPepe's Patriots
+          </h1>
+          <p className="text-gray-400 text-sm font-bold tracking-widest mt-2 uppercase">
+            Pay Anywhere • Liberty Mechanism (Tumble)
+          </p>
+        </div>
+        
+        {/* Buttons for Modals */}
+        <div className="flex items-center gap-3 pb-1">
+          <button 
+            onClick={() => setIsPFOpen(true)} 
+            className="flex items-center gap-2 bg-[#0d1310] hover:bg-green-900/30 border border-green-800/50 text-green-400 px-4 py-2 rounded-lg text-xs font-bold tracking-widest transition-all"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            FAIR
+          </button>
+          <button 
+            onClick={() => setIsInfoOpen(true)} 
+            className="flex items-center justify-center bg-[#0d1310] hover:bg-blue-900/30 border border-blue-800/50 text-blue-400 w-10 h-10 rounded-full font-black text-lg transition-all"
+          >
+            ?
+          </button>
+        </div>
       </div>
 
       <div className="box-content w-[800px] h-[600px] border-4 border-blue-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(220,38,38,0.2)] bg-[#0a0f0c] shrink-0">
@@ -193,7 +239,6 @@ export default function Patriots() {
           <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Bet</label>
           <div className="flex items-center gap-2">
             
-            {/* ✨ INPUT FIX: Block negative signs, expand width */}
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">◎</span>
               <input 
@@ -202,11 +247,10 @@ export default function Patriots() {
                 min="0.01"
                 value={betInput}
                 onChange={(e) => {
-                  const val = e.target.value.replace(/-/g, ''); // Strip minus signs on paste
+                  const val = e.target.value.replace(/-/g, ''); 
                   setBetInput(val);
                 }}
                 onKeyDown={(e) => {
-                  // Physically prevent typing minus or 'e' (scientific notation)
                   if (e.key === '-' || e.key === 'e') {
                     e.preventDefault();
                   }
@@ -262,32 +306,6 @@ export default function Patriots() {
           <span className="text-lg">Buy Bonus ({Math.round(betAmount * 100 * 100) / 100} SOL)</span>
           <span className="text-xs font-bold opacity-90 mt-0.5">(10 SPINS)</span>
         </button>
-      </div>
-
-      {gameResult && !isAnimating && (
-        <div className="mt-4 text-green-400 font-mono text-sm text-center shrink-0">
-          <p>Total Payout: {(gameResult.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(4)} SOL</p>
-          {gameResult.triggeredBonus && <p className="text-yellow-400 font-bold">🎉 FREE SPINS COMPLETED! 🎉</p>}
-        </div>
-      )}
-
-      {/* ✨ PROVABLY FAIR FIX: Educational block below controls */}
-      <div className="mt-8 max-w-[800px] w-full bg-[#0d1310] border border-blue-900/30 p-6 rounded-xl text-left shadow-lg shrink-0">
-        <h3 className="text-blue-400 font-black tracking-widest uppercase mb-3 flex items-center gap-2">
-          {/* Shield Icon */}
-          <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-          </svg>
-          Provably Fair
-        </h3>
-        <p className="text-gray-400 text-sm leading-relaxed">
-          This slot is strictly 100% Provably Fair. Every tumble is generated deterministically using a cryptographic combination of a 
-          <span className="text-gray-300 font-bold"> Server Seed</span> (hashed before you spin), your 
-          <span className="text-gray-300 font-bold"> Client Seed</span>, and an incrementing 
-          <span className="text-gray-300 font-bold"> Nonce</span>. 
-          This mathematical proof guarantees that outcomes cannot be altered, predicted, or tampered with prior to your spin. 
-          All wagers and payouts are fully secured and verifiable on the Solana blockchain.
-        </p>
       </div>
 
     </div>
