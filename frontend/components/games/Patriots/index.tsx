@@ -14,14 +14,14 @@ export default function Patriots() {
   const { connection } = useConnection();
   const { publicKey, signTransaction, sendTransaction } = useWallet();
   
-  const [betInput, setBetInput] = useState<string>("0.10");
+  // Start with 4 decimals by default
+  const [betInput, setBetInput] = useState<string>("0.1000");
   const betAmount = Number(betInput) || 0; 
   
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [gameResult, setGameResult] = useState<any>(null);
 
-  // ✨ Modal States & Trackers
   const [isInfoOpen, setIsInfoOpen] = useState<boolean>(false);
   const [isPFOpen, setIsPFOpen] = useState<boolean>(false);
   const [pfData, setPfData] = useState({ hash: '', seed: '' });
@@ -32,8 +32,9 @@ export default function Patriots() {
       return;
     }
     
-    if (betAmount < 0.01) {
-      alert("Minimum bet is 0.01 SOL");
+    // Lowered hard stop to allow bets like 0.008
+    if (betAmount < 0.0001) {
+      alert("Minimum bet is 0.0001 SOL");
       return;
     }
 
@@ -42,7 +43,6 @@ export default function Patriots() {
       setGameResult(null);
       setIsAnimating(false);
 
-      // 1. Fetch VRF Seed from Backend
       const seedRes = await fetch(`${BACKEND_URL}/api/patriots/seed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -53,16 +53,14 @@ export default function Patriots() {
 
       setPfData(prev => ({ ...prev, hash: seedData.serverSeedHash, seed: '' }));
 
-      // 2. Generate Random Client Seed & Nonce
       const clientSeed = Math.random().toString(36).substring(2, 15);
       const nonce = Math.floor(Math.random() * 1000000);
       
       const totalWager = isBonusBuy ? betAmount * 100 : betAmount;
       
-      // 🔥 CRITICAL FIX 1: Math.floor prevents JS floating point math from crashing the Solana Transaction Builder
+      // 🔥 CRITICAL: Math.floor prevents JS floating point math from causing Phantom simulation crashes
       const betLamports = Math.floor(totalWager * anchor.web3.LAMPORTS_PER_SOL);
 
-      // 3. Prepare Smart Contract Transaction
       const serverSeedHashBuffer = Buffer.from(seedData.serverSeedHash, 'hex');
       const hashArray = Array.from(serverSeedHashBuffer);
 
@@ -113,7 +111,6 @@ export default function Patriots() {
 
       console.log("On-chain wager secured! Tx:", txId);
 
-      // 4. Request the outcome and the math frames from the Backend Engine
       const playRes = await fetch(`${BACKEND_URL}/api/patriots/play`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -130,18 +127,14 @@ export default function Patriots() {
       const playData = await playRes.json();
       if (!playData.success) throw new Error(playData.error || "Backend engine failed");
 
-      console.log("Received Math Frames:", playData);
-      
       setPfData(prev => ({ ...prev, seed: playData.serverSeed }));
       setGameResult(playData);
       setIsAnimating(true);
 
     } catch (error: any) {
       console.error("Spin Error:", error);
-      
-      // 🔥 CRITICAL FIX 2: Intercept the simulation error so the user knows what went wrong
       if (error.message?.includes("WalletSendTransactionError")) {
-         alert(`Transaction Rejected! ⚠️ If you are buying a Bonus, it costs 100x your base bet. Ensure your wallet has enough SOL to cover it, or try lowering your base bet to 0.01 SOL.`);
+         alert(`Transaction Rejected! ⚠️ If you are buying a Bonus, it costs 100x your base bet. Ensure your wallet has enough SOL to cover it.`);
       } else {
          alert(error.message);
       }
@@ -165,7 +158,6 @@ export default function Patriots() {
         onClose={() => setIsInfoOpen(false)} 
       />
 
-      {/* ✨ HEADER FIX: Placed inline with title block */}
       <div className="w-[800px] flex justify-between items-end mb-6 mt-4 shrink-0">
         <div className="flex flex-col text-left">
           <h1 className="text-4xl font-black text-red-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.6)]">
@@ -176,7 +168,6 @@ export default function Patriots() {
           </p>
         </div>
         
-        {/* Buttons for Modals */}
         <div className="flex items-center gap-3 pb-1">
           <button 
             onClick={() => setIsPFOpen(true)} 
@@ -197,7 +188,6 @@ export default function Patriots() {
       </div>
 
       <div className="box-content w-[800px] h-[600px] border-4 border-blue-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(220,38,38,0.2)] bg-[#0a0f0c] shrink-0">
-
         <div 
           className="absolute inset-0 z-0"
           style={{
@@ -247,8 +237,8 @@ export default function Patriots() {
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">◎</span>
               <input 
                 type="number" 
-                step="0.01"
-                min="0.01"
+                step="0.0001"
+                min="0.0001"
                 value={betInput}
                 onChange={(e) => {
                   const val = e.target.value.replace(/-/g, ''); 
@@ -260,9 +250,10 @@ export default function Patriots() {
                   }
                 }}
                 onBlur={() => {
+                  // 🔥 FIX: Properly allows numbers like 0.008 to persist
                   let val = Number(betInput);
-                  if (isNaN(val) || val < 0.01) val = 0.01;
-                  setBetInput(val.toFixed(2));
+                  if (isNaN(val) || val < 0.0001) val = 0.0001;
+                  setBetInput(val.toFixed(4));
                 }}
                 className="bg-[#0a0f0c] border-2 border-blue-900/50 rounded-lg py-2 pl-7 pr-2 text-white font-black w-36 focus:border-blue-500 focus:shadow-[0_0_15px_rgba(59,130,246,0.3)] focus:outline-none transition-all"
                 disabled={isSpinning || isAnimating}
@@ -270,14 +261,14 @@ export default function Patriots() {
             </div>
 
             <button 
-              onClick={() => setBetInput(prev => Math.max(0.01, Number((Number(prev) / 2).toFixed(2))).toString())}
+              onClick={() => setBetInput(prev => Math.max(0.0001, Number((Number(prev) / 2).toFixed(4))).toString())}
               disabled={isSpinning || isAnimating}
               className="bg-blue-900/30 hover:bg-blue-800/50 border border-blue-800/50 text-blue-300 font-bold py-2 px-3 rounded-lg text-sm transition-all disabled:opacity-50"
             >
               1/2
             </button>
             <button 
-              onClick={() => setBetInput(prev => (Number(prev) * 2).toFixed(2).toString())}
+              onClick={() => setBetInput(prev => (Number(prev) * 2).toFixed(4).toString())}
               disabled={isSpinning || isAnimating}
               className="bg-blue-900/30 hover:bg-blue-800/50 border border-blue-800/50 text-blue-300 font-bold py-2 px-3 rounded-lg text-sm transition-all disabled:opacity-50"
             >
@@ -307,11 +298,17 @@ export default function Patriots() {
               : 'bg-green-600 hover:bg-green-500 text-white shadow-[0_0_20px_rgba(22,163,74,0.4)] hover:shadow-[0_0_30px_rgba(22,163,74,0.6)] border-2 border-green-400'
           }`}
         >
-          <span className="text-lg">Buy Bonus ({Math.round(betAmount * 100 * 100) / 100} SOL)</span>
+          <span className="text-lg">Buy Bonus ({(betAmount * 100).toFixed(4)} SOL)</span>
           <span className="text-xs font-bold opacity-90 mt-0.5">(10 SPINS)</span>
         </button>
       </div>
 
+      {gameResult && !isAnimating && (
+        <div className="mt-4 text-green-400 font-mono text-sm text-center shrink-0">
+          <p>Total Payout: {(gameResult.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(4)} SOL</p>
+          {gameResult.triggeredBonus && <p className="text-yellow-400 font-bold">🎉 FREE SPINS COMPLETED! 🎉</p>}
+        </div>
+      )}
     </div>
   );
 }
