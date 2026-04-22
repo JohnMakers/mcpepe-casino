@@ -9,10 +9,18 @@ export default function InfoModal({ isOpen, onClose }: Props) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-[#0a0f0c] border border-blue-800 max-w-3xl w-full max-h-[85vh] rounded-xl p-8 shadow-[0_0_50px_rgba(220,38,38,0.15)] overflow-y-auto custom-scrollbar">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+      onClick={onClose}
+    >
+      {/* ✨ FIX: Added stopPropagation so clicking inside the modal doesn't trigger the close */}
+      <div 
+        className="bg-[#0a0f0c] border border-blue-800 max-w-3xl w-full max-h-[85vh] rounded-xl p-8 shadow-[0_0_50px_rgba(220,38,38,0.15)] overflow-y-auto custom-scrollbar"
+        onClick={(e) => e.stopPropagation()}
+      >
         
-        <div className="flex items-center justify-between mb-8 sticky top-0 bg-[#0a0f0c]/90 pb-4 border-b border-gray-800 z-10 backdrop-blur-md">
+        {/* ✨ FIX: Removed sticky, top-0, and backdrop-blur classes so it scrolls naturally */}
+        <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-800">
           <h2 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
             <span className="text-red-500">McPepe's</span> Patriots Rules
           </h2>

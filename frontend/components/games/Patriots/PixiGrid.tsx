@@ -28,7 +28,7 @@ const SYMBOL_SIZE = 76;
 const GRID_OFFSET_X = 138; 
 const GRID_OFFSET_Y = 78;
 
-// 🔒 STRICTLY PRESERVED COORDINATES (Directly from User)
+// 🔒 STRICTLY PRESERVED COORDINATES
 const TILE_POSITIONS = [
   [ { x: 20, y: 23 }, { x: 20, y: 121 }, { x: 20, y: 216.8 }, { x: 20, y: 311.5 }, { x: 20, y: 408 } ],
   [ { x: 115, y: 23 }, { x: 115, y: 121 }, { x: 115, y: 216.8 }, { x: 115, y: 311.5 }, { x: 115, y: 408 } ],
@@ -154,7 +154,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         });
       };
 
-      // ✨ FIX: Enhanced showPopupText to accept subtext for the Total SOL display
       const showPopupText = (textStr: string, subTextStr?: string) => {
         return new Promise<void>((resolve) => {
           const popupContainer = new PIXI.Container();
@@ -179,14 +178,14 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
               style: {
                 fontSize: 60,
                 fontWeight: '900',
-                fill: '#4ade80', // Green
+                fill: '#4ade80',
                 align: 'center',
                 stroke: { color: '#000000', width: 6 },
                 dropShadow: { color: '#000000', blur: 10, distance: 4 }
               }
             } as any);
             subText.anchor.set(0.5);
-            subText.y = 80; // Place it right under the main text
+            subText.y = 80; 
             popupContainer.addChild(subText);
           }
 
@@ -205,7 +204,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
           tl.to(popupContainer.scale, { x: 1, y: 1, duration: 0.5, ease: "back.out(1.5)" })
             .to(popupContainer, { alpha: 1, duration: 0.2 }, "<")
-            // Keeps the text on screen slightly longer so it's readable
             .to(popupContainer, { alpha: 0, y: popupContainer.y - 80, duration: 0.4, ease: "power2.in" }, "+=2.0");
         });
       };
@@ -283,6 +281,22 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             const framePayout = frame.tumblePayout || 0;
             await explodeWinningSymbols(frame.winningSymbols, frame.grid, framePayout);
 
+            // ✨ CRITICAL FRONTEND BUG FIX: Simulate gravity locally on the frontend 
+            // reference array so existing containers (like bombs) drop smoothly 
+            // instead of being destroyed and recreated on the next render.
+            for (let c = 0; c < COLS; c++) {
+              let newCol = [];
+              for (let r = 0; r < ROWS; r++) {
+                if (symbolsRef.current[c][r] !== null) {
+                  newCol.push(symbolsRef.current[c][r]);
+                }
+              }
+              while (newCol.length < ROWS) {
+                newCol.unshift(null);
+              }
+              symbolsRef.current[c] = newCol;
+            }
+
             if (framePayout > 0) {
               currentSpinWin += framePayout;
               spinWinText.text = `WIN: ${(currentSpinWin / 1e9).toFixed(4)}`;
@@ -349,7 +363,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           
           if (isMounted) {
             trackerText.text = ""; 
-            // ✨ FIX: Complete text combined with the Total Payout
             await showPopupText("BONUS COMPLETE!", `+${(runningBonusTotal / 1e9).toFixed(4)} SOL`);
           }
         }
@@ -508,6 +521,8 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                 ease: "power2.in" 
               }, 0.2);
               
+              // We set this to null, which is later utilized by the gravity fix 
+              // to shift the array references downward perfectly.
               symbolsRef.current[c][r] = null; 
             }
           }
