@@ -12,7 +12,6 @@ export default function Patriots() {
   const { connection } = useConnection();
   const { publicKey, signTransaction, sendTransaction } = useWallet();
   
-  // ✨ FIX: Use string for input state so users can fully delete the '0' without layout breaking
   const [betInput, setBetInput] = useState<string>("0.10");
   const betAmount = Number(betInput) || 0; 
   
@@ -135,15 +134,19 @@ export default function Patriots() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full w-full bg-[#0a0f0c] p-6 relative">
-      <div className="absolute top-4 left-4">
-        <h1 className="text-3xl font-black text-red-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.6)]">
+    <div className="flex flex-col items-center justify-start min-h-screen w-full bg-[#0a0f0c] p-6 pb-20 relative overflow-y-auto">
+      
+      {/* ✨ TITLE FIX: Centered above the component, not absolute */}
+      <div className="flex flex-col items-center text-center mb-6 mt-4">
+        <h1 className="text-4xl font-black text-red-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.6)]">
           McPepe's Patriots
         </h1>
-        <p className="text-gray-500 text-sm font-bold tracking-widest">Pay Anywhere • Tumble Mechanism</p>
+        <p className="text-gray-400 text-sm font-bold tracking-widest mt-2 uppercase">
+          Pay Anywhere • Liberty Mechanism (Tumble)
+        </p>
       </div>
 
-      <div className="box-content w-[800px] h-[600px] border-4 border-blue-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(220,38,38,0.2)] bg-[#0a0f0c]">
+      <div className="box-content w-[800px] h-[600px] border-4 border-blue-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(220,38,38,0.2)] bg-[#0a0f0c] shrink-0">
 
         <div 
           className="absolute inset-0 z-0"
@@ -185,25 +188,35 @@ export default function Patriots() {
         )}
       </div>
 
-      <div className="flex gap-6 items-center bg-black border border-blue-900/40 p-4 rounded-xl">
+      <div className="flex gap-6 items-center bg-black border border-blue-900/40 p-4 rounded-xl shrink-0">
         <div className="flex flex-col">
           <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Bet</label>
           <div className="flex items-center gap-2">
             
-            {/* ✨ FIX: Robust Input Component */}
+            {/* ✨ INPUT FIX: Block negative signs, expand width */}
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">◎</span>
               <input 
                 type="number" 
                 step="0.01"
+                min="0.01"
                 value={betInput}
-                onChange={(e) => setBetInput(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/-/g, ''); // Strip minus signs on paste
+                  setBetInput(val);
+                }}
+                onKeyDown={(e) => {
+                  // Physically prevent typing minus or 'e' (scientific notation)
+                  if (e.key === '-' || e.key === 'e') {
+                    e.preventDefault();
+                  }
+                }}
                 onBlur={() => {
                   let val = Number(betInput);
                   if (isNaN(val) || val < 0.01) val = 0.01;
                   setBetInput(val.toFixed(2));
                 }}
-                className="bg-[#0a0f0c] border-2 border-blue-900/50 rounded-lg py-2 pl-7 pr-2 text-white font-black w-24 focus:border-blue-500 focus:shadow-[0_0_15px_rgba(59,130,246,0.3)] focus:outline-none transition-all"
+                className="bg-[#0a0f0c] border-2 border-blue-900/50 rounded-lg py-2 pl-7 pr-2 text-white font-black w-36 focus:border-blue-500 focus:shadow-[0_0_15px_rgba(59,130,246,0.3)] focus:outline-none transition-all"
                 disabled={isSpinning || isAnimating}
               />
             </div>
@@ -252,11 +265,31 @@ export default function Patriots() {
       </div>
 
       {gameResult && !isAnimating && (
-        <div className="mt-4 text-green-400 font-mono text-sm text-center">
+        <div className="mt-4 text-green-400 font-mono text-sm text-center shrink-0">
           <p>Total Payout: {(gameResult.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(4)} SOL</p>
           {gameResult.triggeredBonus && <p className="text-yellow-400 font-bold">🎉 FREE SPINS COMPLETED! 🎉</p>}
         </div>
       )}
+
+      {/* ✨ PROVABLY FAIR FIX: Educational block below controls */}
+      <div className="mt-8 max-w-[800px] w-full bg-[#0d1310] border border-blue-900/30 p-6 rounded-xl text-left shadow-lg shrink-0">
+        <h3 className="text-blue-400 font-black tracking-widest uppercase mb-3 flex items-center gap-2">
+          {/* Shield Icon */}
+          <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          Provably Fair
+        </h3>
+        <p className="text-gray-400 text-sm leading-relaxed">
+          This slot is strictly 100% Provably Fair. Every tumble is generated deterministically using a cryptographic combination of a 
+          <span className="text-gray-300 font-bold"> Server Seed</span> (hashed before you spin), your 
+          <span className="text-gray-300 font-bold"> Client Seed</span>, and an incrementing 
+          <span className="text-gray-300 font-bold"> Nonce</span>. 
+          This mathematical proof guarantees that outcomes cannot be altered, predicted, or tampered with prior to your spin. 
+          All wagers and payouts are fully secured and verifiable on the Solana blockchain.
+        </p>
+      </div>
+
     </div>
   );
 }
