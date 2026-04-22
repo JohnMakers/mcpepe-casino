@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\backend\\\\server.js\")"
+    ]
+  }
+}

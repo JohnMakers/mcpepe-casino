@@ -127,7 +127,6 @@ export default function Patriots() {
 
   return (
     <div className="flex flex-col items-center justify-center h-full w-full bg-[#0a0f0c] p-6 relative">
-      {/* ✨ THEME FIX: Red Title with Red Glow */}
       <div className="absolute top-4 left-4">
         <h1 className="text-3xl font-black text-red-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.6)]">
           McPepe's Patriots
@@ -135,7 +134,6 @@ export default function Patriots() {
         <p className="text-gray-500 text-sm font-bold tracking-widest">Pay Anywhere • Tumble Mechanism</p>
       </div>
 
-      {/* ✨ THEME FIX: Blue Border with subtle Red Shadow for American Vibe */}
       <div className="box-content w-[800px] h-[600px] border-4 border-blue-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(220,38,38,0.2)] bg-[#0a0f0c]">
 
         <div 
@@ -178,21 +176,41 @@ export default function Patriots() {
         )}
       </div>
 
-      {/* ✨ THEME FIX: Control Panel Updates */}
       <div className="flex gap-6 items-center bg-black border border-blue-900/40 p-4 rounded-xl">
+        {/* ✨ UI UPGRADE: Advanced Bet Controls */}
         <div className="flex flex-col">
-          <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Base Bet (SOL)</label>
-          <input 
-            type="number" 
-            step="0.05"
-            value={betAmount}
-            onChange={(e) => setBetAmount(Number(e.target.value))}
-            className="bg-[#0a0f0c] border border-gray-800 rounded p-2 text-white font-bold w-32 focus:border-blue-500 focus:outline-none"
-            disabled={isSpinning || isAnimating}
-          />
+          <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Bet</label>
+          <div className="flex items-center gap-2">
+            <input 
+              type="number" 
+              step="0.01"
+              min="0.01"
+              value={betAmount}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                if (val >= 0) setBetAmount(val); // Block negatives
+              }}
+              className="bg-[#0a0f0c] border border-gray-800 rounded p-2 text-white font-bold w-24 focus:border-blue-500 focus:outline-none"
+              disabled={isSpinning || isAnimating}
+            />
+            <button 
+              onClick={() => setBetAmount(prev => Math.max(0.01, Number((prev / 2).toFixed(2))))}
+              disabled={isSpinning || isAnimating}
+              className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded text-sm transition-colors disabled:opacity-50"
+            >
+              1/2
+            </button>
+            <button 
+              onClick={() => setBetAmount(prev => Number((prev * 2).toFixed(2)))}
+              disabled={isSpinning || isAnimating}
+              className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded text-sm transition-colors disabled:opacity-50"
+            >
+              2x
+            </button>
+          </div>
         </div>
 
-        {/* Spin Button: Deep Blue */}
+        {/* ✨ UI UPGRADE: "Single Spin" */}
         <button 
           onClick={() => handleSpin(false)}
           disabled={isSpinning || isAnimating}
@@ -202,19 +220,21 @@ export default function Patriots() {
               : 'bg-blue-700 hover:bg-blue-600 text-white shadow-[0_0_20px_rgba(29,78,216,0.4)] hover:shadow-[0_0_30px_rgba(29,78,216,0.6)]'
           }`}
         >
-          {isSpinning ? 'Escrowing...' : isAnimating ? 'Tumbling...' : 'Spin'}
+          {isSpinning ? 'Escrowing...' : isAnimating ? 'Tumbling...' : 'Single Spin'}
         </button>
 
+        {/* ✨ UI UPGRADE: "Buy Bonus" + Subtitle */}
         <button 
           onClick={() => handleSpin(true)}
           disabled={isSpinning || isAnimating}
-          className={`px-8 py-4 rounded font-black text-lg uppercase tracking-widest transition-all ${
+          className={`px-8 py-2.5 rounded font-black uppercase tracking-widest transition-all flex flex-col items-center justify-center ${
             (isSpinning || isAnimating)
               ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
               : 'bg-green-600 hover:bg-green-500 text-white shadow-[0_0_20px_rgba(22,163,74,0.4)] hover:shadow-[0_0_30px_rgba(22,163,74,0.6)] border-2 border-green-400'
           }`}
         >
-          Buy Feature ({Math.round(betAmount * 100 * 100) / 100} SOL)
+          <span className="text-lg">Buy Bonus ({Math.round(betAmount * 100 * 100) / 100} SOL)</span>
+          <span className="text-xs font-bold opacity-90 mt-0.5">(10 SPINS)</span>
         </button>
       </div>
 

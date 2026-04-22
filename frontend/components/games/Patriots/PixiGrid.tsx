@@ -31,11 +31,11 @@ const GRID_OFFSET_Y = 78;
 // Preserved perfectly!
 const TILE_POSITIONS = [
   [ { x: 20, y: 23 }, { x: 20, y: 121 }, { x: 20, y: 216.8 }, { x: 20, y: 311.5 }, { x: 20, y: 408 } ],
-  [ { x: 115, y: 22 }, { x: 115, y: 121 }, { x: 115, y: 216.8 }, { x: 115, y: 311.5 }, { x: 115, y: 408 } ],
-  [ { x: 211.5, y: 21 }, { x: 211.5, y: 121 }, { x: 211.5, y: 216.8 }, { x: 211.5, y: 311.5 }, { x: 211.5, y: 408 } ],
-  [ { x: 308, y: 20 }, { x: 308, y: 121 }, { x: 308, y: 216.8 }, { x: 308, y: 311.5 }, { x: 308, y: 408 } ],
-  [ { x: 403, y: 19 }, { x: 403, y: 121 }, { x: 403, y: 216.8 }, { x: 403, y: 311.5 }, { x: 403, y: 408 } ],
-  [ { x: 500, y: 18 }, { x: 500, y: 121 }, { x: 500, y: 216.8 }, { x: 500, y: 311.5 }, { x: 500, y: 408 } ],
+  [ { x: 115, y: 23 }, { x: 115, y: 121 }, { x: 115, y: 216.8 }, { x: 115, y: 311.5 }, { x: 115, y: 408 } ],
+  [ { x: 211.5, y: 23 }, { x: 211.5, y: 121 }, { x: 211.5, y: 216.8 }, { x: 211.5, y: 311.5 }, { x: 211.5, y: 408 } ],
+  [ { x: 308, y: 23 }, { x: 308, y: 121 }, { x: 308, y: 216.8 }, { x: 308, y: 311.5 }, { x: 308, y: 408 } ],
+  [ { x: 403, y: 23 }, { x: 403, y: 121 }, { x: 403, y: 216.8 }, { x: 403, y: 311.5 }, { x: 403, y: 408 } ],
+  [ { x: 500, y: 23 }, { x: 500, y: 121 }, { x: 500, y: 216.8 }, { x: 500, y: 311.5 }, { x: 500, y: 408 } ],
 ];
 
 const COLS = 6;
@@ -263,7 +263,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
             if (framePayout > 0) {
               currentSpinWin += framePayout;
-              // ✨ FIX: 4 Decimals
               spinWinText.text = `WIN: ${(currentSpinWin / 1e9).toFixed(4)}`;
               
               if (spinWinText.alpha === 0) {
@@ -297,7 +296,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           for (let i = 0; i < freeSpins.length; i++) {
             if (!isMounted) break;
             
-            // ✨ FIX: 4 Decimals
             trackerText.text = `SPINS: ${freeSpins.length - i}  |  TOTAL: ${(runningBonusTotal / 1e9).toFixed(4)} SOL`;
             
             await clearBoard(); 
@@ -311,7 +309,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
               const multiString = fsSpin.bombMultipliers.map((m: number) => `${m}x`).join(" + ");
               await showPopupText(`BOMBS: ${multiString}\nTOTAL MULT: ${fsSpin.finalSpinMultiplier}x!`);
 
-              // ✨ FIX: 4 Decimals
               spinWinText.text = `WIN: ${(fsSpin.totalSpinPayout / 1e9).toFixed(4)}`;
               spinWinText.style.fill = '#4ade80';
               spinWinText.alpha = 1;
@@ -323,7 +320,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             }
 
             runningBonusTotal += (fsSpin.totalSpinPayout || 0);
-            // ✨ FIX: 4 Decimals
             trackerText.text = `SPINS: ${freeSpins.length - i - 1}  |  TOTAL: ${(runningBonusTotal / 1e9).toFixed(4)} SOL`;
             
             await new Promise(resolve => setTimeout(resolve, 800));
@@ -386,26 +382,18 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             symbolContainer.addChild(sprite);
 
             // ✨ FEATURE: Bell (Scatter) Shaking Effect
+            // Removed scaling completely to keep it from getting obnoxious. 
+            // Just a fast, subtle rotation wobble.
             if (targetSymbolType === 7) {
-                // Pulse size
-                gsap.to(sprite.scale, {
-                    x: 1.15, y: 1.15,
-                    duration: 0.4,
-                    yoyo: true,
-                    repeat: -1,
-                    ease: "sine.inOut"
-                });
-                // Wobble rotation
                 gsap.to(sprite, {
                     rotation: 0.15,
-                    duration: 0.12,
+                    duration: 0.08,
                     yoyo: true,
                     repeat: -1,
                     ease: "sine.inOut"
                 });
             }
 
-            // Feature: Bomb Text
             if (targetSymbolType === 8) {
                 const multValue = currentBombMults.current.shift() || 2; 
                 
@@ -421,7 +409,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                 });
                 multText.anchor.set(0.5);
                 
-                // ✨ FIX: Move text exactly 30% lower
                 multText.y = 22; 
                 
                 symbolContainer.addChild(multText);
@@ -508,7 +495,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       }
 
       if (foundWin && framePayout > 0) {
-        // ✨ FIX: 4 Decimals
         const floatText = new PIXI.Text({
           text: `+${(framePayout / 1e9).toFixed(4)} SOL`,
           style: {
