@@ -11,7 +11,11 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:300
 export default function Patriots() {
   const { connection } = useConnection();
   const { publicKey, signTransaction, sendTransaction } = useWallet();
-  const [betAmount, setBetAmount] = useState<number>(0.1);
+  
+  // ✨ FIX: Use string for input state so users can fully delete the '0' without layout breaking
+  const [betInput, setBetInput] = useState<string>("0.10");
+  const betAmount = Number(betInput) || 0; 
+  
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [gameResult, setGameResult] = useState<any>(null);
@@ -19,6 +23,11 @@ export default function Patriots() {
   const handleSpin = async (isBonusBuy: boolean = false) => {
     if (!publicKey || !signTransaction || !sendTransaction) {
       alert("Please connect your wallet first.");
+      return;
+    }
+    
+    if (betAmount < 0.01) {
+      alert("Minimum bet is 0.01 SOL");
       return;
     }
 
@@ -177,40 +186,45 @@ export default function Patriots() {
       </div>
 
       <div className="flex gap-6 items-center bg-black border border-blue-900/40 p-4 rounded-xl">
-        {/* ✨ UI UPGRADE: Advanced Bet Controls */}
         <div className="flex flex-col">
           <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Bet</label>
           <div className="flex items-center gap-2">
-            <input 
-              type="number" 
-              step="0.01"
-              min="0.01"
-              value={betAmount}
-              onChange={(e) => {
-                const val = Number(e.target.value);
-                if (val >= 0) setBetAmount(val); // Block negatives
-              }}
-              className="bg-[#0a0f0c] border border-gray-800 rounded p-2 text-white font-bold w-24 focus:border-blue-500 focus:outline-none"
-              disabled={isSpinning || isAnimating}
-            />
+            
+            {/* ✨ FIX: Robust Input Component */}
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">◎</span>
+              <input 
+                type="number" 
+                step="0.01"
+                value={betInput}
+                onChange={(e) => setBetInput(e.target.value)}
+                onBlur={() => {
+                  let val = Number(betInput);
+                  if (isNaN(val) || val < 0.01) val = 0.01;
+                  setBetInput(val.toFixed(2));
+                }}
+                className="bg-[#0a0f0c] border-2 border-blue-900/50 rounded-lg py-2 pl-7 pr-2 text-white font-black w-24 focus:border-blue-500 focus:shadow-[0_0_15px_rgba(59,130,246,0.3)] focus:outline-none transition-all"
+                disabled={isSpinning || isAnimating}
+              />
+            </div>
+
             <button 
-              onClick={() => setBetAmount(prev => Math.max(0.01, Number((prev / 2).toFixed(2))))}
+              onClick={() => setBetInput(prev => Math.max(0.01, Number((Number(prev) / 2).toFixed(2))).toString())}
               disabled={isSpinning || isAnimating}
-              className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded text-sm transition-colors disabled:opacity-50"
+              className="bg-blue-900/30 hover:bg-blue-800/50 border border-blue-800/50 text-blue-300 font-bold py-2 px-3 rounded-lg text-sm transition-all disabled:opacity-50"
             >
               1/2
             </button>
             <button 
-              onClick={() => setBetAmount(prev => Number((prev * 2).toFixed(2)))}
+              onClick={() => setBetInput(prev => (Number(prev) * 2).toFixed(2).toString())}
               disabled={isSpinning || isAnimating}
-              className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded text-sm transition-colors disabled:opacity-50"
+              className="bg-blue-900/30 hover:bg-blue-800/50 border border-blue-800/50 text-blue-300 font-bold py-2 px-3 rounded-lg text-sm transition-all disabled:opacity-50"
             >
               2x
             </button>
           </div>
         </div>
 
-        {/* ✨ UI UPGRADE: "Single Spin" */}
         <button 
           onClick={() => handleSpin(false)}
           disabled={isSpinning || isAnimating}
@@ -223,7 +237,6 @@ export default function Patriots() {
           {isSpinning ? 'Escrowing...' : isAnimating ? 'Tumbling...' : 'Single Spin'}
         </button>
 
-        {/* ✨ UI UPGRADE: "Buy Bonus" + Subtitle */}
         <button 
           onClick={() => handleSpin(true)}
           disabled={isSpinning || isAnimating}

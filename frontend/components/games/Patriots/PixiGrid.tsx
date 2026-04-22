@@ -28,7 +28,7 @@ const SYMBOL_SIZE = 76;
 const GRID_OFFSET_X = 138; 
 const GRID_OFFSET_Y = 78;
 
-// Preserved perfectly!
+// 🔒 STRICTLY PRESERVED COORDINATES (Directly from User)
 const TILE_POSITIONS = [
   [ { x: 20, y: 23 }, { x: 20, y: 121 }, { x: 20, y: 216.8 }, { x: 20, y: 311.5 }, { x: 20, y: 408 } ],
   [ { x: 115, y: 23 }, { x: 115, y: 121 }, { x: 115, y: 216.8 }, { x: 115, y: 311.5 }, { x: 115, y: 408 } ],
@@ -154,9 +154,12 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         });
       };
 
-      const showPopupText = (textStr: string) => {
+      // ✨ FIX: Enhanced showPopupText to accept subtext for the Total SOL display
+      const showPopupText = (textStr: string, subTextStr?: string) => {
         return new Promise<void>((resolve) => {
-          const text = new PIXI.Text({
+          const popupContainer = new PIXI.Container();
+
+          const mainText = new PIXI.Text({
             text: textStr,
             style: {
               fontSize: 75,
@@ -167,24 +170,43 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
               dropShadow: { color: '#000000', blur: 15, distance: 5 }
             }
           } as any);
+          mainText.anchor.set(0.5);
+          popupContainer.addChild(mainText);
+
+          if (subTextStr) {
+            const subText = new PIXI.Text({
+              text: subTextStr,
+              style: {
+                fontSize: 60,
+                fontWeight: '900',
+                fill: '#4ade80', // Green
+                align: 'center',
+                stroke: { color: '#000000', width: 6 },
+                dropShadow: { color: '#000000', blur: 10, distance: 4 }
+              }
+            } as any);
+            subText.anchor.set(0.5);
+            subText.y = 80; // Place it right under the main text
+            popupContainer.addChild(subText);
+          }
+
+          popupContainer.x = CANVAS_WIDTH / 2;
+          popupContainer.y = CANVAS_HEIGHT / 2;
+          popupContainer.scale.set(0);
+          popupContainer.alpha = 0;
           
-          text.anchor.set(0.5);
-          text.x = CANVAS_WIDTH / 2;
-          text.y = CANVAS_HEIGHT / 2;
-          text.scale.set(0);
-          text.alpha = 0;
-          
-          app.stage.addChild(text);
+          app.stage.addChild(popupContainer);
 
           const tl = gsap.timeline({ onComplete: () => {
-              app.stage.removeChild(text);
-              text.destroy();
+              app.stage.removeChild(popupContainer);
+              popupContainer.destroy({ children: true });
               resolve();
           }});
 
-          tl.to(text.scale, { x: 1, y: 1, duration: 0.5, ease: "back.out(1.5)" })
-            .to(text, { alpha: 1, duration: 0.2 }, "<")
-            .to(text, { alpha: 0, y: text.y - 80, duration: 0.4, ease: "power2.in" }, "+=1.5");
+          tl.to(popupContainer.scale, { x: 1, y: 1, duration: 0.5, ease: "back.out(1.5)" })
+            .to(popupContainer, { alpha: 1, duration: 0.2 }, "<")
+            // Keeps the text on screen slightly longer so it's readable
+            .to(popupContainer, { alpha: 0, y: popupContainer.y - 80, duration: 0.4, ease: "power2.in" }, "+=2.0");
         });
       };
 
@@ -327,7 +349,8 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           
           if (isMounted) {
             trackerText.text = ""; 
-            await showPopupText("BONUS COMPLETE!");
+            // ✨ FIX: Complete text combined with the Total Payout
+            await showPopupText("BONUS COMPLETE!", `+${(runningBonusTotal / 1e9).toFixed(4)} SOL`);
           }
         }
 
@@ -381,9 +404,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             sprite.anchor.set(0.5);
             symbolContainer.addChild(sprite);
 
-            // ✨ FEATURE: Bell (Scatter) Shaking Effect
-            // Removed scaling completely to keep it from getting obnoxious. 
-            // Just a fast, subtle rotation wobble.
             if (targetSymbolType === 7) {
                 gsap.to(sprite, {
                     rotation: 0.15,
