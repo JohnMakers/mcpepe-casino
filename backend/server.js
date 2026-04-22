@@ -1161,7 +1161,8 @@ async function resolvePatriotsOnChain(playerPubkeyStr, gamePubkeyStr, unhashedSe
         seedLengthBuffer.writeUInt32LE(seedBuffer.length, 0);
         
         const payoutBuffer = Buffer.alloc(8);
-        payoutBuffer.writeBigUInt64LE(BigInt(payoutAmount));
+        // 🔥 CRITICAL FIX 1: Math.round() physically prevents floating-point BigInt crashes
+        payoutBuffer.writeBigUInt64LE(BigInt(Math.round(payoutAmount)));
 
         const ixData = Buffer.concat([sighash, seedLengthBuffer, seedBuffer, payoutBuffer]);
         const resolveIx = new anchor.web3.TransactionInstruction({
@@ -1176,17 +1177,39 @@ async function resolvePatriotsOnChain(playerPubkeyStr, gamePubkeyStr, unhashedSe
             data: ixData
         });
 
-        const tx = new anchor.web3.Transaction().add(resolveIx);
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-        tx.recentBlockhash = blockhash;
-        tx.feePayer = houseKeypair.publicKey;
-        tx.sign(houseKeypair);
+        let txSig;
+        let retries = 5; 
+        
+        while (retries > 0) {
+            try {
+                const tx = new anchor.web3.Transaction().add(resolveIx);
+                const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+                tx.recentBlockhash = blockhash;
+                tx.feePayer = houseKeypair.publicKey;
+                tx.sign(houseKeypair);
 
-        const txSig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
-        await connection.confirmTransaction({ signature: txSig, blockhash, lastValidBlockHeight }, "confirmed");
-        console.log(`✅ [HOUSE] Patriots Resolved! TX: ${txSig}`);
+                txSig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+                const confirmation = await connection.confirmTransaction({ signature: txSig, blockhash, lastValidBlockHeight }, "confirmed");
+                
+                // 🔥 CRITICAL FIX 2: Ensure the Solana smart contract actually approved the payout!
+                if (confirmation.value.err) {
+                    throw new Error(`On-chain rejection: ${JSON.stringify(confirmation.value.err)}`);
+                }
+                
+                console.log(`✅ [HOUSE] Patriots Resolved! TX: ${txSig}`);
+                return; // Success, exit function gracefully
+            } catch (err) {
+                console.log(`⚠️ Network retry for Patriots Payout... (${retries} left). Error: ${err.message}`);
+                await new Promise(r => setTimeout(r, 2000));
+                retries--;
+                if (retries === 0) throw new Error("CRITICAL: Failed to pay user after 5 attempts.");
+            }
+        }
     } catch (err) {
         console.error("❌ [HOUSE] Failed to resolve Patriots:", err.message);
+        // 🔥 CRITICAL FIX 3: We MUST throw the error back to the API route!
+        // This causes the API to return a 500 Error, which tells the frontend to abort the fake win animation.
+        throw err; 
     }
 }
 
