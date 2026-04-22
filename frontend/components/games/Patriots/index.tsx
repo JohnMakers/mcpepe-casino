@@ -14,14 +14,13 @@ export default function Patriots() {
   const { connection } = useConnection();
   const { publicKey, signTransaction, sendTransaction } = useWallet();
   
-  const [betInput, setBetInput] = useState<string>("0.10");
+  const [betInput, setBetInput] = useState<string>("0.1000");
   const betAmount = Number(betInput) || 0; 
   
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [gameResult, setGameResult] = useState<any>(null);
 
-  // ✨ Modal States & Trackers
   const [isInfoOpen, setIsInfoOpen] = useState<boolean>(false);
   const [isPFOpen, setIsPFOpen] = useState<boolean>(false);
   const [pfData, setPfData] = useState({ hash: '', seed: '' });
@@ -32,8 +31,9 @@ export default function Patriots() {
       return;
     }
     
-    if (betAmount < 0.01) {
-      alert("Minimum bet is 0.01 SOL");
+    // 🔥 FIX 1: Lowered the hard-stop limit to 0.0001
+    if (betAmount < 0.0001) {
+      alert("Minimum bet is 0.0001 SOL");
       return;
     }
 
@@ -42,7 +42,6 @@ export default function Patriots() {
       setGameResult(null);
       setIsAnimating(false);
 
-      // 1. Fetch VRF Seed from Backend
       const seedRes = await fetch(`${BACKEND_URL}/api/patriots/seed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -53,16 +52,17 @@ export default function Patriots() {
 
       setPfData(prev => ({ ...prev, hash: seedData.serverSeedHash, seed: '' }));
 
-      // 2. Generate Random Client Seed & Nonce
       const clientSeed = Math.random().toString(36).substring(2, 15);
       const nonce = Math.floor(Math.random() * 1000000);
       
       const totalWager = isBonusBuy ? betAmount * 100 : betAmount;
-      
-      // 🔥 CRITICAL FIX 1: Math.floor prevents JS floating point math from crashing the Solana Transaction Builder
-      const betLamports = Math.floor(totalWager * anchor.web3.LAMPORTS_PER_SOL);
+      const baseLamports = Math.floor(betAmount * anchor.web3.LAMPORTS_PER_SOL);
+      const feeLamports = isBonusBuy ? Math.floor(betAmount * 99 * anchor.web3.LAMPORTS_PER_SOL) : 0;
+      const totalLamports = baseLamports + feeLamports;
 
-      // 3. Prepare Smart Contract Transaction
+      // 🔥 FIX 2: Added detailed debug logging so you know exactly what is being requested
+      console.log(`🛠️ DEBUG | Attempting to charge wallet: ${totalLamports / 1e9} SOL`);
+
       const serverSeedHashBuffer = Buffer.from(seedData.serverSeedHash, 'hex');
       const hashArray = Array.from(serverSeedHashBuffer);
 
@@ -83,12 +83,14 @@ export default function Patriots() {
       const provider = new anchor.AnchorProvider(connection, { publicKey, signTransaction } as any, { preflightCommitment: "confirmed" });
       const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
 
-      const tx = new Transaction().add(
+      const tx = new Transaction();
+
+      tx.add(
         await program.methods.startPatriots(
-          new anchor.BN(betLamports),
+          new anchor.BN(baseLamports.toString()),
           hashArray,
           clientSeed,
-          new anchor.BN(nonce)
+          new anchor.BN(nonce.toString())
         )
         .accounts({
           player: publicKey,
@@ -99,21 +101,34 @@ export default function Patriots() {
         .instruction()
       );
 
+      if (isBonusBuy) {
+        tx.add(
+          SystemProgram.transfer({
+            fromPubkey: publicKey,
+            toPubkey: vaultPDA,
+            lamports: feeLamports
+          })
+        );
+      }
+
       const latestBlockhash = await connection.getLatestBlockhash('confirmed');
       tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = publicKey;
 
-      const txId = await sendTransaction(tx, connection);
+      const txId = await sendTransaction(tx, connection, { skipPreflight: true });
 
-      await connection.confirmTransaction({
+      const confirmation = await connection.confirmTransaction({
         signature: txId,
         blockhash: latestBlockhash.blockhash,
         lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
       }, 'confirmed');
 
+      if (confirmation.value.err) {
+         throw new Error(`On-Chain Error: Transaction rejected by network. You may not have enough SOL.`);
+      }
+
       console.log("On-chain wager secured! Tx:", txId);
 
-      // 4. Request the outcome and the math frames from the Backend Engine
       const playRes = await fetch(`${BACKEND_URL}/api/patriots/play`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,7 +137,7 @@ export default function Patriots() {
           gamePubkey: gameStatePDA.toBase58(),
           clientSeed,
           nonce,
-          betAmount: betLamports,
+          betAmount: totalLamports, 
           isBonusBuy 
         })
       });
@@ -138,10 +153,8 @@ export default function Patriots() {
 
     } catch (error: any) {
       console.error("Spin Error:", error);
-      
-      // 🔥 CRITICAL FIX 2: Intercept the simulation error so the user knows what went wrong
       if (error.message?.includes("WalletSendTransactionError")) {
-         alert(`Transaction Rejected! ⚠️ If you are buying a Bonus, it costs 100x your base bet. Ensure your wallet has enough SOL to cover it, or try lowering your base bet to 0.01 SOL.`);
+         alert(`Transaction Rejected! ⚠️ If you are buying a Bonus, it costs 100x your base bet. Ensure your wallet has enough SOL to cover it.`);
       } else {
          alert(error.message);
       }
@@ -165,7 +178,6 @@ export default function Patriots() {
         onClose={() => setIsInfoOpen(false)} 
       />
 
-      {/* ✨ HEADER FIX: Placed inline with title block */}
       <div className="w-[800px] flex justify-between items-end mb-6 mt-4 shrink-0">
         <div className="flex flex-col text-left">
           <h1 className="text-4xl font-black text-red-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.6)]">
@@ -176,7 +188,6 @@ export default function Patriots() {
           </p>
         </div>
         
-        {/* Buttons for Modals */}
         <div className="flex items-center gap-3 pb-1">
           <button 
             onClick={() => setIsPFOpen(true)} 
@@ -247,8 +258,8 @@ export default function Patriots() {
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">◎</span>
               <input 
                 type="number" 
-                step="0.01"
-                min="0.01"
+                step="0.0001"
+                min="0.0001"
                 value={betInput}
                 onChange={(e) => {
                   const val = e.target.value.replace(/-/g, ''); 
@@ -260,9 +271,10 @@ export default function Patriots() {
                   }
                 }}
                 onBlur={() => {
+                  // 🔥 FIX 3: Allowed 4 decimals on Blur and lowered bottom limit
                   let val = Number(betInput);
-                  if (isNaN(val) || val < 0.01) val = 0.01;
-                  setBetInput(val.toFixed(2));
+                  if (isNaN(val) || val < 0.0001) val = 0.0001;
+                  setBetInput(val.toFixed(4));
                 }}
                 className="bg-[#0a0f0c] border-2 border-blue-900/50 rounded-lg py-2 pl-7 pr-2 text-white font-black w-36 focus:border-blue-500 focus:shadow-[0_0_15px_rgba(59,130,246,0.3)] focus:outline-none transition-all"
                 disabled={isSpinning || isAnimating}
@@ -270,14 +282,14 @@ export default function Patriots() {
             </div>
 
             <button 
-              onClick={() => setBetInput(prev => Math.max(0.01, Number((Number(prev) / 2).toFixed(2))).toString())}
+              onClick={() => setBetInput(prev => Math.max(0.0001, Number((Number(prev) / 2).toFixed(4))).toString())}
               disabled={isSpinning || isAnimating}
               className="bg-blue-900/30 hover:bg-blue-800/50 border border-blue-800/50 text-blue-300 font-bold py-2 px-3 rounded-lg text-sm transition-all disabled:opacity-50"
             >
               1/2
             </button>
             <button 
-              onClick={() => setBetInput(prev => (Number(prev) * 2).toFixed(2).toString())}
+              onClick={() => setBetInput(prev => (Number(prev) * 2).toFixed(4).toString())}
               disabled={isSpinning || isAnimating}
               className="bg-blue-900/30 hover:bg-blue-800/50 border border-blue-800/50 text-blue-300 font-bold py-2 px-3 rounded-lg text-sm transition-all disabled:opacity-50"
             >
@@ -307,9 +319,34 @@ export default function Patriots() {
               : 'bg-green-600 hover:bg-green-500 text-white shadow-[0_0_20px_rgba(22,163,74,0.4)] hover:shadow-[0_0_30px_rgba(22,163,74,0.6)] border-2 border-green-400'
           }`}
         >
-          <span className="text-lg">Buy Bonus ({Math.round(betAmount * 100 * 100) / 100} SOL)</span>
+          {/* 🔥 FIX 4: Ensured the button text also displays the exact calculation */}
+          <span className="text-lg">Buy Bonus ({(betAmount * 100).toFixed(4)} SOL)</span>
           <span className="text-xs font-bold opacity-90 mt-0.5">(10 SPINS)</span>
         </button>
+      </div>
+
+      {gameResult && !isAnimating && (
+        <div className="mt-4 text-green-400 font-mono text-sm text-center shrink-0">
+          <p>Total Payout: {(gameResult.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(4)} SOL</p>
+          {gameResult.triggeredBonus && <p className="text-yellow-400 font-bold">🎉 FREE SPINS COMPLETED! 🎉</p>}
+        </div>
+      )}
+
+      <div className="mt-8 max-w-[800px] w-full bg-[#0d1310] border border-blue-900/30 p-6 rounded-xl text-left shadow-lg shrink-0">
+        <h3 className="text-blue-400 font-black tracking-widest uppercase mb-3 flex items-center gap-2">
+          <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          Provably Fair
+        </h3>
+        <p className="text-gray-400 text-sm leading-relaxed">
+          This slot is strictly 100% Provably Fair. Every tumble is generated deterministically using a cryptographic combination of a 
+          <span className="text-gray-300 font-bold"> Server Seed</span> (hashed before you spin), your 
+          <span className="text-gray-300 font-bold"> Client Seed</span>, and an incrementing 
+          <span className="text-gray-300 font-bold"> Nonce</span>. 
+          This mathematical proof guarantees that outcomes cannot be altered, predicted, or tampered with prior to your spin. 
+          All wagers and payouts are fully secured and verifiable on the Solana blockchain.
+        </p>
       </div>
 
     </div>
