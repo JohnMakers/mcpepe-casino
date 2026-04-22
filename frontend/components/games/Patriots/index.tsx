@@ -51,7 +51,6 @@ export default function Patriots() {
       const seedData = await seedRes.json();
       if (!seedData.success) throw new Error(seedData.error || "Failed to fetch seed");
 
-      // Update Provably Fair Hash State
       setPfData(prev => ({ ...prev, hash: seedData.serverSeedHash, seed: '' }));
 
       // 2. Generate Random Client Seed & Nonce
@@ -59,7 +58,9 @@ export default function Patriots() {
       const nonce = Math.floor(Math.random() * 1000000);
       
       const totalWager = isBonusBuy ? betAmount * 100 : betAmount;
-      const betLamports = totalWager * anchor.web3.LAMPORTS_PER_SOL;
+      
+      // 🔥 CRITICAL FIX 1: Math.floor prevents JS floating point math from crashing the Solana Transaction Builder
+      const betLamports = Math.floor(totalWager * anchor.web3.LAMPORTS_PER_SOL);
 
       // 3. Prepare Smart Contract Transaction
       const serverSeedHashBuffer = Buffer.from(seedData.serverSeedHash, 'hex');
@@ -131,16 +132,19 @@ export default function Patriots() {
 
       console.log("Received Math Frames:", playData);
       
-      // Update Provably Fair Final Seed State
       setPfData(prev => ({ ...prev, seed: playData.serverSeed }));
-
-      // 5. Trigger the Animation sequence
       setGameResult(playData);
       setIsAnimating(true);
 
     } catch (error: any) {
       console.error("Spin Error:", error);
-      alert(error.message);
+      
+      // 🔥 CRITICAL FIX 2: Intercept the simulation error so the user knows what went wrong
+      if (error.message?.includes("WalletSendTransactionError")) {
+         alert(`Transaction Rejected! ⚠️ If you are buying a Bonus, it costs 100x your base bet. Ensure your wallet has enough SOL to cover it, or try lowering your base bet to 0.01 SOL.`);
+      } else {
+         alert(error.message);
+      }
     } finally {
       setIsSpinning(false);
     }

@@ -377,8 +377,10 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
     return () => {
       isMounted = false;
+      gsap.globalTimeline.clear(); // Ensure animations don't leak into the background
       try {
-        app.destroy(true, { children: true, texture: true });
+        // 🔥 FIX 3: Removed `texture: true` so PIXI doesn't throw the Assets warning
+        app.destroy(true, { children: true }); 
       } catch (error) {
         console.error("Cleanup error:", error);
       }
