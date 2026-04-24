@@ -52,11 +52,11 @@ const DROP_START_Y = 50;
 // 3. Exact X/Y resting coordinates for the 5 Columns x 3 Rows
 // Adjust these numbers to perfectly align the green boxes with your background!
 const TILE_POSITIONS = [
-  [ { x: 190, y: 180 }, { x: 190, y: 320 }, { x: 190, y: 460 } ], // Column 0 (Far Left)
-  [ { x: 335, y: 180 }, { x: 335, y: 320 }, { x: 335, y: 460 } ], // Column 1
-  [ { x: 480, y: 180 }, { x: 480, y: 320 }, { x: 480, y: 460 } ], // Column 2 (Middle)
-  [ { x: 625, y: 180 }, { x: 625, y: 320 }, { x: 625, y: 460 } ], // Column 3
-  [ { x: 770, y: 180 }, { x: 770, y: 320 }, { x: 770, y: 460 } ]  // Column 4 (Far Right)
+  [ { x: 210, y: 180 }, { x: 220, y: 320 }, { x: 230, y: 460 } ], // Column 0 (Far Left)
+  [ { x: 340, y: 180 }, { x: 345, y: 320 }, { x: 350, y: 460 } ], // Column 1
+  [ { x: 383, y: 180 }, { x: 485, y: 320 }, { x: 487, y: 460 } ], // Column 2 (Middle)
+  [ { x: 620, y: 180 }, { x: 622, y: 320 }, { x: 624, y: 460 } ], // Column 3
+  [ { x: 750, y: 180 }, { x: 740, y: 320 }, { x: 730, y: 460 } ]  // Column 4 (Far Right)
 ];
 
 // ==========================================
