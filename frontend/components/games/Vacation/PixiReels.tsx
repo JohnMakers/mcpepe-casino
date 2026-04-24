@@ -23,6 +23,20 @@ const SYMBOL_MAP: Record<number, string> = {
   11: '/vacations/vacation_passport.png'
 };
 
+const SYMBOL_NAMES: Record<number, string> = {
+  0: '10s', 1: 'Jacks', 2: 'Queens', 3: 'Kings', 4: 'Aces',
+  5: 'Sunscreen', 6: 'Luggage', 7: 'Cocktails', 8: 'Jet Skis', 9: 'Yachts',
+  10: 'McPepe', 11: 'Passports'
+};
+
+// 20 Fixed Paylines for Frontend Mapping
+const VAC_LINES = [
+  [1,1,1,1,1], [0,0,0,0,0], [2,2,2,2,2], [0,1,2,1,0], [2,1,0,1,2],
+  [1,0,1,0,1], [1,2,1,2,1], [0,0,1,2,2], [2,2,1,0,0], [1,0,0,0,1],
+  [1,2,2,2,1], [0,1,0,1,0], [2,1,2,1,2], [0,1,1,1,0], [2,1,1,1,2],
+  [1,1,0,1,1], [1,1,2,1,1], [0,0,2,0,0], [2,2,0,2,2], [0,2,2,2,0]
+];
+
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 500;
 const SYMBOL_SIZE = 120;
@@ -77,13 +91,26 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       mainContainer.addChild(mask);
       mainContainer.mask = mask;
 
+      // Center Popup Text
       const centerText = new PIXI.Text({ text: "", style: { fontSize: 60, fontWeight: '900', fill: '#c084fc', stroke: { color: '#000000', width: 8 } }});
       centerText.anchor.set(0.5); centerText.x = CANVAS_WIDTH / 2; centerText.y = CANVAS_HEIGHT / 2; centerText.alpha = 0;
       app.stage.addChild(centerText);
 
-      const animateReels = async (targetGrid: number[][], luggageValues: any[] = [], expandingSymbol: number | null = null) => {
-        return new Promise<void>((resolve) => {
-          const tl = gsap.timeline({ onComplete: resolve });
+      // Bottom Win Indicator Text
+      const winInfoText = new PIXI.Text({ 
+        text: "", 
+        style: { fontSize: 22, fontWeight: '900', fill: '#4ade80', stroke: { color: '#000000', width: 5 }, dropShadow: { color: '#000000', blur: 4, distance: 2 } }
+      });
+      winInfoText.anchor.set(0.5, 1); 
+      winInfoText.x = CANVAS_WIDTH / 2; 
+      winInfoText.y = CANVAS_HEIGHT - 10; 
+      winInfoText.alpha = 0;
+      app.stage.addChild(winInfoText);
+
+      const animateReels = async (targetGrid: number[][], luggageValues: any[] = [], expandingSymbol: number | null = null): Promise<PIXI.Container[][]> => {
+        return new Promise((resolve) => {
+          const activeContainers: PIXI.Container[][] = Array.from({ length: 5 }, () => []);
+          const tl = gsap.timeline({ onComplete: () => resolve(activeContainers) });
           
           // Clear children EXCEPT background (index 0) and mask
           while(mainContainer.children.length > 2) {
@@ -125,6 +152,7 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
               }
 
               mainContainer.addChild(container);
+              activeContainers[col][row] = container;
 
               tl.to(container, {
                 y: finalY + 20, 
@@ -143,6 +171,35 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
         });
       };
 
+      const displayWinningLines = async (containers: PIXI.Container[][], winningLines: any[]) => {
+        if (!winningLines || winningLines.length === 0) return;
+
+        for (const line of winningLines) {
+          const { lineIndex, symbol, count, win } = line;
+          const linePath = VAC_LINES[lineIndex];
+
+          // Update Bottom Text
+          winInfoText.text = `Line ${lineIndex + 1}: ${count}x ${SYMBOL_NAMES[symbol]}  |  Win: ${(win / 1e9).toFixed(4)} SOL`;
+          gsap.to(winInfoText, { alpha: 1, duration: 0.2 });
+
+          const tl = gsap.timeline();
+          
+          // Pulsate the symbols on this specific line
+          for (let col = 0; col < count; col++) {
+            const row = linePath[col];
+            const container = containers[col][row];
+            if (container) {
+              tl.to(container.scale, { x: 1.15, y: 1.15, duration: 0.15, yoyo: true, repeat: 3 }, 0);
+            }
+          }
+          
+          // Wait to let the user read it before moving to the next line
+          await new Promise(r => setTimeout(r, 1200)); 
+        }
+        
+        gsap.to(winInfoText, { alpha: 0, duration: 0.2 });
+      };
+
       const showCenterPopup = (text: string, color: string) => {
         return new Promise<void>((resolve) => {
           centerText.text = text;
@@ -157,24 +214,35 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       };
 
       const playSequence = async () => {
-        await animateReels(playData.baseGrid);
+        // 1. Render Base Spin
+        const baseContainers = await animateReels(playData.baseGrid);
+        
+        // 2. Pulse Base Wins
+        if (playData.baseWinningLines && playData.baseWinningLines.length > 0) {
+          await displayWinningLines(baseContainers, playData.baseWinningLines);
+        }
         
         if (playData.payout > 0 && !playData.triggeredBonus) {
-           await showCenterPopup(`WIN: ${(playData.payout / 1e9).toFixed(4)} SOL`, '#4ade80');
+           await showCenterPopup(`TOTAL WIN: ${(playData.payout / 1e9).toFixed(4)} SOL`, '#facc15');
         }
 
+        // 3. Free Spins Handling
         if (playData.triggeredBonus && playData.freeSpinsData) {
           await showCenterPopup("FREE SPINS TRIGGERED!", '#c084fc');
           
           const fsData = playData.freeSpinsData;
-          await showCenterPopup(`EXPANDING SYMBOL: ${fsData.expandingSymbol}`, '#facc15');
+          await showCenterPopup(`EXPANDING SYMBOL: ${SYMBOL_NAMES[fsData.expandingSymbol].toUpperCase()}`, '#facc15');
 
           for (let i = 0; i < fsData.spins.length; i++) {
             if (!isMounted) break;
             const spin = fsData.spins[i];
             
-            await animateReels(spin.grid, spin.luggageValues, fsData.expandingSymbol);
+            const fsContainers = await animateReels(spin.grid, spin.luggageValues, fsData.expandingSymbol);
             
+            if (spin.winningLines && spin.winningLines.length > 0) {
+              await displayWinningLines(fsContainers, spin.winningLines);
+            }
+
             if (spin.collectionWin > 0) {
               await showCenterPopup(`MCPEPE COLLECTS: ${(spin.collectionWin / 1e9).toFixed(4)} SOL`, '#4ade80');
             } else if (spin.expandedWin > 0) {
