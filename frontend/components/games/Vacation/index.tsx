@@ -149,28 +149,27 @@ export default function Vacation() {
       {/* PIXI CANVAS CONTAINER */}
       <div className="box-content w-[960px] h-[600px] border-4 border-cyan-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(6,182,212,0.2)] bg-[#050806] shrink-0">
         
+        {/* Always render PIXI to show the background by default */}
+        <div className="absolute inset-0 z-10">
+          <PixiReels 
+            playData={gameResult} 
+            onAnimationComplete={() => setIsAnimating(false)} 
+          />
+        </div>
+
         {!isSpinning && !gameResult && (
-          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-            <span className="text-cyan-400 font-black text-2xl uppercase tracking-widest opacity-80 drop-shadow-lg">
+          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/50">
+            <span className="text-cyan-400 font-black text-2xl uppercase tracking-widest opacity-90 drop-shadow-lg">
               Waiting for Spin
             </span>
           </div>
         )}
         
         {isSpinning && !gameResult && (
-          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/60">
             <span className="text-purple-400 font-black text-2xl uppercase tracking-widest animate-pulse drop-shadow-lg">
               Escrowing Wager...
             </span>
-          </div>
-        )}
-
-        {gameResult && (
-          <div className="absolute inset-0 z-30">
-            <PixiReels 
-              playData={gameResult} 
-              onAnimationComplete={() => setIsAnimating(false)} 
-            />
           </div>
         )}
       </div>

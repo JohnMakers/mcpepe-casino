@@ -3,7 +3,7 @@ import * as PIXI from 'pixi.js';
 import gsap from 'gsap';
 
 interface PixiReelsProps {
-  playData: any;
+  playData: any | null;
   onAnimationComplete: () => void;
 }
 
@@ -36,10 +36,27 @@ const VAC_LINES = [
 const CANVAS_WIDTH = 960;
 const CANVAS_HEIGHT = 600;
 const SYMBOL_SIZE = 120;
-const SPACING_X = 145;
-const SPACING_Y = 140;
-const OFFSET_X = 190; 
-const OFFSET_Y = 180; 
+
+// ==========================================
+// 🛠️ MANUAL POSITION TUNING AREA
+// ==========================================
+
+// 1. Where do symbols spawn from before dropping? (Negative means above canvas)
+const DROP_START_Y = -150; 
+
+// 2. Set to true to draw a red line at DROP_START_Y so you can see it visually.
+const SHOW_DEBUG_DROP_LINE = true; 
+
+// 3. Exact X/Y resting coordinates for the 5 Columns x 3 Rows
+const TILE_POSITIONS = [
+  [ { x: 190, y: 180 }, { x: 190, y: 320 }, { x: 190, y: 460 } ], // Column 0 (Far Left)
+  [ { x: 335, y: 180 }, { x: 335, y: 320 }, { x: 335, y: 460 } ], // Column 1
+  [ { x: 480, y: 180 }, { x: 480, y: 320 }, { x: 480, y: 460 } ], // Column 2 (Middle)
+  [ { x: 625, y: 180 }, { x: 625, y: 320 }, { x: 625, y: 460 } ], // Column 3
+  [ { x: 770, y: 180 }, { x: 770, y: 320 }, { x: 770, y: 460 } ]  // Column 4 (Far Right)
+];
+
+// ==========================================
 
 export default function PixiReels({ playData, onAnimationComplete }: PixiReelsProps) {
   const pixiContainer = useRef<HTMLDivElement>(null);
@@ -70,6 +87,7 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       const mainContainer = new PIXI.Container();
       app.stage.addChild(mainContainer);
 
+      // 1. Draw Default Background
       try {
         const bg = PIXI.Sprite.from('/vacations/vacation_bg.png');
         bg.width = CANVAS_WIDTH;
@@ -79,9 +97,26 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
         console.warn("Background asset failed to load");
       }
 
+      // 2. Draw Debug Drop Line (If Enabled)
+      if (SHOW_DEBUG_DROP_LINE) {
+        const debugLine = new PIXI.Graphics()
+          .moveTo(0, DROP_START_Y)
+          .lineTo(CANVAS_WIDTH, DROP_START_Y)
+          .stroke({ color: 0xff0000, width: 4 });
+        mainContainer.addChild(debugLine);
+
+        const debugText = new PIXI.Text({ text: "DROP START LINE", style: { fill: '#ff0000', fontSize: 16, fontWeight: '900' }});
+        debugText.x = 10;
+        debugText.y = DROP_START_Y - 25;
+        mainContainer.addChild(debugText);
+      }
+
       const mask = new PIXI.Graphics().rect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT).fill(0xffffff);
       mainContainer.addChild(mask);
       mainContainer.mask = mask;
+
+      // Stop here if there is no playData (Default State on Page Load)
+      if (!playData) return;
 
       // UI Text Elements
       const centerText = new PIXI.Text({ text: "", style: { fontSize: 60, fontWeight: '900', fill: '#c084fc', stroke: { color: '#000000', width: 8 } }});
@@ -94,7 +129,6 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       winInfoText.anchor.set(0.5, 1); winInfoText.x = CANVAS_WIDTH / 2; winInfoText.y = CANVAS_HEIGHT - 10; winInfoText.alpha = 0;
       app.stage.addChild(winInfoText);
 
-      // Progressive HUD (Only visible in Free Spins)
       const hudContainer = new PIXI.Container();
       hudContainer.y = 20;
       hudContainer.alpha = 0;
@@ -116,30 +150,35 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
         else hudText.text = `MCPEPES: ${collected}/${nextTarget}  |  MULT: ${multiplier}x`;
       };
 
-      // Reel Animation Engine
       const animateReels = async (targetGrid: number[][], luggageValues: any[] = [], isNudge = false, hookCol = -1): Promise<PIXI.Container[][]> => {
         return new Promise((resolve) => {
           const activeContainers: PIXI.Container[][] = Array.from({ length: 5 }, () => []);
           const tl = gsap.timeline({ onComplete: () => resolve(activeContainers) });
           
-          while(mainContainer.children.length > 2) mainContainer.removeChildAt(2);
+          // Clear previous grid
+          while(mainContainer.children.length > (SHOW_DEBUG_DROP_LINE ? 4 : 2)) {
+             mainContainer.removeChildAt(mainContainer.children.length - 1);
+          }
 
           for (let col = 0; col < 5; col++) {
             for (let row = 0; row < 3; row++) {
               const symType = targetGrid[col][row];
               const container = new PIXI.Container();
-              const finalX = OFFSET_X + col * SPACING_X;
-              const finalY = OFFSET_Y + row * SPACING_Y;
+              
+              // Map to explicit coordinates
+              const targetPos = TILE_POSITIONS[col][row];
+              const finalX = targetPos.x;
+              const finalY = targetPos.y;
               
               container.x = finalX;
 
-              // Animation start positions
+              // Setup start positions based on mechanic
               if (isNudge) {
-                container.y = finalY - SPACING_Y; // Start one slot up and slide down
+                container.y = finalY - 140; 
               } else if (col === hookCol) {
-                container.y = finalY + 500; // Hook pulls from the bottom up
+                container.y = finalY + 500; 
               } else {
-                container.y = finalY - 800; // Normal spin drops from top
+                container.y = DROP_START_Y; // Use the manual drop line
               }
 
               try {
@@ -151,7 +190,6 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
                 container.addChild(fallback);
               }
 
-              // Apply Luggage Multipliers
               if (symType === 6 && luggageValues) { 
                 const lugData = luggageValues.find((l: any) => l.col === col && l.row === row);
                 if (lugData) {
@@ -165,11 +203,9 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
               activeContainers[col][row] = container;
 
               if (col === hookCol) {
-                // Hook animation (pulls up)
                 tl.to(container, { y: finalY - 20, duration: 0.5, ease: "power2.out", delay: row * 0.05 }, 0);
                 tl.to(container, { y: finalY, duration: 0.2, ease: "bounce.out" }, ">");
               } else {
-                // Standard drop or Nudge slide
                 tl.to(container, { y: finalY + 20, duration: 0.4, ease: "power2.in", delay: col * 0.15 + (row * 0.02) }, 0);
                 tl.to(container, { y: finalY, duration: 0.15, ease: "back.out(2)" }, `>${col * 0.15}`); 
               }
@@ -217,10 +253,9 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
           const mcpepes: PIXI.Container[] = [];
           const luggages: PIXI.Container[] = [];
 
-          // Find Fishermen and Fish
           for (let c = 0; c < 5; c++) {
             for (let r = 0; r < 3; r++) {
-              if (playData.freeSpinsData?.spins) { // Safe check
+              if (playData.freeSpinsData?.spins) { 
                   const sym = containers[c][r].children[0] as PIXI.Sprite;
                   if (sym.texture === PIXI.Texture.from(SYMBOL_MAP[10])) mcpepes.push(containers[c][r]);
                   if (sym.texture === PIXI.Texture.from(SYMBOL_MAP[6])) luggages.push(containers[c][r]);
@@ -229,9 +264,7 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
           }
 
           if (mcpepes.length > 0 && luggages.length > 0) {
-            // Pulse McPepe
             mcpepes.forEach(pepe => tl.to(pepe.scale, { x: 1.3, y: 1.3, duration: 0.3, yoyo: true, repeat: 1 }, 0));
-            // Pull Luggage towards Center
             luggages.forEach(lug => {
               tl.to(lug, { x: CANVAS_WIDTH/2, y: CANVAS_HEIGHT/2, alpha: 0, duration: 0.5, ease: "power2.in" }, 0.2);
             });
@@ -242,10 +275,8 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       };
 
       const playSequence = async () => {
-        // 1. Initial Grid (Checks for Near Misses)
         let baseContainers = await animateReels(playData.initialGrid);
 
-        // 2. Near Miss Animations
         if (playData.nearMissData?.nudgeTriggered) {
           await new Promise(r => setTimeout(r, 800));
           await showCenterPopup("NUDGE!", '#38bdf8');
@@ -256,7 +287,6 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
           baseContainers = await animateReels(playData.baseGrid, [], false, playData.nearMissData.hookCol);
         }
         
-        // 3. Base Game Wins
         if (playData.baseWinningLines?.length > 0) {
           await displayWinningLines(baseContainers, playData.baseWinningLines);
         }
@@ -265,10 +295,9 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
            await showCenterPopup(`TOTAL WIN: ${(playData.payout / 1e9).toFixed(4)} SOL`, '#facc15');
         }
 
-        // 4. Free Spins Loop
         if (playData.triggeredBonus && playData.freeSpinsData) {
           await showCenterPopup("FREE SPINS!", '#c084fc');
-          gsap.to(hudContainer, { alpha: 1, duration: 0.5 }); // Show HUD
+          gsap.to(hudContainer, { alpha: 1, duration: 0.5 }); 
           
           const fsData = playData.freeSpinsData;
           
@@ -291,7 +320,7 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
             await new Promise(r => setTimeout(r, 600)); 
           }
 
-          gsap.to(hudContainer, { alpha: 0, duration: 0.5 }); // Hide HUD
+          gsap.to(hudContainer, { alpha: 0, duration: 0.5 }); 
         }
 
         if (isMounted) onAnimationComplete();
