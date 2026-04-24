@@ -35,7 +35,7 @@ const VAC_LINES = [
 
 const CANVAS_WIDTH = 960;
 const CANVAS_HEIGHT = 600;
-const SYMBOL_SIZE = 90;
+const SYMBOL_SIZE = 100;
 
 // ==========================================
 // 🛠️ MANUAL POSITION TUNING AREA
@@ -47,7 +47,7 @@ const SHOW_DEBUG_GRID = true;
 
 // 2. Where do symbols spawn from before dropping? 
 // (Set to 20 so you can see it while debugging. Change to -150 for production).
-const DROP_START_Y = 160; 
+const DROP_START_Y = 130; 
 
 // 3. Exact X/Y resting coordinates for the 5 Columns x 3 Rows
 // Adjust these numbers to perfectly align the green boxes with your background!
