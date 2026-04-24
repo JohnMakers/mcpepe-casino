@@ -7,7 +7,6 @@ interface PixiReelsProps {
   onAnimationComplete: () => void;
 }
 
-// 12-Symbol Mapping with Updated Paths
 const SYMBOL_MAP: Record<number, string> = {
   0: '/vacations/vacation_10.png', 
   1: '/vacations/vacation_j.png', 
@@ -29,12 +28,9 @@ const SYMBOL_NAMES: Record<number, string> = {
   10: 'McPepe', 11: 'Passports'
 };
 
-// 20 Fixed Paylines for Frontend Mapping
 const VAC_LINES = [
   [1,1,1,1,1], [0,0,0,0,0], [2,2,2,2,2], [0,1,2,1,0], [2,1,0,1,2],
-  [1,0,1,0,1], [1,2,1,2,1], [0,0,1,2,2], [2,2,1,0,0], [1,0,0,0,1],
-  [1,2,2,2,1], [0,1,0,1,0], [2,1,2,1,2], [0,1,1,1,0], [2,1,1,1,2],
-  [1,1,0,1,1], [1,1,2,1,1], [0,0,2,0,0], [2,2,0,2,2], [0,2,2,2,0]
+  [1,0,0,0,1], [1,2,2,2,1], [0,0,1,2,2], [2,2,1,0,0], [1,0,1,2,1]
 ];
 
 const CANVAS_WIDTH = 960;
@@ -42,8 +38,8 @@ const CANVAS_HEIGHT = 600;
 const SYMBOL_SIZE = 120;
 const SPACING_X = 145;
 const SPACING_Y = 140;
-const OFFSET_X = 190;
-const OFFSET_Y = 180;
+const OFFSET_X = 190; 
+const OFFSET_Y = 180; 
 
 export default function PixiReels({ playData, onAnimationComplete }: PixiReelsProps) {
   const pixiContainer = useRef<HTMLDivElement>(null);
@@ -58,11 +54,8 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
         width: CANVAS_WIDTH, height: CANVAS_HEIGHT, backgroundAlpha: 0, antialias: true,
       });
 
-      // Load Assets safely (including BG)
       const assetPaths = [...Object.values(SYMBOL_MAP), '/vacations/vacation_bg.png'];
-      const assetsToLoad = assetPaths.map(path => 
-        PIXI.Assets.load(path).catch(() => null) 
-      );
+      const assetsToLoad = assetPaths.map(path => PIXI.Assets.load(path).catch(() => null));
       await Promise.all(assetsToLoad);
 
       if (!isMounted) {
@@ -77,7 +70,6 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       const mainContainer = new PIXI.Container();
       app.stage.addChild(mainContainer);
 
-      // ADD SLOT BACKGROUND
       try {
         const bg = PIXI.Sprite.from('/vacations/vacation_bg.png');
         bg.width = CANVAS_WIDTH;
@@ -91,31 +83,46 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       mainContainer.addChild(mask);
       mainContainer.mask = mask;
 
-      // Center Popup Text
+      // UI Text Elements
       const centerText = new PIXI.Text({ text: "", style: { fontSize: 60, fontWeight: '900', fill: '#c084fc', stroke: { color: '#000000', width: 8 } }});
       centerText.anchor.set(0.5); centerText.x = CANVAS_WIDTH / 2; centerText.y = CANVAS_HEIGHT / 2; centerText.alpha = 0;
       app.stage.addChild(centerText);
 
-      // Bottom Win Indicator Text
       const winInfoText = new PIXI.Text({ 
-        text: "", 
-        style: { fontSize: 22, fontWeight: '900', fill: '#4ade80', stroke: { color: '#000000', width: 5 }, dropShadow: { color: '#000000', blur: 4, distance: 2 } }
+        text: "", style: { fontSize: 22, fontWeight: '900', fill: '#4ade80', stroke: { color: '#000000', width: 5 }, dropShadow: { color: '#000000', blur: 4, distance: 2 } }
       });
-      winInfoText.anchor.set(0.5, 1); 
-      winInfoText.x = CANVAS_WIDTH / 2; 
-      winInfoText.y = CANVAS_HEIGHT - 10; 
-      winInfoText.alpha = 0;
+      winInfoText.anchor.set(0.5, 1); winInfoText.x = CANVAS_WIDTH / 2; winInfoText.y = CANVAS_HEIGHT - 10; winInfoText.alpha = 0;
       app.stage.addChild(winInfoText);
 
-      const animateReels = async (targetGrid: number[][], luggageValues: any[] = [], expandingSymbol: number | null = null): Promise<PIXI.Container[][]> => {
+      // Progressive HUD (Only visible in Free Spins)
+      const hudContainer = new PIXI.Container();
+      hudContainer.y = 20;
+      hudContainer.alpha = 0;
+      app.stage.addChild(hudContainer);
+
+      const hudBg = new PIXI.Graphics().roundRect(CANVAS_WIDTH / 2 - 250, 0, 500, 60, 15).fill({ color: 0x000000, alpha: 0.8 });
+      hudBg.stroke({ color: 0x4ade80, width: 3 });
+      hudContainer.addChild(hudBg);
+
+      const hudText = new PIXI.Text({ text: "MCPEPES: 0/4  |  MULT: 1x", style: { fontSize: 24, fontWeight: '900', fill: '#ffffff' }});
+      hudText.anchor.set(0.5); hudText.x = CANVAS_WIDTH / 2; hudText.y = 30;
+      hudContainer.addChild(hudText);
+
+      const updateHUD = (collected: number, multiplier: number) => {
+        let nextTarget = 4;
+        if (collected >= 4) nextTarget = 8;
+        if (collected >= 8) nextTarget = 12;
+        if (collected >= 12) hudText.text = `MAX LEVEL REACHED!  |  MULT: 10x`;
+        else hudText.text = `MCPEPES: ${collected}/${nextTarget}  |  MULT: ${multiplier}x`;
+      };
+
+      // Reel Animation Engine
+      const animateReels = async (targetGrid: number[][], luggageValues: any[] = [], isNudge = false, hookCol = -1): Promise<PIXI.Container[][]> => {
         return new Promise((resolve) => {
           const activeContainers: PIXI.Container[][] = Array.from({ length: 5 }, () => []);
           const tl = gsap.timeline({ onComplete: () => resolve(activeContainers) });
           
-          // Clear children EXCEPT background (index 0) and mask
-          while(mainContainer.children.length > 2) {
-             mainContainer.removeChildAt(2);
-          }
+          while(mainContainer.children.length > 2) mainContainer.removeChildAt(2);
 
           for (let col = 0; col < 5; col++) {
             for (let row = 0; row < 3; row++) {
@@ -125,7 +132,15 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
               const finalY = OFFSET_Y + row * SPACING_Y;
               
               container.x = finalX;
-              container.y = finalY - 800; 
+
+              // Animation start positions
+              if (isNudge) {
+                container.y = finalY - SPACING_Y; // Start one slot up and slide down
+              } else if (col === hookCol) {
+                container.y = finalY + 500; // Hook pulls from the bottom up
+              } else {
+                container.y = finalY - 800; // Normal spin drops from top
+              }
 
               try {
                 const sprite = PIXI.Sprite.from(SYMBOL_MAP[symType]);
@@ -136,9 +151,9 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
                 container.addChild(fallback);
               }
 
-              // Apply Big Bass Luggage Cash Values (Symbol 6 is Luggage)
+              // Apply Luggage Multipliers
               if (symType === 6 && luggageValues) { 
-                const lugData = luggageValues.find(l => l.col === col && l.row === row);
+                const lugData = luggageValues.find((l: any) => l.col === col && l.row === row);
                 if (lugData) {
                   const valText = new PIXI.Text({ text: `${lugData.val}x`, style: { fontSize: 24, fontWeight: '900', fill: '#4ade80', stroke: { color: '#000000', width: 4 } }});
                   valText.anchor.set(0.5); valText.y = 40;
@@ -146,26 +161,18 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
                 }
               }
 
-              if (expandingSymbol !== null && symType === expandingSymbol) {
-                const highlight = new PIXI.Graphics().rect(-SYMBOL_SIZE/2, -SYMBOL_SIZE/2, SYMBOL_SIZE, SYMBOL_SIZE).stroke({ color: 0xc084fc, width: 6 });
-                container.addChild(highlight);
-              }
-
               mainContainer.addChild(container);
               activeContainers[col][row] = container;
 
-              tl.to(container, {
-                y: finalY + 20, 
-                duration: 0.4,
-                ease: "power2.in",
-                delay: col * 0.15 + (row * 0.02) 
-              }, 0);
-              
-              tl.to(container, {
-                y: finalY, 
-                duration: 0.15,
-                ease: "back.out(2)"
-              }, `>${col * 0.15}`); 
+              if (col === hookCol) {
+                // Hook animation (pulls up)
+                tl.to(container, { y: finalY - 20, duration: 0.5, ease: "power2.out", delay: row * 0.05 }, 0);
+                tl.to(container, { y: finalY, duration: 0.2, ease: "bounce.out" }, ">");
+              } else {
+                // Standard drop or Nudge slide
+                tl.to(container, { y: finalY + 20, duration: 0.4, ease: "power2.in", delay: col * 0.15 + (row * 0.02) }, 0);
+                tl.to(container, { y: finalY, duration: 0.15, ease: "back.out(2)" }, `>${col * 0.15}`); 
+              }
             }
           }
         });
@@ -173,18 +180,14 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
 
       const displayWinningLines = async (containers: PIXI.Container[][], winningLines: any[]) => {
         if (!winningLines || winningLines.length === 0) return;
-
         for (const line of winningLines) {
           const { lineIndex, symbol, count, win } = line;
           const linePath = VAC_LINES[lineIndex];
 
-          // Update Bottom Text
           winInfoText.text = `Line ${lineIndex + 1}: ${count}x ${SYMBOL_NAMES[symbol]}  |  Win: ${(win / 1e9).toFixed(4)} SOL`;
           gsap.to(winInfoText, { alpha: 1, duration: 0.2 });
 
           const tl = gsap.timeline();
-          
-          // Pulsate the symbols on this specific line
           for (let col = 0; col < count; col++) {
             const row = linePath[col];
             const container = containers[col][row];
@@ -192,33 +195,69 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
               tl.to(container.scale, { x: 1.15, y: 1.15, duration: 0.15, yoyo: true, repeat: 3 }, 0);
             }
           }
-          
-          // Wait to let the user read it before moving to the next line
           await new Promise(r => setTimeout(r, 1200)); 
         }
-        
         gsap.to(winInfoText, { alpha: 0, duration: 0.2 });
       };
 
       const showCenterPopup = (text: string, color: string) => {
         return new Promise<void>((resolve) => {
-          centerText.text = text;
-          centerText.style.fill = color;
+          centerText.text = text; centerText.style.fill = color;
           gsap.fromTo(centerText.scale, { x: 0, y: 0 }, { x: 1, y: 1, duration: 0.5, ease: "back.out(1.5)" });
           gsap.fromTo(centerText, { alpha: 0 }, { alpha: 1, duration: 0.2 });
           gsap.to(centerText, { alpha: 0, y: centerText.y - 50, duration: 0.4, delay: 1.5, onComplete: () => {
-            centerText.y = CANVAS_HEIGHT / 2; 
-            resolve();
+            centerText.y = CANVAS_HEIGHT / 2; resolve();
           }});
         });
       };
 
+      const animateCollection = async (containers: PIXI.Container[][], luggageValues: any[]) => {
+        return new Promise<void>((resolve) => {
+          const tl = gsap.timeline({ onComplete: resolve });
+          const mcpepes: PIXI.Container[] = [];
+          const luggages: PIXI.Container[] = [];
+
+          // Find Fishermen and Fish
+          for (let c = 0; c < 5; c++) {
+            for (let r = 0; r < 3; r++) {
+              if (playData.freeSpinsData?.spins) { // Safe check
+                  const sym = containers[c][r].children[0] as PIXI.Sprite;
+                  if (sym.texture === PIXI.Texture.from(SYMBOL_MAP[10])) mcpepes.push(containers[c][r]);
+                  if (sym.texture === PIXI.Texture.from(SYMBOL_MAP[6])) luggages.push(containers[c][r]);
+              }
+            }
+          }
+
+          if (mcpepes.length > 0 && luggages.length > 0) {
+            // Pulse McPepe
+            mcpepes.forEach(pepe => tl.to(pepe.scale, { x: 1.3, y: 1.3, duration: 0.3, yoyo: true, repeat: 1 }, 0));
+            // Pull Luggage towards Center
+            luggages.forEach(lug => {
+              tl.to(lug, { x: CANVAS_WIDTH/2, y: CANVAS_HEIGHT/2, alpha: 0, duration: 0.5, ease: "power2.in" }, 0.2);
+            });
+          } else {
+             resolve();
+          }
+        });
+      };
+
       const playSequence = async () => {
-        // 1. Render Base Spin
-        const baseContainers = await animateReels(playData.baseGrid);
+        // 1. Initial Grid (Checks for Near Misses)
+        let baseContainers = await animateReels(playData.initialGrid);
+
+        // 2. Near Miss Animations
+        if (playData.nearMissData?.nudgeTriggered) {
+          await new Promise(r => setTimeout(r, 800));
+          await showCenterPopup("NUDGE!", '#38bdf8');
+          baseContainers = await animateReels(playData.baseGrid, [], true, -1);
+        } else if (playData.nearMissData?.hookTriggered) {
+          await new Promise(r => setTimeout(r, 800));
+          await showCenterPopup("HOOKED!", '#f87171');
+          baseContainers = await animateReels(playData.baseGrid, [], false, playData.nearMissData.hookCol);
+        }
         
-        // 2. Pulse Base Wins
-        if (playData.baseWinningLines && playData.baseWinningLines.length > 0) {
+        // 3. Base Game Wins
+        if (playData.baseWinningLines?.length > 0) {
           await displayWinningLines(baseContainers, playData.baseWinningLines);
         }
         
@@ -226,31 +265,33 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
            await showCenterPopup(`TOTAL WIN: ${(playData.payout / 1e9).toFixed(4)} SOL`, '#facc15');
         }
 
-        // 3. Free Spins Handling
+        // 4. Free Spins Loop
         if (playData.triggeredBonus && playData.freeSpinsData) {
-          await showCenterPopup("FREE SPINS TRIGGERED!", '#c084fc');
+          await showCenterPopup("FREE SPINS!", '#c084fc');
+          gsap.to(hudContainer, { alpha: 1, duration: 0.5 }); // Show HUD
           
           const fsData = playData.freeSpinsData;
-          await showCenterPopup(`EXPANDING SYMBOL: ${SYMBOL_NAMES[fsData.expandingSymbol].toUpperCase()}`, '#facc15');
-
+          
           for (let i = 0; i < fsData.spins.length; i++) {
             if (!isMounted) break;
             const spin = fsData.spins[i];
             
-            const fsContainers = await animateReels(spin.grid, spin.luggageValues, fsData.expandingSymbol);
+            updateHUD(spin.totalCollectedSoFar, spin.activeMultiplier);
+            const fsContainers = await animateReels(spin.grid, spin.luggageValues);
             
-            if (spin.winningLines && spin.winningLines.length > 0) {
+            if (spin.winningLines?.length > 0) {
               await displayWinningLines(fsContainers, spin.winningLines);
             }
 
-            if (spin.collectionWin > 0) {
-              await showCenterPopup(`MCPEPE COLLECTS: ${(spin.collectionWin / 1e9).toFixed(4)} SOL`, '#4ade80');
-            } else if (spin.expandedWin > 0) {
-               await showCenterPopup(`EXPANSION WIN: ${(spin.expandedWin / 1e9).toFixed(4)} SOL`, '#facc15');
+            if (spin.mcpepeCount > 0 && spin.collectionWin > 0) {
+              await animateCollection(fsContainers, spin.luggageValues);
+              await showCenterPopup(`MCPEPE CATCHES: ${(spin.collectionWin / 1e9).toFixed(4)} SOL`, '#4ade80');
             }
 
             await new Promise(r => setTimeout(r, 600)); 
           }
+
+          gsap.to(hudContainer, { alpha: 0, duration: 0.5 }); // Hide HUD
         }
 
         if (isMounted) onAnimationComplete();

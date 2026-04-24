@@ -1232,7 +1232,7 @@ app.post('/api/vacation/seed', (req, res) => {
 });
 
 // ==========================================
-// MCPEPE'S VACATION: GAME ENGINE MATH (12-SYMBOL)
+// MCPEPE'S VACATION: GAME ENGINE MATH (10-LINE BIG BASS SPLASH CLONE)
 // ==========================================
 const VACATION_SYMBOLS = {
     TEN: 0, J: 1, Q: 2, K: 3, A: 4, 
@@ -1240,7 +1240,7 @@ const VACATION_SYMBOLS = {
     MCPEPE: 10, PASSPORT_SCATTER: 11 
 };
 
-// Payout Multipliers (Based on $0.05 line bet equivalent)
+// Payout Multipliers (Based on $0.10 line bet equivalent now that we have 10 lines)
 const VAC_PAYTABLE = {
     [VACATION_SYMBOLS.TEN]: { 3: 5, 4: 25, 5: 100 },
     [VACATION_SYMBOLS.J]: { 3: 5, 4: 25, 5: 100 },
@@ -1248,32 +1248,47 @@ const VAC_PAYTABLE = {
     [VACATION_SYMBOLS.K]: { 3: 10, 4: 50, 5: 150 },
     [VACATION_SYMBOLS.A]: { 3: 10, 4: 50, 5: 150 },
     [VACATION_SYMBOLS.SUNSCREEN]: { 2: 5, 3: 30, 4: 100, 5: 500 },
-    [VACATION_SYMBOLS.LUGGAGE]: { 2: 5, 3: 30, 4: 100, 5: 500 },
+    // NEW: Luggage (Money) now pays standard line wins in the base game (Up to 20x Total Bet / 200x Line Bet)
+    [VACATION_SYMBOLS.LUGGAGE]: { 3: 10, 4: 50, 5: 200 }, 
     [VACATION_SYMBOLS.COCKTAIL]: { 2: 10, 3: 40, 4: 400, 5: 1000 },
     [VACATION_SYMBOLS.JETSKI]: { 2: 10, 3: 40, 4: 400, 5: 1000 },
     [VACATION_SYMBOLS.YACHT]: { 2: 20, 3: 100, 4: 1000, 5: 2000 },
-    [VACATION_SYMBOLS.MCPEPE]: { 2: 50, 3: 200, 4: 2000, 5: 5000 },
-    [VACATION_SYMBOLS.PASSPORT_SCATTER]: { 3: 40, 4: 400, 5: 4000 } // Pays on total bet
+    // Note: MCPEPE (Collector) is removed from the paytable because he will NOT drop in the base game anymore.
+    [VACATION_SYMBOLS.PASSPORT_SCATTER]: { 3: 20, 4: 150, 5: 2000 } // Scatter pays directly as a multiplier of TOTAL bet
 };
 
-// 20 Fixed Paylines
+// 10 Fixed Paylines (Classic setup)
 const VAC_LINES = [
-    [1,1,1,1,1], [0,0,0,0,0], [2,2,2,2,2], [0,1,2,1,0], [2,1,0,1,2],
-    [1,0,1,0,1], [1,2,1,2,1], [0,0,1,2,2], [2,2,1,0,0], [1,0,0,0,1],
-    [1,2,2,2,1], [0,1,0,1,0], [2,1,2,1,2], [0,1,1,1,0], [2,1,1,1,2],
-    [1,1,0,1,1], [1,1,2,1,1], [0,0,2,0,0], [2,2,0,2,2], [0,2,2,2,0]
+    [1,1,1,1,1], // Line 1: Middle
+    [0,0,0,0,0], // Line 2: Top
+    [2,2,2,2,2], // Line 3: Bottom
+    [0,1,2,1,0], // Line 4: V
+    [2,1,0,1,2], // Line 5: Inverted V
+    [1,0,0,0,1], // Line 6: Chevron Up
+    [1,2,2,2,1], // Line 7: Chevron Down
+    [0,0,1,2,2], // Line 8: Zig Zag Down
+    [2,2,1,0,0], // Line 9: Zig Zag Up
+    [1,0,1,2,1]  // Line 10: W
 ];
 
-// Expanded 60-Symbol Reel Strips tuned for 12 Symbols (~96.5% RTP, High Volatility)
-const VAC_REEL_STRIPS = [
-    [0,1,2,3,4,0,5,1,2,11,3,0,1,6,2,0,1,7,3,0,2,1,4,0,8,1,2,0,3,1,4,0,2,1,5,0,3,2,1,4,0,9,1,2,0,3,1,4,0,2,1,10,0,3,1,2,4,11],
-    [1,0,2,4,3,1,0,5,1,2,0,3,1,0,6,2,1,0,7,3,1,2,0,4,1,8,0,2,1,3,0,4,1,2,0,5,1,3,2,0,4,1,9,0,2,1,3,0,4,1,2,0,11,1,3,0,2,4,10,11],
-    [2,1,0,3,4,2,1,5,2,0,1,4,2,1,6,0,2,1,7,4,2,0,1,3,2,8,1,0,2,4,1,3,2,0,1,5,2,4,0,1,3,2,9,1,0,2,4,1,3,2,0,1,11,2,4,1,0,3,10,11],
-    [3,2,1,0,4,3,2,5,3,1,0,4,3,2,0,1,3,2,6,4,3,1,0,2,3,7,2,1,3,4,0,2,3,1,0,8,3,4,1,0,2,3,9,0,1,3,4,0,2,3,1,0,11,3,4,0,1,2,10,11],
-    [4,3,2,1,0,4,3,5,4,2,1,0,4,3,1,2,4,3,6,0,4,2,1,3,4,7,3,2,4,0,1,3,4,2,1,8,4,0,2,1,3,4,9,1,2,4,0,1,3,4,2,1,11,4,0,1,2,3,10,11]
+// Base Game Strips (Symbol 10 / McPepe is completely REMOVED)
+const BASE_VAC_REEL_STRIPS = [
+    [0,1,2,3,4,0,5,1,2,11,3,0,1,6,2,0,1,7,3,0,2,1,4,0,8,1,2,0,3,1,4,0,2,1,5,0,3,2,1,4,0,9,1,2,0,3,1,4,0,2,1,5,0,3,1,2,4,11],
+    [1,0,2,4,3,1,0,5,1,2,0,3,1,0,6,2,1,0,7,3,1,2,0,4,1,8,0,2,1,3,0,4,1,2,0,5,1,3,2,0,4,1,9,0,2,1,3,0,4,1,2,0,11,1,3,0,2,4,6,11],
+    [2,1,0,3,4,2,1,5,2,0,1,4,2,1,6,0,2,1,7,4,2,0,1,3,2,8,1,0,2,4,1,3,2,0,1,5,2,4,0,1,3,2,9,1,0,2,4,1,3,2,0,1,11,2,4,1,0,3,7,11],
+    [3,2,1,0,4,3,2,5,3,1,0,4,3,2,0,1,3,2,6,4,3,1,0,2,3,7,2,1,3,4,0,2,3,1,0,8,3,4,1,0,2,3,9,0,1,3,4,0,2,3,1,0,11,3,4,0,1,2,8,11],
+    [4,3,2,1,0,4,3,5,4,2,1,0,4,3,1,2,4,3,6,0,4,2,1,3,4,7,3,2,4,0,1,3,4,2,1,8,4,0,2,1,3,4,9,1,2,4,0,1,3,4,2,1,11,4,0,1,2,3,9,11]
 ];
 
-// Potential values for the Luggage Cash Prizes during Free Spins
+// Free Spins Strips (Symbol 10 / McPepe is heavily injected to trigger collections)
+const FS_VAC_REEL_STRIPS = [
+    [0,1,2,3,4,10,5,1,2,11,3,10,1,6,2,10,1,7,3,0,2,1,4,10,8,1,2,0,3,1,4,10,2,1,5,0,3,2,1,4,10,9,1,2,0,3,1,4,10,2,1,10,0,3,1,2,4,11],
+    [1,0,2,4,3,10,0,5,1,2,10,3,1,0,6,2,10,0,7,3,1,2,10,4,1,8,0,2,1,3,10,4,1,2,0,5,1,3,2,10,4,1,9,0,2,1,3,10,4,1,2,0,11,1,3,0,2,4,10,11],
+    [2,1,0,3,4,10,1,5,2,0,10,4,2,1,6,0,10,1,7,4,2,0,10,3,2,8,1,0,2,4,10,3,2,0,1,5,2,4,10,1,3,2,9,1,0,2,4,10,3,2,0,1,11,2,4,1,0,3,10,11],
+    [3,2,1,0,4,10,2,5,3,1,10,4,3,2,0,1,10,2,6,4,3,1,10,2,3,7,2,1,3,4,10,2,3,1,0,8,3,4,10,0,2,3,9,0,1,3,4,10,2,3,1,0,11,3,4,0,1,2,10,11],
+    [4,3,2,1,0,10,3,5,4,2,10,0,4,3,1,2,10,3,6,0,4,2,10,3,4,7,3,2,4,0,10,3,4,2,1,8,4,0,10,1,3,4,9,1,2,4,10,1,3,4,2,1,11,4,0,1,2,3,10,11]
+];
+
 const LUGGAGE_PRIZES = [2, 5, 10, 25, 50, 100];
 
 function getVacationFloat(serverSeed, clientSeed, nonce, counter) {
@@ -1281,9 +1296,13 @@ function getVacationFloat(serverSeed, clientSeed, nonce, counter) {
     return parseInt(hash.substring(0, 8), 16) / 0xffffffff; 
 }
 
-function spinVacationReels(serverSeed, clientSeed, nonce, counterRef, forceScatters = false) {
+function spinVacationReels(serverSeed, clientSeed, nonce, counterRef, isFreeSpin = false, forceScatters = false) {
     let grid = [];
+    let stops = [];
     let scatterCols = [];
+    
+    // Select the correct reel strips!
+    const activeStrips = isFreeSpin ? FS_VAC_REEL_STRIPS : BASE_VAC_REEL_STRIPS;
     
     if (forceScatters) {
         while(scatterCols.length < 3) {
@@ -1293,10 +1312,11 @@ function spinVacationReels(serverSeed, clientSeed, nonce, counterRef, forceScatt
     }
 
     for (let col = 0; col < 5; col++) {
-        let strip = VAC_REEL_STRIPS[col];
+        let strip = activeStrips[col];
         let stopFloat = getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++);
         let stop = Math.floor(stopFloat * strip.length);
         
+        stops.push(stop);
         let columnSymbols = [strip[stop], strip[(stop+1)%strip.length], strip[(stop+2)%strip.length]];
         
         if (forceScatters && scatterCols.includes(col)) {
@@ -1306,26 +1326,42 @@ function spinVacationReels(serverSeed, clientSeed, nonce, counterRef, forceScatt
         
         grid.push(columnSymbols);
     }
-    return grid;
+    return { grid, stops };
 }
 
-function evaluateVacationGrid(grid, lineBet, expandingSymbol = null, serverSeed = "", clientSeed = "", nonce = 0, counterRef = {val: 0}) {
+function evaluateVacationGrid(grid, lineBet, serverSeed = "", clientSeed = "", nonce = 0, counterRef = {val: 0}) {
     let payout = 0;
     let winningLines = [];
     let scatterCount = 0;
-    let collectionWin = 0;
     
-    // 1. Count Scatters
+    // Big Bass Data Trackers
+    let mcpepeCount = 0;
+    let totalLuggageMult = 0;
+    let luggageValues = [];
+    
+    // 1. Scan Grid for Scatters, McPepes, and Luggage Values
     for (let c = 0; c < 5; c++) {
         for (let r = 0; r < 3; r++) {
-            if (grid[c][r] === VACATION_SYMBOLS.PASSPORT_SCATTER) scatterCount++;
+            const sym = grid[c][r];
+            
+            if (sym === VACATION_SYMBOLS.PASSPORT_SCATTER) scatterCount++;
+            if (sym === VACATION_SYMBOLS.MCPEPE) mcpepeCount++;
+            
+            if (sym === VACATION_SYMBOLS.LUGGAGE) {
+                let prizeFloat = getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+                let prizeMult = LUGGAGE_PRIZES[Math.floor(prizeFloat * LUGGAGE_PRIZES.length)];
+                luggageValues.push({ col: c, row: r, val: prizeMult });
+                totalLuggageMult += prizeMult;
+            }
         }
     }
+
+    // Scatter pays on TOTAL bet (lineBet * 10 lines)
     if (VAC_PAYTABLE[VACATION_SYMBOLS.PASSPORT_SCATTER][scatterCount]) {
-        payout += lineBet * VAC_PAYTABLE[VACATION_SYMBOLS.PASSPORT_SCATTER][scatterCount];
+        payout += (lineBet * 10) * VAC_PAYTABLE[VACATION_SYMBOLS.PASSPORT_SCATTER][scatterCount];
     }
 
-    // 2. Evaluate 20 Standard Lines
+    // 2. Evaluate 10 Standard Lines
     for (let i = 0; i < VAC_LINES.length; i++) {
         let line = VAC_LINES[i];
         let firstSym = -1;
@@ -1333,9 +1369,9 @@ function evaluateVacationGrid(grid, lineBet, expandingSymbol = null, serverSeed 
         
         for (let col = 0; col < 5; col++) {
             let sym = grid[col][line[col]];
-            if (sym === VACATION_SYMBOLS.PASSPORT_SCATTER) {
-                count++; 
-            } else if (firstSym === -1) {
+            if (sym === VACATION_SYMBOLS.PASSPORT_SCATTER) break; // Scatters break lines
+            
+            if (firstSym === -1) {
                 firstSym = sym;
                 count++;
             } else if (sym === firstSym) {
@@ -1352,47 +1388,74 @@ function evaluateVacationGrid(grid, lineBet, expandingSymbol = null, serverSeed 
         }
     }
 
-    // 3. Free Spins Logic
-    let expandedWin = 0;
-    let luggageValues = []; 
-    if (expandingSymbol !== null) {
-        let expandCount = 0;
-        for (let col = 0; col < 5; col++) {
-            if (grid[col].includes(expandingSymbol)) expandCount++;
-        }
-        
-        let minRequired = expandingSymbol >= VACATION_SYMBOLS.SUNSCREEN ? 2 : 3;
-        if (expandCount >= minRequired && VAC_PAYTABLE[expandingSymbol][expandCount]) {
-            expandedWin = (lineBet * VAC_PAYTABLE[expandingSymbol][expandCount]) * 20;
-            payout += expandedWin;
-        }
+    return { payout, winningLines, scatterCount, mcpepeCount, totalLuggageMult, luggageValues };
+}
 
-        // Collection Mechanic
-        let mcpepePresent = false;
-        let totalLuggageMult = 0;
-        
-        for (let c = 0; c < 5; c++) {
-            for (let r = 0; r < 3; r++) {
-                if (grid[c][r] === VACATION_SYMBOLS.MCPEPE) mcpepePresent = true;
-                if (grid[c][r] === VACATION_SYMBOLS.LUGGAGE) {
-                    let prizeFloat = getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++);
-                    let prizeMult = LUGGAGE_PRIZES[Math.floor(prizeFloat * LUGGAGE_PRIZES.length)];
-                    luggageValues.push({ col: c, row: r, val: prizeMult });
-                    totalLuggageMult += prizeMult;
-                }
+function processNearMiss(initialGrid, initialStops, serverSeed, clientSeed, nonce, counterRef) {
+    let scatters = [];
+    for (let c = 0; c < 5; c++) {
+        for (let r = 0; r < 3; r++) {
+            if (initialGrid[c][r] === VACATION_SYMBOLS.PASSPORT_SCATTER) {
+                scatters.push({ col: c, row: r });
             }
-        }
-
-        if (mcpepePresent && totalLuggageMult > 0) {
-            collectionWin = lineBet * 20 * totalLuggageMult; 
-            payout += collectionWin;
         }
     }
 
-    return { payout, winningLines, scatterCount, expandedWin, collectionWin, luggageValues };
+    let result = {
+        grid: initialGrid, 
+        nudgeTriggered: false,
+        hookTriggered: false,
+        hookCol: -1
+    };
+
+    if (scatters.length === 2) {
+        let canNudge = scatters.every(s => s.row < 2);
+
+        if (canNudge) {
+            let newGrid = [];
+            let scatterCols = scatters.map(s => s.col);
+
+            for (let c = 0; c < 5; c++) {
+                // FIXED: Now correctly pulls from BASE_VAC_REEL_STRIPS
+                let strip = BASE_VAC_REEL_STRIPS[c]; 
+                if (scatterCols.includes(c)) {
+                    let newStop = (initialStops[c] - 1 + strip.length) % strip.length;
+                    newGrid.push([strip[newStop], strip[(newStop+1)%strip.length], strip[(newStop+2)%strip.length]]);
+                } else {
+                    let stopFloat = getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+                    let newStop = Math.floor(stopFloat * strip.length);
+                    newGrid.push([strip[newStop], strip[(newStop+1)%strip.length], strip[(newStop+2)%strip.length]]);
+                }
+            }
+            result.grid = newGrid;
+            result.nudgeTriggered = true;
+
+        } else {
+            let hookFloat = getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+            if (hookFloat < 0.25) {
+                let scatterCols = scatters.map(s => s.col);
+                let availableCols = [0, 1, 2, 3, 4].filter(c => !scatterCols.includes(c));
+                
+                let colTargetFloat = getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+                let targetCol = availableCols[Math.floor(colTargetFloat * availableCols.length)];
+                
+                let newGrid = initialGrid.map(colArr => [...colArr]);
+                
+                let rowTargetFloat = getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+                let targetRow = rowTargetFloat < 0.5 ? 1 : 2; 
+
+                newGrid[targetCol][targetRow] = VACATION_SYMBOLS.PASSPORT_SCATTER;
+
+                result.grid = newGrid;
+                result.hookTriggered = true;
+                result.hookCol = targetCol;
+            }
+        }
+    }
+    return result;
 }
 
-// THE PLAY ENDPOINT
+// THE PLAY ENDPOINT (Final Big Bass Integration)
 app.post('/api/vacation/play', async (req, res) => {
     try {
         const { playerPubkey, gamePubkey, clientSeed, nonce, betAmount, isBonusBuy } = req.body;
@@ -1402,49 +1465,99 @@ app.post('/api/vacation/play', async (req, res) => {
             return res.status(400).json({ error: "No active session. Fetch seed first." });
         }
 
-        // If Bonus Buy, actual bet per line is 100x smaller (20 lines total)
         const totalWager = Number(betAmount);
         const actualBaseBet = isBonusBuy ? totalWager / 100 : totalWager;
-        const lineBet = actualBaseBet / 20;
+        const lineBet = actualBaseBet / 10; 
 
         let currentCounter = { val: 0 };
         
-        // --- BASE SPIN ---
-        const baseGrid = spinVacationReels(game.serverSeed, clientSeed, nonce, currentCounter, isBonusBuy);
-        const baseEval = evaluateVacationGrid(baseGrid, lineBet);
+        // --- 1. BASE SPIN ---
+        const { grid: initialGrid, stops: initialStops } = spinVacationReels(game.serverSeed, clientSeed, nonce, currentCounter, false, isBonusBuy);
+        
+        // --- 2. NEAR MISS EVALUATION ---
+        let finalBaseGrid = initialGrid;
+        let nearMissData = { nudgeTriggered: false, hookTriggered: false };
+
+        if (!isBonusBuy) {
+            nearMissData = processNearMiss(initialGrid, initialStops, game.serverSeed, clientSeed, nonce, currentCounter);
+            if (nearMissData.nudgeTriggered || nearMissData.hookTriggered) {
+                finalBaseGrid = nearMissData.grid;
+            }
+        }
+
+        // --- 3. FINAL BASE EVALUATION ---
+        const baseEval = evaluateVacationGrid(finalBaseGrid, lineBet, game.serverSeed, clientSeed, nonce, currentCounter);
         let totalPayout = baseEval.payout;
         
         let triggeredBonus = baseEval.scatterCount >= 3 || isBonusBuy;
         let freeSpinsData = null;
 
-        // --- FREE SPINS ---
+        // --- 4. THE BIG BASS BONUS ENGINE ---
         if (triggeredBonus) {
-            // Select Expanding Symbol (0-8, excluding Scatters)
-            let expFloat = getVacationFloat(game.serverSeed, clientSeed, nonce, currentCounter.val++);
-            let expandingSymbol = Math.floor(expFloat * 11); 
+            let spinsData = [];
+            let mcpepesCollected = 0;
             
-            let spins = [];
-            for (let i = 0; i < 10; i++) {
-                let fsGrid = spinVacationReels(game.serverSeed, clientSeed, nonce, currentCounter, false);
-                let fsEval = evaluateVacationGrid(fsGrid, lineBet, expandingSymbol, game.serverSeed, clientSeed, nonce, currentCounter);
-                totalPayout += fsEval.payout;
-                spins.push({
+            let totalSpinsAwarded = 10; 
+            let currentSpinNum = 0;
+
+            const totalBet = lineBet * 10;
+
+            while (currentSpinNum < totalSpinsAwarded) {
+                // Determine current multiplier tier
+                let currentMultiplier = 1;
+                if (currentSpinNum >= 30) currentMultiplier = 10;      // Level 4 
+                else if (currentSpinNum >= 20) currentMultiplier = 3;  // Level 3 
+                else if (currentSpinNum >= 10) currentMultiplier = 2;  // Level 2 
+
+                // Spin using FS strips
+                const { grid: fsGrid } = spinVacationReels(game.serverSeed, clientSeed, nonce, currentCounter, true, false);
+                const fsEval = evaluateVacationGrid(fsGrid, lineBet, game.serverSeed, clientSeed, nonce, currentCounter);
+                
+                let spinPayout = fsEval.payout;
+                let collectionWin = 0;
+
+                // Execute the Collection Mechanic
+                if (fsEval.mcpepeCount > 0 && fsEval.totalLuggageMult > 0) {
+                    collectionWin = (totalBet * fsEval.totalLuggageMult) * fsEval.mcpepeCount * currentMultiplier;
+                    spinPayout += collectionWin;
+                }
+
+                totalPayout += spinPayout;
+
+                // Track Progress
+                mcpepesCollected += fsEval.mcpepeCount;
+
+                // Retrigger Logic
+                if (mcpepesCollected >= 4 && totalSpinsAwarded === 10) totalSpinsAwarded = 20; 
+                if (mcpepesCollected >= 8 && totalSpinsAwarded === 20) totalSpinsAwarded = 30; 
+                if (mcpepesCollected >= 12 && totalSpinsAwarded === 30) totalSpinsAwarded = 40; 
+
+                spinsData.push({
                     grid: fsGrid,
-                    payout: fsEval.payout,
+                    payout: spinPayout,
                     winningLines: fsEval.winningLines,
-                    expandedWin: fsEval.expandedWin,
-                    collectionWin: fsEval.collectionWin,
-                    luggageValues: fsEval.luggageValues
+                    collectionWin: collectionWin,
+                    mcpepeCount: fsEval.mcpepeCount,
+                    luggageValues: fsEval.luggageValues,
+                    activeMultiplier: currentMultiplier,
+                    totalCollectedSoFar: mcpepesCollected
                 });
+
+                currentSpinNum++;
             }
-            freeSpinsData = { expandingSymbol, spins };
+
+            freeSpinsData = { 
+                spins: spinsData, 
+                totalSpinsPlayed: currentSpinNum,
+                finalMcpepesCollected: mcpepesCollected 
+            };
         }
 
-        // Cap Maximum Win at 10,000x the Total Base Bet
-        const MAX_WIN = actualBaseBet * 10000;
+        // Cap Maximum Win at 5,000x the Total Base Bet
+        const MAX_WIN = actualBaseBet * 5000;
         if (totalPayout > MAX_WIN) {
             totalPayout = MAX_WIN;
-            console.log(`🏆 VACATION MAX WIN HIT by ${playerPubkey}! Capped at 10,000x.`);
+            console.log(`🏆 VACATION MAX WIN HIT by ${playerPubkey}! Capped at 5,000x.`);
         }
 
         // Resolve on chain
@@ -1455,7 +1568,9 @@ app.post('/api/vacation/play', async (req, res) => {
             success: true, 
             payout: totalPayout, 
             serverSeed: game.serverSeed, 
-            baseGrid,
+            initialGrid: initialGrid,
+            baseGrid: finalBaseGrid,
+            nearMissData: nearMissData,
             baseWinningLines: baseEval.winningLines,
             triggeredBonus,
             freeSpinsData
