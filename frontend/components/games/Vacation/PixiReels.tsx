@@ -47,16 +47,16 @@ const SHOW_DEBUG_GRID = true;
 
 // 2. Where do symbols spawn from before dropping? 
 // (Set to 20 so you can see it while debugging. Change to -150 for production).
-const DROP_START_Y = 90; 
+const DROP_START_Y = 190; 
 
 // 3. Exact X/Y resting coordinates for the 5 Columns x 3 Rows
 // Adjust these numbers to perfectly align the green boxes with your background!
 const TILE_POSITIONS = [
-  [ { x: 270, y: 200 }, { x: 270, y: 330}, { x: 270, y: 470 } ], // Column 0 (Far Left)
-  [ { x: 382, y: 200 }, { x: 382, y: 330 }, { x: 382, y: 470 } ], // Column 1
-  [ { x: 494, y: 200 }, { x: 494, y: 330 }, { x: 494, y: 470 } ], // Column 2 (Middle)
-  [ { x: 606, y: 200 }, { x: 606, y: 340 }, { x: 606, y: 470 } ], // Column 3
-  [ { x: 717, y: 200 }, { x: 717, y: 340 }, { x: 717, y: 470 } ]  // Column 4 (Far Right)
+  [ { x: 270, y: 210 }, { x: 270, y: 340}, { x: 270, y: 480 } ], // Column 0 (Far Left)
+  [ { x: 382, y: 210 }, { x: 382, y: 340 }, { x: 382, y: 480 } ], // Column 1
+  [ { x: 494, y: 210 }, { x: 494, y: 340 }, { x: 494, y: 480 } ], // Column 2 (Middle)
+  [ { x: 606, y: 210 }, { x: 606, y: 340 }, { x: 606, y: 480 } ], // Column 3
+  [ { x: 717, y: 210 }, { x: 717, y: 340 }, { x: 717, y: 480 } ]  // Column 4 (Far Right)
 ];
 
 // ==========================================
