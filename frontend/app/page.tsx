@@ -16,6 +16,7 @@ import PumpIt from "../components/games/PumpIt";
 import RouletteGame from "../components/games/Roulette"; 
 import BlackjackGame from "../components/games/Blackjack"; 
 import Patriots from '../components/games/Patriots';
+import Vacation from '../components/games/Vacation';
 
 const INITIAL_BETS = [
   { id: "tx1", player: "8xTq...3pZx", game: "Coinflip", amount: 2.5, win: true, hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", clientSeed: "degen_1" },
@@ -101,6 +102,8 @@ export default function Dashboard() {
                   <button onClick={() => setActiveGame('roulette')} className="bg-transparent border border-blue-500 text-blue-500 hover:bg-blue-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Pepe Roulette</button>
                   <button onClick={() => setActiveGame('pumpit')} className="bg-transparent border border-purple-500 text-purple-500 hover:bg-purple-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Pump It!</button>
                   <button onClick={() => setActiveGame('patriots')} className="bg-transparent border border-orange-500 text-orange-500 hover:bg-orange-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">McPepe's Patriots</button>
+                  <button onClick={() => setActiveGame('vacation')} className="bg-transparent border border-purple-500 text-purple-500 hover:bg-purple-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">McPepe's Vacation</button>
+
               </div>
             </div>
           )}
@@ -147,6 +150,11 @@ export default function Dashboard() {
           {/* ADDED PATRIOTS COMPONENT RENDER BLOCK */}
           {activeGame === 'patriots' && (
              <Patriots />
+          )}
+
+          {/* ADDED VACATION COMPONENT RENDER BLOCK */}
+          {activeGame === 'vacation' && (
+             <Vacation />
           )}
           
         </main>
