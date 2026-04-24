@@ -41,13 +41,16 @@ const SYMBOL_SIZE = 120;
 // 🛠️ MANUAL POSITION TUNING AREA
 // ==========================================
 
-// 1. Where do symbols spawn from before dropping? (Negative means above canvas)
-const DROP_START_Y = -150; 
+// 1. Turn this to TRUE to see the grid, boxes, and drop line. 
+// Turn to FALSE when you are done tuning!
+const SHOW_DEBUG_GRID = true; 
 
-// 2. Set to true to draw a red line at DROP_START_Y so you can see it visually.
-const SHOW_DEBUG_DROP_LINE = true; 
+// 2. Where do symbols spawn from before dropping? 
+// (Set to 20 so you can see it while debugging. Change to -150 for production).
+const DROP_START_Y = 20; 
 
 // 3. Exact X/Y resting coordinates for the 5 Columns x 3 Rows
+// Adjust these numbers to perfectly align the green boxes with your background!
 const TILE_POSITIONS = [
   [ { x: 190, y: 180 }, { x: 190, y: 320 }, { x: 190, y: 460 } ], // Column 0 (Far Left)
   [ { x: 335, y: 180 }, { x: 335, y: 320 }, { x: 335, y: 460 } ], // Column 1
@@ -87,7 +90,7 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       const mainContainer = new PIXI.Container();
       app.stage.addChild(mainContainer);
 
-      // 1. Draw Default Background
+      // 1. Draw Default Background (Always visible)
       try {
         const bg = PIXI.Sprite.from('/vacations/vacation_bg.png');
         bg.width = CANVAS_WIDTH;
@@ -97,25 +100,56 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
         console.warn("Background asset failed to load");
       }
 
-      // 2. Draw Debug Drop Line (If Enabled)
-      if (SHOW_DEBUG_DROP_LINE) {
-        const debugLine = new PIXI.Graphics()
-          .moveTo(0, DROP_START_Y)
-          .lineTo(CANVAS_WIDTH, DROP_START_Y)
-          .stroke({ color: 0xff0000, width: 4 });
-        mainContainer.addChild(debugLine);
-
-        const debugText = new PIXI.Text({ text: "DROP START LINE", style: { fill: '#ff0000', fontSize: 16, fontWeight: '900' }});
-        debugText.x = 10;
-        debugText.y = DROP_START_Y - 25;
-        mainContainer.addChild(debugText);
-      }
-
+      // 2. Draw the Mask (Clips symbols so they don't overlap the UI)
       const mask = new PIXI.Graphics().rect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT).fill(0xffffff);
       mainContainer.addChild(mask);
       mainContainer.mask = mask;
 
-      // Stop here if there is no playData (Default State on Page Load)
+      // 3. ✨ DRAW DEBUG GRID (Attached to app.stage so it bypasses the mask)
+      if (SHOW_DEBUG_GRID) {
+        const debugContainer = new PIXI.Container();
+        app.stage.addChild(debugContainer);
+
+        // Draw Drop Line
+        const dropLine = new PIXI.Graphics()
+          .moveTo(0, DROP_START_Y)
+          .lineTo(CANVAS_WIDTH, DROP_START_Y)
+          .stroke({ color: 0xff0000, width: 4 });
+        debugContainer.addChild(dropLine);
+
+        const debugText = new PIXI.Text({ text: "DROP START LINE", style: { fill: '#ff0000', fontSize: 16, fontWeight: '900', stroke: {color: '#000', width: 4} }});
+        debugText.x = 10;
+        debugText.y = Math.max(0, DROP_START_Y - 25);
+        debugContainer.addChild(debugText);
+
+        // Draw Bounding Boxes for Tiles
+        TILE_POSITIONS.forEach((col, cIndex) => {
+          col.forEach((pos, rIndex) => {
+            // Outline Box
+            const box = new PIXI.Graphics()
+              .rect(pos.x - SYMBOL_SIZE/2, pos.y - SYMBOL_SIZE/2, SYMBOL_SIZE, SYMBOL_SIZE)
+              .stroke({ color: 0x4ade80, width: 3, alpha: 0.8 }); // Bright Green
+            
+            // Center Dot
+            const centerDot = new PIXI.Graphics()
+              .circle(pos.x, pos.y, 5)
+              .fill(0xff00ff); // Hot Pink
+            
+            // Coordinate Label
+            const coordText = new PIXI.Text({ 
+                text: `C:${cIndex} R:${rIndex}\nX:${pos.x} Y:${pos.y}`, 
+                style: { fill: '#4ade80', fontSize: 12, align: 'center', fontWeight: 'bold', stroke: {color: '#000', width: 3} }
+            });
+            coordText.anchor.set(0.5);
+            coordText.x = pos.x;
+            coordText.y = pos.y + SYMBOL_SIZE/2 + 20;
+
+            debugContainer.addChild(box, centerDot, coordText);
+          });
+        });
+      }
+
+      // Stop here if there is no playData (This preserves the background on page load!)
       if (!playData) return;
 
       // UI Text Elements
@@ -155,8 +189,8 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
           const activeContainers: PIXI.Container[][] = Array.from({ length: 5 }, () => []);
           const tl = gsap.timeline({ onComplete: () => resolve(activeContainers) });
           
-          // Clear previous grid
-          while(mainContainer.children.length > (SHOW_DEBUG_DROP_LINE ? 4 : 2)) {
+          // Clear previous grid (preserves background and mask)
+          while(mainContainer.children.length > 2) {
              mainContainer.removeChildAt(mainContainer.children.length - 1);
           }
 
@@ -165,20 +199,18 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
               const symType = targetGrid[col][row];
               const container = new PIXI.Container();
               
-              // Map to explicit coordinates
               const targetPos = TILE_POSITIONS[col][row];
               const finalX = targetPos.x;
               const finalY = targetPos.y;
               
               container.x = finalX;
 
-              // Setup start positions based on mechanic
               if (isNudge) {
                 container.y = finalY - 140; 
               } else if (col === hookCol) {
                 container.y = finalY + 500; 
               } else {
-                container.y = DROP_START_Y; // Use the manual drop line
+                container.y = DROP_START_Y; 
               }
 
               try {
