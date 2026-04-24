@@ -1214,6 +1214,323 @@ async function resolvePatriotsOnChain(playerPubkeyStr, gamePubkeyStr, unhashedSe
 }
 
 // ==========================================
+// MCPEPE'S VACATION (SLOTS) ENDPOINTS
+// ==========================================
+const activeVacationGames = new Map();
+
+app.post('/api/vacation/seed', (req, res) => {
+    try {
+        const { playerPubkey } = req.body;
+        const serverSeed = crypto.randomBytes(32).toString('hex');
+        const serverSeedHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
+
+        activeVacationGames.set(playerPubkey, { serverSeed, serverSeedHash, status: "waiting_for_tx" });
+        res.json({ success: true, serverSeedHash });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ==========================================
+// MCPEPE'S VACATION: GAME ENGINE MATH (12-SYMBOL)
+// ==========================================
+const VACATION_SYMBOLS = {
+    TEN: 0, J: 1, Q: 2, K: 3, A: 4, 
+    SUNSCREEN: 5, LUGGAGE: 6, COCKTAIL: 7, JETSKI: 8, YACHT: 9, 
+    MCPEPE: 10, PASSPORT_SCATTER: 11 
+};
+
+// Payout Multipliers (Based on $0.05 line bet equivalent)
+const VAC_PAYTABLE = {
+    [VACATION_SYMBOLS.TEN]: { 3: 5, 4: 25, 5: 100 },
+    [VACATION_SYMBOLS.J]: { 3: 5, 4: 25, 5: 100 },
+    [VACATION_SYMBOLS.Q]: { 3: 5, 4: 25, 5: 100 },
+    [VACATION_SYMBOLS.K]: { 3: 10, 4: 50, 5: 150 },
+    [VACATION_SYMBOLS.A]: { 3: 10, 4: 50, 5: 150 },
+    [VACATION_SYMBOLS.SUNSCREEN]: { 2: 5, 3: 30, 4: 100, 5: 500 },
+    [VACATION_SYMBOLS.LUGGAGE]: { 2: 5, 3: 30, 4: 100, 5: 500 },
+    [VACATION_SYMBOLS.COCKTAIL]: { 2: 10, 3: 40, 4: 400, 5: 1000 },
+    [VACATION_SYMBOLS.JETSKI]: { 2: 10, 3: 40, 4: 400, 5: 1000 },
+    [VACATION_SYMBOLS.YACHT]: { 2: 20, 3: 100, 4: 1000, 5: 2000 },
+    [VACATION_SYMBOLS.MCPEPE]: { 2: 50, 3: 200, 4: 2000, 5: 5000 },
+    [VACATION_SYMBOLS.PASSPORT_SCATTER]: { 3: 40, 4: 400, 5: 4000 } // Pays on total bet
+};
+
+// 20 Fixed Paylines
+const VAC_LINES = [
+    [1,1,1,1,1], [0,0,0,0,0], [2,2,2,2,2], [0,1,2,1,0], [2,1,0,1,2],
+    [1,0,1,0,1], [1,2,1,2,1], [0,0,1,2,2], [2,2,1,0,0], [1,0,0,0,1],
+    [1,2,2,2,1], [0,1,0,1,0], [2,1,2,1,2], [0,1,1,1,0], [2,1,1,1,2],
+    [1,1,0,1,1], [1,1,2,1,1], [0,0,2,0,0], [2,2,0,2,2], [0,2,2,2,0]
+];
+
+// Expanded 60-Symbol Reel Strips tuned for 12 Symbols (~96.5% RTP, High Volatility)
+const VAC_REEL_STRIPS = [
+    [0,1,2,3,4,0,5,1,2,11,3,0,1,6,2,0,1,7,3,0,2,1,4,0,8,1,2,0,3,1,4,0,2,1,5,0,3,2,1,4,0,9,1,2,0,3,1,4,0,2,1,10,0,3,1,2,4,11],
+    [1,0,2,4,3,1,0,5,1,2,0,3,1,0,6,2,1,0,7,3,1,2,0,4,1,8,0,2,1,3,0,4,1,2,0,5,1,3,2,0,4,1,9,0,2,1,3,0,4,1,2,0,11,1,3,0,2,4,10,11],
+    [2,1,0,3,4,2,1,5,2,0,1,4,2,1,6,0,2,1,7,4,2,0,1,3,2,8,1,0,2,4,1,3,2,0,1,5,2,4,0,1,3,2,9,1,0,2,4,1,3,2,0,1,11,2,4,1,0,3,10,11],
+    [3,2,1,0,4,3,2,5,3,1,0,4,3,2,0,1,3,2,6,4,3,1,0,2,3,7,2,1,3,4,0,2,3,1,0,8,3,4,1,0,2,3,9,0,1,3,4,0,2,3,1,0,11,3,4,0,1,2,10,11],
+    [4,3,2,1,0,4,3,5,4,2,1,0,4,3,1,2,4,3,6,0,4,2,1,3,4,7,3,2,4,0,1,3,4,2,1,8,4,0,2,1,3,4,9,1,2,4,0,1,3,4,2,1,11,4,0,1,2,3,10,11]
+];
+
+// Potential values for the Luggage Cash Prizes during Free Spins
+const LUGGAGE_PRIZES = [2, 5, 10, 25, 50, 100];
+
+function getVacationFloat(serverSeed, clientSeed, nonce, counter) {
+    const hash = crypto.createHmac('sha256', serverSeed).update(`${clientSeed}:${nonce}:${counter}`).digest('hex');
+    return parseInt(hash.substring(0, 8), 16) / 0xffffffff; 
+}
+
+function spinVacationReels(serverSeed, clientSeed, nonce, counterRef, forceScatters = false) {
+    let grid = [];
+    let scatterCols = [];
+    
+    if (forceScatters) {
+        while(scatterCols.length < 3) {
+            let col = Math.floor(getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++) * 5);
+            if(!scatterCols.includes(col)) scatterCols.push(col);
+        }
+    }
+
+    for (let col = 0; col < 5; col++) {
+        let strip = VAC_REEL_STRIPS[col];
+        let stopFloat = getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+        let stop = Math.floor(stopFloat * strip.length);
+        
+        let columnSymbols = [strip[stop], strip[(stop+1)%strip.length], strip[(stop+2)%strip.length]];
+        
+        if (forceScatters && scatterCols.includes(col)) {
+            let row = Math.floor(getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++) * 3);
+            columnSymbols[row] = VACATION_SYMBOLS.PASSPORT_SCATTER;
+        }
+        
+        grid.push(columnSymbols);
+    }
+    return grid;
+}
+
+function evaluateVacationGrid(grid, lineBet, expandingSymbol = null, serverSeed = "", clientSeed = "", nonce = 0, counterRef = {val: 0}) {
+    let payout = 0;
+    let winningLines = [];
+    let scatterCount = 0;
+    let collectionWin = 0;
+    
+    // 1. Count Scatters
+    for (let c = 0; c < 5; c++) {
+        for (let r = 0; r < 3; r++) {
+            if (grid[c][r] === VACATION_SYMBOLS.PASSPORT_SCATTER) scatterCount++;
+        }
+    }
+    if (VAC_PAYTABLE[VACATION_SYMBOLS.PASSPORT_SCATTER][scatterCount]) {
+        payout += lineBet * VAC_PAYTABLE[VACATION_SYMBOLS.PASSPORT_SCATTER][scatterCount];
+    }
+
+    // 2. Evaluate 20 Standard Lines
+    for (let i = 0; i < VAC_LINES.length; i++) {
+        let line = VAC_LINES[i];
+        let firstSym = -1;
+        let count = 0;
+        
+        for (let col = 0; col < 5; col++) {
+            let sym = grid[col][line[col]];
+            if (sym === VACATION_SYMBOLS.PASSPORT_SCATTER) {
+                count++; 
+            } else if (firstSym === -1) {
+                firstSym = sym;
+                count++;
+            } else if (sym === firstSym) {
+                count++;
+            } else {
+                break;
+            }
+        }
+        
+        if (firstSym !== -1 && VAC_PAYTABLE[firstSym] && VAC_PAYTABLE[firstSym][count]) {
+            let win = lineBet * VAC_PAYTABLE[firstSym][count];
+            payout += win;
+            winningLines.push({ lineIndex: i, symbol: firstSym, count, win });
+        }
+    }
+
+    // 3. Free Spins Logic
+    let expandedWin = 0;
+    let luggageValues = []; 
+    if (expandingSymbol !== null) {
+        let expandCount = 0;
+        for (let col = 0; col < 5; col++) {
+            if (grid[col].includes(expandingSymbol)) expandCount++;
+        }
+        
+        let minRequired = expandingSymbol >= VACATION_SYMBOLS.SUNSCREEN ? 2 : 3;
+        if (expandCount >= minRequired && VAC_PAYTABLE[expandingSymbol][expandCount]) {
+            expandedWin = (lineBet * VAC_PAYTABLE[expandingSymbol][expandCount]) * 20;
+            payout += expandedWin;
+        }
+
+        // Collection Mechanic
+        let mcpepePresent = false;
+        let totalLuggageMult = 0;
+        
+        for (let c = 0; c < 5; c++) {
+            for (let r = 0; r < 3; r++) {
+                if (grid[c][r] === VACATION_SYMBOLS.MCPEPE) mcpepePresent = true;
+                if (grid[c][r] === VACATION_SYMBOLS.LUGGAGE) {
+                    let prizeFloat = getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++);
+                    let prizeMult = LUGGAGE_PRIZES[Math.floor(prizeFloat * LUGGAGE_PRIZES.length)];
+                    luggageValues.push({ col: c, row: r, val: prizeMult });
+                    totalLuggageMult += prizeMult;
+                }
+            }
+        }
+
+        if (mcpepePresent && totalLuggageMult > 0) {
+            collectionWin = lineBet * 20 * totalLuggageMult; 
+            payout += collectionWin;
+        }
+    }
+
+    return { payout, winningLines, scatterCount, expandedWin, collectionWin, luggageValues };
+}
+
+// THE PLAY ENDPOINT
+app.post('/api/vacation/play', async (req, res) => {
+    try {
+        const { playerPubkey, gamePubkey, clientSeed, nonce, betAmount, isBonusBuy } = req.body;
+
+        const game = activeVacationGames.get(playerPubkey);
+        if (!game || game.status !== "waiting_for_tx") {
+            return res.status(400).json({ error: "No active session. Fetch seed first." });
+        }
+
+        // If Bonus Buy, actual bet per line is 100x smaller (20 lines total)
+        const totalWager = Number(betAmount);
+        const actualBaseBet = isBonusBuy ? totalWager / 100 : totalWager;
+        const lineBet = actualBaseBet / 20;
+
+        let currentCounter = { val: 0 };
+        
+        // --- BASE SPIN ---
+        const baseGrid = spinVacationReels(game.serverSeed, clientSeed, nonce, currentCounter, isBonusBuy);
+        const baseEval = evaluateVacationGrid(baseGrid, lineBet);
+        let totalPayout = baseEval.payout;
+        
+        let triggeredBonus = baseEval.scatterCount >= 3 || isBonusBuy;
+        let freeSpinsData = null;
+
+        // --- FREE SPINS ---
+        if (triggeredBonus) {
+            // Select Expanding Symbol (0-8, excluding Scatters)
+            let expFloat = getVacationFloat(game.serverSeed, clientSeed, nonce, currentCounter.val++);
+            let expandingSymbol = Math.floor(expFloat * 11); 
+            
+            let spins = [];
+            for (let i = 0; i < 10; i++) {
+                let fsGrid = spinVacationReels(game.serverSeed, clientSeed, nonce, currentCounter, false);
+                let fsEval = evaluateVacationGrid(fsGrid, lineBet, expandingSymbol, game.serverSeed, clientSeed, nonce, currentCounter);
+                totalPayout += fsEval.payout;
+                spins.push({
+                    grid: fsGrid,
+                    payout: fsEval.payout,
+                    winningLines: fsEval.winningLines,
+                    expandedWin: fsEval.expandedWin,
+                    collectionWin: fsEval.collectionWin,
+                    luggageValues: fsEval.luggageValues
+                });
+            }
+            freeSpinsData = { expandingSymbol, spins };
+        }
+
+        // Cap Maximum Win at 10,000x the Total Base Bet
+        const MAX_WIN = actualBaseBet * 10000;
+        if (totalPayout > MAX_WIN) {
+            totalPayout = MAX_WIN;
+            console.log(`🏆 VACATION MAX WIN HIT by ${playerPubkey}! Capped at 10,000x.`);
+        }
+
+        // Resolve on chain
+        await resolveVacationOnChain(playerPubkey, gamePubkey, game.serverSeed, totalPayout);
+        activeVacationGames.delete(playerPubkey);
+
+        res.json({ 
+            success: true, 
+            payout: totalPayout, 
+            serverSeed: game.serverSeed, 
+            baseGrid,
+            baseWinningLines: baseEval.winningLines,
+            triggeredBonus,
+            freeSpinsData
+        });
+
+    } catch (error) {
+        console.error("❌ Vacation Play Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+async function resolveVacationOnChain(playerPubkeyStr, gamePubkeyStr, unhashedServerSeed, payoutAmount) {
+    try {
+        console.log(`[HOUSE] Resolving Vacation for ${playerPubkeyStr}. Payout: ${payoutAmount}`);
+
+        const playerPubkey = new anchor.web3.PublicKey(playerPubkeyStr);
+        const gamePubkey = new anchor.web3.PublicKey(gamePubkeyStr);
+        const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("vault")], PROGRAM_ID);
+
+        const sighash = crypto.createHash('sha256').update("global:resolve_vacation").digest().slice(0, 8);
+        const seedBuffer = Buffer.from(unhashedServerSeed, 'utf8');
+        const seedLengthBuffer = Buffer.alloc(4);
+        seedLengthBuffer.writeUInt32LE(seedBuffer.length, 0);
+        
+        const payoutBuffer = Buffer.alloc(8);
+        payoutBuffer.writeBigUInt64LE(BigInt(Math.round(payoutAmount)));
+
+        const ixData = Buffer.concat([sighash, seedLengthBuffer, seedBuffer, payoutBuffer]);
+        const resolveIx = new anchor.web3.TransactionInstruction({
+            programId: PROGRAM_ID,
+            keys: [
+                { pubkey: gamePubkey, isSigner: false, isWritable: true },
+                { pubkey: houseKeypair.publicKey, isSigner: true, isWritable: true },
+                { pubkey: vaultPDA, isSigner: false, isWritable: true },
+                { pubkey: playerPubkey, isSigner: false, isWritable: true },
+                { pubkey: anchor.web3.SystemProgram.programId, isSigner: false, isWritable: false },
+            ],
+            data: ixData
+        });
+
+        let txSig;
+        let retries = 5; 
+        
+        while (retries > 0) {
+            try {
+                const tx = new anchor.web3.Transaction().add(resolveIx);
+                const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+                tx.recentBlockhash = blockhash;
+                tx.feePayer = houseKeypair.publicKey;
+                tx.sign(houseKeypair);
+
+                txSig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+                const confirmation = await connection.confirmTransaction({ signature: txSig, blockhash, lastValidBlockHeight }, "confirmed");
+                
+                if (confirmation.value.err) {
+                    throw new Error(`On-chain rejection: ${JSON.stringify(confirmation.value.err)}`);
+                }
+                
+                console.log(`✅ [HOUSE] Vacation Resolved! TX: ${txSig}`);
+                return;
+            } catch (err) {
+                console.log(`⚠️ Network retry for Vacation Payout... (${retries} left). Error: ${err.message}`);
+                await new Promise(r => setTimeout(r, 2000));
+                retries--;
+                if (retries === 0) throw new Error("CRITICAL: Failed to pay user after 5 attempts.");
+            }
+        }
+    } catch (err) {
+        console.error("❌ [HOUSE] Failed to resolve Vacation:", err.message);
+        throw err; 
+    }
+}
+
+
+// ==========================================
 
 setInterval(() => {}, 1000 * 60 * 60);
 

@@ -806,6 +806,98 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "startVacation",
+      "accounts": [
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "betAmount",
+          "type": "u64"
+        },
+        {
+          "name": "serverSeedHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "clientSeed",
+          "type": "string"
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "isBonusBuy",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "resolveVacation",
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "house",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "unhashedServerSeed",
+          "type": "string"
+        },
+        {
+          "name": "payout",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1068,6 +1160,47 @@
       }
     },
     {
+      "name": "VacationState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "publicKey"
+          },
+          {
+            "name": "betAmount",
+            "type": "u64"
+          },
+          {
+            "name": "serverSeedHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "clientSeed",
+            "type": "string"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "isBonusBuy",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "WhackdGame",
       "type": {
         "kind": "struct",
@@ -1190,38 +1323,13 @@
   "errors": [
     {
       "code": 6000,
-      "name": "InvalidMove",
-      "msg": "Invalid move selected."
+      "name": "InvalidServerSeed",
+      "msg": "Server seed hash does not match the provided unhashed seed."
     },
     {
       "code": 6001,
-      "name": "GameAlreadyActive",
-      "msg": "Game is already active. Awaiting house resolution."
-    },
-    {
-      "code": 6002,
-      "name": "GameNotActive",
-      "msg": "Game is not active."
-    },
-    {
-      "code": 6003,
-      "name": "InvalidHash",
-      "msg": "House commitment hash mismatch."
-    },
-    {
-      "code": 6004,
-      "name": "NoWinnings",
-      "msg": "No winnings to claim."
-    },
-    {
-      "code": 6005,
-      "name": "GameIsActive",
-      "msg": "Cannot settle while round is active."
-    },
-    {
-      "code": 6006,
-      "name": "InvalidAuthority",
-      "msg": "Invalid House Authority signer."
+      "name": "InsufficientVaultFunds",
+      "msg": "Vault does not have enough funds to cover the payout."
     }
   ],
   "metadata": {

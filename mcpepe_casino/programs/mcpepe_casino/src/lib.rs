@@ -8,7 +8,7 @@ pub mod roulette;
 pub mod pumpit;
 pub mod blackjack;
 pub mod patriots;
-
+pub mod vacation;
 
 use coinflip::*;
 use whackd::*;  
@@ -17,6 +17,8 @@ use roulette::*;
 use pumpit::*;
 use blackjack::*;
 use patriots::*; 
+use vacation::*;
+
 
 declare_id!("7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw");
 
@@ -158,4 +160,25 @@ pub mod mcpepe_casino {
     ) -> Result<()> {
         patriots::resolve_patriots(ctx, unhashed_server_seed, payout)
     }
+
+    // --- VACATION ROUTES ---
+    pub fn start_vacation(
+        ctx: Context<StartVacation>,
+        bet_amount: u64,
+        server_seed_hash: [u8; 32],
+        client_seed: String,
+        nonce: u64,
+        is_bonus_buy: bool,
+    ) -> Result<()> {
+        vacation::start_vacation(ctx, bet_amount, server_seed_hash, client_seed, nonce, is_bonus_buy)
+    }
+
+    pub fn resolve_vacation(
+        ctx: Context<ResolveVacation>,
+        unhashed_server_seed: String,
+        payout: u64,
+    ) -> Result<()> {
+        vacation::resolve_vacation(ctx, unhashed_server_seed, payout)
+    }
+
 }
