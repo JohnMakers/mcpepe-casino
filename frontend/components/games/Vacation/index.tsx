@@ -135,7 +135,7 @@ export default function Vacation() {
   return (
     <div className="flex flex-col items-center justify-start min-h-screen w-full bg-[#0a0f0c] p-6 pb-20 relative overflow-y-auto">
       
-      <div className="w-[800px] flex justify-between items-end mb-6 mt-4 shrink-0">
+      <div className="w-[960px] flex justify-between items-end mb-6 mt-4 shrink-0">
         <div className="flex flex-col text-left">
           <h1 className="text-4xl font-black text-cyan-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(6,182,212,0.6)]">
             McPepe's Vacation
@@ -147,7 +147,7 @@ export default function Vacation() {
       </div>
 
       {/* PIXI CANVAS CONTAINER */}
-      <div className="box-content w-[800px] h-[500px] border-4 border-cyan-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(6,182,212,0.2)] bg-[#050806] shrink-0">
+      <div className="box-content w-[960x] h-[600px] border-4 border-cyan-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(6,182,212,0.2)] bg-[#050806] shrink-0">
         
         {!isSpinning && !gameResult && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">

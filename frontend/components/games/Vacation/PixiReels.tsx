@@ -37,13 +37,13 @@ const VAC_LINES = [
   [1,1,0,1,1], [1,1,2,1,1], [0,0,2,0,0], [2,2,0,2,2], [0,2,2,2,0]
 ];
 
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 500;
+const CANVAS_WIDTH = 960;
+const CANVAS_HEIGHT = 600;
 const SYMBOL_SIZE = 120;
-const SPACING_X = 140;
-const SPACING_Y = 130;
-const OFFSET_X = 120;
-const OFFSET_Y = 120;
+const SPACING_X = 145;
+const SPACING_Y = 140;
+const OFFSET_X = 190;
+const OFFSET_Y = 180;
 
 export default function PixiReels({ playData, onAnimationComplete }: PixiReelsProps) {
   const pixiContainer = useRef<HTMLDivElement>(null);
