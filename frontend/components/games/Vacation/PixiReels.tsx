@@ -5,7 +5,6 @@ import gsap from 'gsap';
 interface PixiReelsProps {
   playData: any | null;
   onAnimationComplete: () => void;
-  // NEW: Callback to trigger the React modal and wait for resolution
   onShowBonusModal: (spins: number, resume: () => void) => void;
 }
 
@@ -38,8 +37,6 @@ const VAC_LINES = [
 const CANVAS_WIDTH = 960;
 const CANVAS_HEIGHT = 600;
 const SYMBOL_SIZE = 110;
-
-const SHOW_DEBUG_GRID = false; 
 const DROP_START_Y = 130; 
 
 const TILE_POSITIONS = [
@@ -104,93 +101,130 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
       winInfoText.anchor.set(0.5, 1); winInfoText.x = CANVAS_WIDTH / 2; winInfoText.y = CANVAS_HEIGHT - 10; winInfoText.alpha = 0;
       app.stage.addChild(winInfoText);
 
+      // ==========================================
+      // 🎰 UPGRADED CASINO HUD (Top Placement)
+      // ==========================================
       const hudContainer = new PIXI.Container();
-      hudContainer.y = 12;
-      hudContainer.x = CANVAS_WIDTH / 2 - 325; 
+      hudContainer.y = 0; 
+      hudContainer.x = CANVAS_WIDTH / 2 - 450; // Total width 900
       hudContainer.alpha = 0; 
       app.stage.addChild(hudContainer);
 
-      const hudBg = new PIXI.Graphics().roundRect(0, 0, 650, 95, 12).fill({ color: 0x050806, alpha: 0.95 });
-      hudBg.stroke({ color: 0x4ade80, width: 2, alpha: 0.5 });
+      // Sleek background panel
+      const hudBg = new PIXI.Graphics()
+        .path().moveTo(0, 0).lineTo(900, 0).lineTo(870, 85).lineTo(30, 85).closePath()
+        .fill({ color: 0x050806, alpha: 0.95 })
+        .stroke({ color: 0x9333ea, width: 3, alpha: 0.8 }); // Purple Neon Glow
       hudContainer.addChild(hudBg);
 
-      const hudTitle = new PIXI.Text({ text: "MCPEPE PROGRESSION", style: { fontSize: 14, fontWeight: '900', fill: '#9ca3af', letterSpacing: 2 }});
-      hudTitle.x = 20; hudTitle.y = 8;
-      hudContainer.addChild(hudTitle);
+      // 1. SPINS TRACKER (Left)
+      const spinLabel = new PIXI.Text({ text: "FREE SPINS", style: { fontSize: 13, fill: '#c084fc', fontWeight: '900', letterSpacing: 2 }});
+      spinLabel.x = 55; spinLabel.y = 15;
+      const spinValue = new PIXI.Text({ text: "0 / 0", style: { fontSize: 34, fill: '#fff', fontWeight: '900', dropShadow: { color: '#9333ea', blur: 8, distance: 0 } }});
+      spinValue.x = 55; spinValue.y = 35;
+      hudContainer.addChild(spinLabel, spinValue);
 
-      const multInfo = new PIXI.Text({ text: "CURRENT: 1X", style: { fontSize: 20, fontWeight: '900', fill: '#facc15', dropShadow: { color: '#000', blur: 2, distance: 2 } }});
-      multInfo.x = 480; multInfo.y = 5;
-      hudContainer.addChild(multInfo);
+      // 2. MCPEPE COLLECTION TRACK (Center)
+      const TICK_WIDTH = 36;
+      const TICK_HEIGHT = 36;
+      const START_X = 210;
+
+      const trackTitle = new PIXI.Text({ text: "WILD COLLECTION REWARDS", style: { fontSize: 13, fill: '#9ca3af', fontWeight: '900', letterSpacing: 2 }});
+      trackTitle.x = START_X; trackTitle.y = 10;
+      hudContainer.addChild(trackTitle);
 
       const ticksContainers: PIXI.Container[] = [];
-      const TICK_WIDTH = 42;
-      const TICK_HEIGHT = 42;
-      const TICK_SPACING = 50;
-      const START_X = 25;
-
+      
       for (let i = 0; i < 12; i++) {
+        // Create distinct groups of 4 by adding extra spacing
+        const groupOffset = Math.floor(i / 4) * 25; 
+        const xPos = START_X + (i * 40) + groupOffset;
+        
         const tickCont = new PIXI.Container();
-        tickCont.x = START_X + (i * TICK_SPACING);
-        tickCont.y = 30;
+        tickCont.x = xPos;
+        tickCont.y = 32;
         hudContainer.addChild(tickCont);
         ticksContainers.push(tickCont);
 
-        const emptyBg = new PIXI.Graphics().roundRect(0, 0, TICK_WIDTH, TICK_HEIGHT, 6).fill(0x1f2937);
+        // Empty Outline Box
+        const emptyBg = new PIXI.Graphics().roundRect(0, 0, TICK_WIDTH, TICK_HEIGHT, 8).fill({ color: 0x1f2937, alpha: 0.6 }).stroke({ color: 0x374151, width: 2 });
         tickCont.addChild(emptyBg);
 
+        // Filled Container (Holds Pepe and Glow)
         const filledCont = new PIXI.Container();
         filledCont.alpha = 0; 
+        filledCont.x = TICK_WIDTH / 2; // Set pivot to center for popping animation
+        filledCont.y = TICK_HEIGHT / 2;
         tickCont.addChild(filledCont);
+
+        // Subtle green glow behind collected Pepes
+        const glow = new PIXI.Graphics().circle(0, 0, 20).fill({ color: 0x4ade80, alpha: 0.4 });
+        filledCont.addChild(glow);
 
         try {
           const pepe = PIXI.Sprite.from('/vacations/vacation_mcpepe.png');
-          pepe.width = TICK_WIDTH;
-          pepe.height = TICK_HEIGHT;
+          pepe.width = TICK_WIDTH - 4;
+          pepe.height = TICK_HEIGHT - 4;
+          pepe.anchor.set(0.5);
           filledCont.addChild(pepe);
         } catch (e) {
-          const fallback = new PIXI.Graphics().roundRect(0, 0, TICK_WIDTH, TICK_HEIGHT, 6).fill(0x4ade80);
+          const fallback = new PIXI.Graphics().circle(0, 0, TICK_WIDTH/2 - 2).fill(0x4ade80);
           filledCont.addChild(fallback);
         }
 
-        let bracketMult = "1X";
-        if (i >= 4 && i < 8) bracketMult = "2X";
-        if (i >= 8 && i < 12) bracketMult = "3X";
-
-        const mText = new PIXI.Text({ text: bracketMult, style: { fontSize: 14, fill: '#facc15', fontWeight: '900', stroke: {color: '#000000', width: 4} }});
-        mText.anchor.set(0.5);
-        mText.x = TICK_WIDTH / 2;
-        mText.y = TICK_HEIGHT - 6; 
-        filledCont.addChild(mText);
-
-        if (i === 3) { 
-          const lbl = new PIXI.Text({ text: "2X", style: { fontSize: 13, fill: '#fff', fontWeight: 'bold' }});
-          lbl.x = tickCont.x + 10; lbl.y = 75;
-          hudContainer.addChild(lbl);
+        // Tier Completion Labels (2X, 3X, 10X)
+        if (i === 3) {
+            const arrow = new PIXI.Text({ text: "▶", style: { fontSize: 16, fill: '#4ade80' }});
+            arrow.x = xPos + TICK_WIDTH + 5; arrow.y = 42;
+            const lbl = new PIXI.Text({ text: "2X", style: { fontSize: 16, fill: '#fff', fontWeight: '900', dropShadow: { color: '#000', blur: 2, distance: 2 } }});
+            lbl.x = xPos + TICK_WIDTH - 5; lbl.y = 12;
+            hudContainer.addChild(arrow, lbl);
         }
-        if (i === 7) { 
-          const lbl = new PIXI.Text({ text: "3X", style: { fontSize: 13, fill: '#fff', fontWeight: 'bold' }});
-          lbl.x = tickCont.x + 10; lbl.y = 75;
-          hudContainer.addChild(lbl);
+        if (i === 7) {
+            const arrow = new PIXI.Text({ text: "▶", style: { fontSize: 16, fill: '#4ade80' }});
+            arrow.x = xPos + TICK_WIDTH + 5; arrow.y = 42;
+            const lbl = new PIXI.Text({ text: "3X", style: { fontSize: 16, fill: '#fff', fontWeight: '900', dropShadow: { color: '#000', blur: 2, distance: 2 } }});
+            lbl.x = xPos + TICK_WIDTH - 5; lbl.y = 12;
+            hudContainer.addChild(arrow, lbl);
         }
-        if (i === 11) { 
-          const lbl = new PIXI.Text({ text: "10X", style: { fontSize: 15, fill: '#facc15', fontWeight: '900' }});
-          lbl.x = tickCont.x + 4; lbl.y = 74;
-          hudContainer.addChild(lbl);
+        if (i === 11) {
+            const lbl = new PIXI.Text({ text: "10X", style: { fontSize: 22, fill: '#facc15', fontWeight: '900', dropShadow: { color: '#ca8a04', blur: 6, distance: 0 } }});
+            lbl.x = xPos + TICK_WIDTH + 5; lbl.y = 35;
+            hudContainer.addChild(lbl);
         }
       }
 
-      const updateHUD = (collected: number, multiplier: number) => {
-        multInfo.text = `CURRENT: ${multiplier}X`;
+      // 3. CURRENT MULTIPLIER (Right)
+      const multLabel = new PIXI.Text({ text: "MULTIPLIER", style: { fontSize: 13, fill: '#facc15', fontWeight: '900', letterSpacing: 2 }});
+      multLabel.x = 760; multLabel.y = 15;
+      const multInfo = new PIXI.Text({ text: "1X", style: { fontSize: 34, fill: '#fff', fontWeight: '900', dropShadow: { color: '#ca8a04', blur: 8, distance: 0 } }});
+      multInfo.x = 760; multInfo.y = 35;
+      hudContainer.addChild(multLabel, multInfo);
+
+      // HUD Update Engine
+      const updateHUD = (collected: number, multiplier: number, currentSpin: number, totalSpins: number) => {
+        spinValue.text = `${currentSpin} / ${totalSpins}`;
+        multInfo.text = `${multiplier}X`;
+
+        if (multiplier > 1) multInfo.style.fill = '#facc15';
+        else multInfo.style.fill = '#ffffff';
+
         for (let i = 0; i < 12; i++) {
           const filledCont = ticksContainers[i].children[1] as PIXI.Container;
-          if (i < collected) {
+          if (i < collected && filledCont.alpha === 0) {
             filledCont.alpha = 1;
-            gsap.fromTo(filledCont.scale, { x: 0, y: 0 }, { x: 1, y: 1, duration: 0.3, ease: "back.out(2)" });
-          } else {
+            // Pop in animation for newly collected Pepes
+            gsap.fromTo(filledCont.scale, { x: 0, y: 0 }, { x: 1, y: 1, duration: 0.5, ease: "back.out(2)" });
+          } else if (i >= collected) {
             filledCont.alpha = 0;
+            filledCont.scale.set(1);
           }
         }
       };
+
+      // ==========================================
+      // REELS AND ANIMATION LOGIC
+      // ==========================================
 
       const animateReels = async (targetGrid: number[][], luggageValues: any[] = [], isNudge = false, hookCol = -1): Promise<PIXI.Container[][]> => {
         return new Promise((resolve) => {
@@ -331,17 +365,15 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
            await showCenterPopup(`TOTAL WIN: ${(playData.payout / 1e9).toFixed(4)} SOL`, '#facc15');
         }
 
-        // ==========================================
-        // 🚨 TRIGGER THE REACT MODAL HERE
-        // ==========================================
         if (playData.triggeredBonus && playData.freeSpinsData) {
           
-          // Wait for the user to click "Continue" on the React Modal
           await new Promise<void>((resolve) => {
              onShowBonusModal(playData.freeSpinsData.spins.length, resolve);
           });
 
-          // Once resolved, proceed with the UI fade in and spin loops
+          // Pre-populate HUD right as the modal resolves
+          const totalSpins = playData.freeSpinsData.spins.length;
+          updateHUD(0, 1, 1, totalSpins);
           gsap.to(hudContainer, { alpha: 1, duration: 0.5 }); 
           
           const fsData = playData.freeSpinsData;
@@ -351,8 +383,9 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
             if (!isMounted) break;
             const spin = fsData.spins[i];
             
+            // Show HUD status BEFORE the reels spin
             runningMcpepeTotal = spin.totalCollectedSoFar - spin.mcpepeCount;
-            updateHUD(runningMcpepeTotal, spin.activeMultiplier);
+            updateHUD(runningMcpepeTotal, spin.activeMultiplier, i + 1, totalSpins);
 
             const fsContainers = await animateReels(spin.grid, spin.luggageValues);
             
@@ -361,8 +394,9 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
             }
 
             if (spin.mcpepeCount > 0) {
+              // Update HUD AFTER reels land so player sees the new Pepes fill the bar
               runningMcpepeTotal += spin.mcpepeCount;
-              updateHUD(runningMcpepeTotal, spin.activeMultiplier);
+              updateHUD(runningMcpepeTotal, spin.activeMultiplier, i + 1, totalSpins);
             }
 
             if (spin.mcpepeCount > 0 && spin.collectionWin > 0) {
