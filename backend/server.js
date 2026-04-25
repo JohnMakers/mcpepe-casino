@@ -1282,13 +1282,12 @@ const BASE_VAC_REEL_STRIPS = [
 
 // Free Spins Strips (Symbol 10 / McPepe is heavily injected to trigger collections)
 const FS_VAC_REEL_STRIPS = [
-    [0,2,6,1,4,10,3,5,0,1,0,2,4,3,0,1,7,6,2,4,3,0,1,1,2,6,4,8,3,0,1,2,4,0,3,0,9,1,2,4,3,6,0,0,1,2,4,5,3,0,6,1,2,4,3,7,0,1,0,2,4,3,0,0,8,1,2,6,4,3,0,1,9,2,0,4,3,0,1,2],
-    [1,3,6,2,0,10,4,5,1,2,0,3,0,4,1,2,7,6,3,0,4,1,2,2,3,6,0,8,4,1,2,3,0,0,4,1,9,2,3,0,4,6,1,0,2,3,0,5,4,1,6,2,3,0,4,7,1,2,0,3,0,4,0,1,8,2,3,6,0,4,1,2,9,3,0,0,4,1,2,3],
-    [2,4,6,3,1,10,0,5,2,3,0,4,1,0,2,3,7,6,4,1,0,2,3,3,4,6,1,8,0,2,3,4,1,0,0,2,9,3,4,1,0,6,2,0,3,4,1,5,0,2,6,3,4,1,0,7,2,3,0,4,1,0,0,2,8,3,4,6,1,0,2,3,9,4,0,1,0,2,3,4],
-    [3,0,6,4,2,10,1,5,3,4,0,0,2,1,3,4,7,6,0,2,1,3,4,4,0,6,2,8,1,3,4,0,2,0,1,3,9,4,0,2,1,6,3,0,4,0,2,5,1,3,6,4,0,2,1,7,3,4,0,0,2,1,0,3,8,4,0,6,2,1,3,4,9,0,0,2,1,3,4,0],
-    [4,1,6,0,3,10,2,5,4,0,0,1,3,2,4,0,7,6,1,3,2,4,0,0,1,6,3,8,2,4,0,1,3,0,2,4,9,0,1,3,2,6,4,0,0,1,3,5,2,4,6,0,1,3,2,7,4,0,0,1,3,2,0,4,8,0,1,6,3,2,4,0,9,1,0,3,2,4,0,1]
+    [0,0,0,0,1,1,1,1,6,2,3,4,0,0,0,5,10,1,1,1,6,2,3,4,0,0,0,7,1,1,1,6,2,3,4,0,0,0,8,1,1,1,6,2,3,4,0,0,0,9,1,1,1,6,2,3,4,0,0,0,1,1,1,6,2,3,4,0,0,0,1,1,1,2,3,4],
+    [2,2,2,2,3,3,3,3,6,4,0,1,2,2,2,5,10,3,3,3,6,4,0,1,2,2,2,7,3,3,3,6,4,0,1,2,2,2,8,3,3,3,6,4,0,1,2,2,2,9,3,3,3,6,4,0,1,2,2,2,3,3,3,6,4,0,1,2,2,2,3,3,3,4,0,1],
+    [4,4,4,4,0,0,0,0,6,1,2,3,4,4,4,5,10,0,0,0,6,1,2,3,4,4,4,7,0,0,0,6,1,2,3,4,4,4,8,0,0,0,6,1,2,3,4,4,4,9,0,0,0,6,1,2,3,4,4,4,0,0,0,6,1,2,3,4,4,4,0,0,0,1,2,3],
+    [1,1,1,1,2,2,2,2,6,3,4,0,1,1,1,5,10,2,2,2,6,3,4,0,1,1,1,7,2,2,2,6,3,4,0,1,1,1,8,2,2,2,6,3,4,0,1,1,1,9,2,2,2,6,3,4,0,1,1,1,2,2,2,6,3,4,0,1,1,1,2,2,2,3,4,0],
+    [3,3,3,3,4,4,4,4,6,0,1,2,3,3,3,5,10,4,4,4,6,0,1,2,3,3,3,7,4,4,4,6,0,1,2,3,3,3,8,4,4,4,6,0,1,2,3,3,3,9,4,4,4,6,0,1,2,3,3,3,4,4,4,6,0,1,2,3,3,3,4,4,4,0,1,2]
 ];
-
 const LUGGAGE_PRIZES = [2, 5, 10, 25, 50, 100];
 
 function getVacationFloat(serverSeed, clientSeed, nonce, counter) {
@@ -1350,14 +1349,14 @@ function evaluateVacationGrid(grid, lineBet, serverSeed = "", clientSeed = "", n
             if (sym === VACATION_SYMBOLS.LUGGAGE) {
                 let prizeFloat = getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++);
                 
-                // NEW: Big Bass Standard Weighted Probability
+                // HIGH VOLATILITY DISTRIBUTION (Nerfed for Casino Protection)
                 let prizeMult;
-                if (prizeFloat < 0.50) prizeMult = 2;       // 50% chance
-                else if (prizeFloat < 0.80) prizeMult = 5;  // 30% chance
-                else if (prizeFloat < 0.92) prizeMult = 10; // 12% chance
-                else if (prizeFloat < 0.97) prizeMult = 20; // 5% chance
-                else if (prizeFloat < 0.99) prizeMult = 50; // 2% chance
-                else prizeMult = 100;                       // 1% chance
+                if (prizeFloat < 0.60) prizeMult = 2;       // 60% chance (Tiny win)
+                else if (prizeFloat < 0.85) prizeMult = 5;  // 25% chance (Small win)
+                else if (prizeFloat < 0.95) prizeMult = 10; // 10% chance (Decent win)
+                else if (prizeFloat < 0.98) prizeMult = 20; // 3% chance
+                else if (prizeFloat < 0.995) prizeMult = 50; // 1.5% chance
+                else prizeMult = 100;                       // 0.5% chance (Mega rare)
 
                 luggageValues.push({ col: c, row: r, val: prizeMult });
                 totalLuggageMult += prizeMult;
