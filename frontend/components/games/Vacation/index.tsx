@@ -19,6 +19,11 @@ export default function Vacation() {
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [gameResult, setGameResult] = useState<any>(null);
 
+  // RESTORED: State to control our React overlay Modal
+  const [bonusModal, setBonusModal] = useState<{ show: boolean, spins: number, resume: (() => void) | null }>({
+    show: false, spins: 0, resume: null
+  });
+
   const handleSpin = async (isBonusBuy: boolean = false) => {
     if (!publicKey || !signTransaction || !sendTransaction) {
       alert("Please connect your wallet first.");
@@ -147,6 +152,8 @@ export default function Vacation() {
           <PixiReels 
             playData={gameResult} 
             onAnimationComplete={() => setIsAnimating(false)} 
+            // RESTORED: Pass the state setter into PixiReels
+            onShowBonusModal={(spins, resume) => setBonusModal({ show: true, spins, resume })}
           />
         </div>
 
@@ -166,32 +173,69 @@ export default function Vacation() {
           </div>
         )}
 
-        {/* ======================================================================
-            🚨 THE FIX: NEW REDESIGNED END-GAME OVERLAY 🚨
-            Replaces the full-screen separate screen from image_f173b8.jpg
-            ====================================================================== */}
-        {gameResult && !isAnimating && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity duration-300">
-            {/* Modal Card Container */}
-            <div className="relative flex flex-col items-center bg-[#0a0f0c] border-2 border-purple-500/60 p-8 rounded-3xl shadow-[0_0_80px_rgba(168,85,247,0.3)] animate-in zoom-in-95 duration-300 max-h-[95vh] overflow-y-auto">
+        {/* RESTORED & STYLED: START BONUS MODAL */}
+        {bonusModal.show && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md transition-opacity duration-300">
+            <div className="relative flex flex-col items-center bg-[#0a0f0c] border-2 border-purple-500/60 p-6 rounded-3xl shadow-[0_0_80px_rgba(168,85,247,0.3)] animate-in zoom-in-95 duration-300">
               
-              <h2 className="text-4xl font-black text-purple-400 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(192,132,252,0.6)] mb-6">
-                 BONUS GAME FINISHED
-              </h2>
-
-              <div className="bg-[#050806] border-2 border-cyan-800/60 p-6 rounded-xl flex flex-col items-center gap-3 mb-8 shadow-[0_0_30px_rgba(6,182,212,0.2)]">
-                <span className="text-gray-400 font-bold uppercase tracking-widest text-sm">Total Win</span>
-                <span className="text-white font-black text-6xl tracking-tighter drop-shadow-[0_1px_5px_rgba(0,0,0,1)]">
-                   {(gameResult.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(4)} SOL
-                </span>
+              <div className="relative flex-shrink-0 mb-6">
+                 {/* Image constrained cleanly inside the premium card */}
+                 <img 
+                    src="/vacations/vacation_freespin.png" 
+                    alt="Free Spins Awarded" 
+                    className="h-[280px] w-auto object-contain rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-white/10" 
+                 />
+                 
+                 {/* Dynamic text injected onto the PNG */}
+                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center w-full">
+                    <span 
+                      className="text-white font-black text-6xl drop-shadow-[0_4px_4px_rgba(0,0,0,1)] tracking-tighter" 
+                      style={{ WebkitTextStroke: '2px black' }}
+                    >
+                      {bonusModal.spins}
+                    </span>
+                    <span 
+                      className="text-yellow-400 font-black text-xl uppercase tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,1)]" 
+                      style={{ WebkitTextStroke: '1px black' }}
+                    >
+                      Free Spins
+                    </span>
+                 </div>
               </div>
 
               {/* Continue Button */}
               <button
                 onClick={() => {
-                   setGameResult(null); // Clear the game result to return to the game
+                  if (bonusModal.resume) bonusModal.resume(); // Tells PIXI to unpause
+                  setBonusModal({ show: false, spins: 0, resume: null });
                 }}
-                className="px-16 py-3 bg-gradient-to-b from-purple-500 to-purple-700 hover:from-purple-400 hover:to-purple-600 text-white font-black text-xl rounded-full uppercase tracking-widest shadow-[0_0_20px_rgba(168,85,247,0.6)] hover:shadow-[0_0_30px_rgba(168,85,247,0.8)] border-2 border-purple-300 transition-all transform hover:scale-105 active:scale-95"
+                className="px-16 py-3 w-full bg-gradient-to-b from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 text-white font-black text-xl rounded-xl uppercase tracking-widest shadow-[0_0_30px_rgba(168,85,247,0.5)] border border-purple-400/50 transition-all transform hover:-translate-y-1 active:translate-y-1"
+              >
+                Start Bonus
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STYLED: END GAME SUMMARY MODAL */}
+        {gameResult && !isAnimating && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md transition-opacity duration-300">
+            <div className="relative flex flex-col items-center bg-[#0a0f0c] border-2 border-purple-500/60 p-8 rounded-3xl shadow-[0_0_80px_rgba(168,85,247,0.3)] animate-in zoom-in-95 duration-300">
+              
+              <h2 className="text-3xl font-black text-purple-400 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(192,132,252,0.6)] mb-6">
+                 GAME FINISHED
+              </h2>
+
+              <div className="bg-[#050806] border-2 border-cyan-800/60 p-6 rounded-xl flex flex-col items-center gap-2 mb-8 shadow-[0_0_30px_rgba(6,182,212,0.2)] min-w-[250px]">
+                <span className="text-gray-400 font-bold uppercase tracking-widest text-sm">Total Win</span>
+                <span className="text-white font-black text-5xl tracking-tighter drop-shadow-[0_1px_5px_rgba(0,0,0,1)]">
+                   {(gameResult.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(4)} SOL
+                </span>
+              </div>
+
+              <button
+                onClick={() => setGameResult(null)}
+                className="px-16 py-3 w-full bg-gradient-to-b from-cyan-600 to-cyan-800 hover:from-cyan-500 hover:to-cyan-700 text-white font-black text-xl rounded-xl uppercase tracking-widest shadow-[0_0_20px_rgba(6,182,212,0.6)] border border-cyan-400/50 transition-all transform hover:-translate-y-1 active:translate-y-1"
               >
                 Continue
               </button>
