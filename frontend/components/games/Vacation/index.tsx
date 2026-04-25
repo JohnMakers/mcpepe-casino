@@ -19,7 +19,9 @@ export default function Vacation() {
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [gameResult, setGameResult] = useState<any>(null);
 
-  // RESTORED: State to control our React overlay Modal
+  // Tracks the initial wager amount for comparison at the end of the round
+  const [lastWagerLamports, setLastWagerLamports] = useState<number>(0);
+
   const [bonusModal, setBonusModal] = useState<{ show: boolean, spins: number, resume: (() => void) | null }>({
     show: false, spins: 0, resume: null
   });
@@ -36,6 +38,12 @@ export default function Vacation() {
     }
 
     try {
+      const totalWager = isBonusBuy ? betAmount * 100 : betAmount;
+      const betLamports = Math.floor(totalWager * anchor.web3.LAMPORTS_PER_SOL);
+      
+      // Save the wager size to check for profit later
+      setLastWagerLamports(betLamports);
+      
       setIsSpinning(true);
       setGameResult(null);
       setIsAnimating(false);
@@ -50,9 +58,6 @@ export default function Vacation() {
 
       const clientSeed = Math.random().toString(36).substring(2, 15);
       const nonce = Math.floor(Math.random() * 1000000);
-      
-      const totalWager = isBonusBuy ? betAmount * 100 : betAmount;
-      const betLamports = Math.floor(totalWager * anchor.web3.LAMPORTS_PER_SOL);
 
       const serverSeedHashBuffer = Buffer.from(seedData.serverSeedHash, 'hex');
       const hashArray = Array.from(serverSeedHashBuffer);
@@ -95,7 +100,8 @@ export default function Vacation() {
       tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = publicKey;
 
-      const txId = await sendTransaction(tx, connection);
+      const txId = await sendTransaction(tx, connection, { skipPreflight: true });
+      
       await connection.confirmTransaction({
         signature: txId,
         blockhash: latestBlockhash.blockhash,
@@ -125,7 +131,11 @@ export default function Vacation() {
 
     } catch (error: any) {
       console.error("Spin Error:", error);
-      alert(error.message);
+      if (error.message?.includes("WalletSendTransactionError")) {
+         alert(`Transaction Rejected! ⚠️ Ensure your wallet has enough SOL to cover the wager.`);
+      } else {
+         alert(error.message);
+      }
     } finally {
       setIsSpinning(false);
     }
@@ -145,53 +155,28 @@ export default function Vacation() {
         </div>
       </div>
 
-      {/* PIXI CANVAS CONTAINER */}
       <div className="box-content w-[960px] h-[600px] border-4 border-cyan-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(6,182,212,0.2)] bg-[#050806] shrink-0">
         
         <div className="absolute inset-0 z-10">
           <PixiReels 
             playData={gameResult} 
             onAnimationComplete={() => setIsAnimating(false)} 
-            // RESTORED: Pass the state setter into PixiReels
             onShowBonusModal={(spins, resume) => setBonusModal({ show: true, spins, resume })}
           />
         </div>
 
-        {!isSpinning && !gameResult && (
-          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/50">
-            <span className="text-cyan-400 font-black text-2xl uppercase tracking-widest opacity-90 drop-shadow-lg">
-              Waiting for Spin
-            </span>
-          </div>
-        )}
-        
-        {isSpinning && !gameResult && (
-          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/60">
-            <span className="text-purple-400 font-black text-2xl uppercase tracking-widest animate-pulse drop-shadow-lg">
-              Escrowing Wager...
-            </span>
-          </div>
-        )}
-
-{/* ======================================================================
-            CINEMATIC START BONUS MODAL
-            ====================================================================== */}
+        {/* CINEMATIC START BONUS MODAL */}
         {bonusModal.show && (
           <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-sm transition-opacity duration-500">
-            {/* Massive background glow to blend the image into the dark canvas */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(168,85,247,0.3)_0%,_transparent_60%)] pointer-events-none"></div>
 
             <div className="relative flex flex-col items-center animate-in zoom-in-[0.85] duration-500">
-              
               <div className="relative flex-shrink-0">
-                 {/* Pure cinematic image, no ugly boxes or borders */}
                  <img 
                     src="/vacations/vacation_freespin.png" 
                     alt="Free Spins Awarded" 
                     className="h-[480px] w-auto object-contain drop-shadow-[0_10px_40px_rgba(0,0,0,1)]" 
                  />
-                 
-                 {/* Dynamic text injected onto the PNG */}
                  <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center w-full">
                     <span 
                       className="text-white font-black text-[80px] leading-none drop-shadow-[0_5px_5px_rgba(0,0,0,1)] tracking-tighter" 
@@ -208,7 +193,6 @@ export default function Vacation() {
                  </div>
               </div>
 
-              {/* Cinematic Button - overlaps the image slightly */}
               <button
                 onClick={() => {
                   if (bonusModal.resume) bonusModal.resume(); 
@@ -222,24 +206,38 @@ export default function Vacation() {
           </div>
         )}
 
-        {/* ======================================================================
-            CINEMATIC END GAME SUMMARY MODAL
-            ====================================================================== */}
-        {gameResult && !isAnimating && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md transition-opacity duration-500">
-            {/* Cyan background glow */}
+        {/* LOADING STATES */}
+        {!isSpinning && !gameResult && (
+          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/50">
+            <span className="text-cyan-400 font-black text-2xl uppercase tracking-widest opacity-90 drop-shadow-lg">
+              Waiting for Spin
+            </span>
+          </div>
+        )}
+        
+        {isSpinning && !gameResult && (
+          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/60">
+            <span className="text-purple-400 font-black text-2xl uppercase tracking-widest animate-pulse drop-shadow-lg">
+              Escrowing Wager...
+            </span>
+          </div>
+        )}
+
+        {/* NEW SUMMARY LOGIC: Only show if it's a bonus AND payout exceeds original bet */}
+        {gameResult && !isAnimating && gameResult.triggeredBonus && gameResult.payout > lastWagerLamports && (
+          <div 
+            className="absolute inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md transition-opacity duration-500 cursor-pointer"
+            onClick={() => setGameResult(null)}
+          >
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(6,182,212,0.25)_0%,_transparent_60%)] pointer-events-none"></div>
 
-            <div className="relative flex flex-col items-center animate-in zoom-in-[0.85] duration-500">
+            <div className="relative flex flex-col items-center animate-in zoom-in-[0.85] duration-500 pointer-events-none">
               
-              <h2 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-cyan-600 uppercase tracking-widest drop-shadow-[0_0_30px_rgba(6,182,212,0.8)] mb-2" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
+              <h2 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-cyan-600 uppercase tracking-widest drop-shadow-[0_0_30px_rgba(6,182,212,0.8)] mb-8" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
                  EPIC WIN!
               </h2>
-              <p className="text-purple-400 font-bold uppercase tracking-widest mb-10 text-xl drop-shadow-lg">
-                Bonus Feature Complete
-              </p>
 
-              <div className="flex flex-col items-center justify-center mb-12 relative">
+              <div className="flex flex-col items-center justify-center mb-6 relative">
                 <div className="absolute inset-0 bg-cyan-500/20 blur-3xl rounded-full"></div>
                 <span className="text-gray-300 font-bold uppercase tracking-widest text-lg mb-2 relative z-10">Total Payout</span>
                 <span className="text-yellow-400 font-black text-7xl tracking-tighter drop-shadow-[0_5px_15px_rgba(0,0,0,1)] relative z-10" style={{ WebkitTextStroke: '2px black' }}>
@@ -247,20 +245,17 @@ export default function Vacation() {
                 </span>
               </div>
 
-              <button
-                onClick={() => setGameResult(null)}
-                className="px-20 py-4 bg-gradient-to-b from-cyan-500 via-cyan-600 to-cyan-900 hover:from-cyan-400 hover:to-cyan-700 text-white font-black text-2xl rounded-full uppercase tracking-widest shadow-[0_10px_40px_rgba(6,182,212,0.6)] border-[3px] border-cyan-300/80 transition-all transform hover:scale-105 active:scale-95"
-              >
-                COLLECT
-              </button>
-
+              <p className="text-cyan-400/60 font-bold uppercase tracking-widest mt-8 text-sm animate-pulse">
+                Click anywhere to dismiss
+              </p>
             </div>
           </div>
         )}
+
       </div>
 
       {/* CONTROL PANEL */}
-      <div className="flex gap-6 items-center bg-black border border-cyan-900/40 p-4 rounded-xl shrink-0">
+      <div className="flex gap-6 items-center bg-black border border-cyan-900/40 p-4 rounded-xl shrink-0 z-50">
         <div className="flex flex-col">
           <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Total Bet</label>
           <div className="flex items-center gap-2">
@@ -272,6 +267,9 @@ export default function Vacation() {
                 min="0.0001"
                 value={betInput}
                 onChange={(e) => setBetInput(e.target.value.replace(/-/g, ''))}
+                onKeyDown={(e) => {
+                  if (e.key === '-' || e.key === 'e') e.preventDefault();
+                }}
                 onBlur={() => {
                   let val = Number(betInput);
                   if (isNaN(val) || val < 0.0001) val = 0.0001;
