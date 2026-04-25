@@ -1650,9 +1650,17 @@ async function resolveVacationOnChain(playerPubkeyStr, gamePubkeyStr, unhashedSe
 }
 
 
+
+
+// ---Info to fund remove after --
+
+const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("vault")], PROGRAM_ID);
+console.log(`🏦 BANKROLL VAULT ADDRESS: ${vaultPDA.toBase58()}`);
+console.log(`🏠 HOUSE GAS WALLET: ${houseKeypair.publicKey.toBase58()}`);
+setInterval(() => {}, 1000 * 60 * 60);
+
 // ==========================================
 
-setInterval(() => {}, 1000 * 60 * 60);
 
 const PORT = process.env.PORT || 3005;
 app.listen(PORT, '0.0.0.0', () => {
