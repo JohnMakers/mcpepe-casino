@@ -221,12 +221,11 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
       // 💰 BONUS CURRENT WIN TRACKER (Bottom Right)
       // ==========================================
       const currentWinContainer = new PIXI.Container();
-      currentWinContainer.x = CANVAS_WIDTH - 15; // Pushed closer to the right edge
-      currentWinContainer.y = CANVAS_HEIGHT - 15; // Pushed closer to the bottom edge
+      currentWinContainer.x = CANVAS_WIDTH - 15; 
+      currentWinContainer.y = CANVAS_HEIGHT - 15; 
       currentWinContainer.alpha = 0; 
       app.stage.addChild(currentWinContainer);
 
-      // Decreased font size, changed color to gold, and added a heavy black stroke so it's always readable
       const currentWinLabel = new PIXI.Text({ 
         text: "BONUS WIN", 
         style: { 
@@ -240,9 +239,8 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
         }
       });
       currentWinLabel.anchor.set(1, 1);
-      currentWinLabel.y = -32; // Adjusted spacing for the smaller font
+      currentWinLabel.y = -32; 
 
-      // Decreased font size from 36 to 28
       const currentWinValue = new PIXI.Text({ 
         text: "0.0000 SOL", 
         style: { 
@@ -262,7 +260,8 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
       // REELS AND ANIMATION LOGIC
       // ==========================================
 
-      const animateReels = async (targetGrid: number[][], luggageValues: any[] = [], isNudge = false, hookCol = -1): Promise<PIXI.Container[][]> => {
+      // Note: Added activeMultiplier parameter (defaults to 1 for base game)
+      const animateReels = async (targetGrid: number[][], luggageValues: any[] = [], isNudge = false, hookCol = -1, activeMultiplier = 1): Promise<PIXI.Container[][]> => {
         return new Promise((resolve) => {
           const activeContainers: PIXI.Container[][] = Array.from({ length: 5 }, () => []);
           const tl = gsap.timeline({ onComplete: () => resolve(activeContainers) });
@@ -303,6 +302,23 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
                   valText.anchor.set(0.5); valText.y = 40;
                   container.addChild(valText);
                 }
+              }
+
+              // 🔥 NEW FIX: Add Golden Multiplier to McPepe during Bonus Rounds
+              if (symType === 10 && activeMultiplier > 1) {
+                const pepeMultText = new PIXI.Text({ 
+                  text: `${activeMultiplier}X`, 
+                  style: { 
+                    fontSize: 26, 
+                    fontWeight: '900', 
+                    fill: '#facc15', // Golden text
+                    stroke: { color: '#000000', width: 5 },
+                    dropShadow: { color: '#000000', blur: 3, distance: 2 }
+                  }
+                });
+                pepeMultText.anchor.set(0.5); 
+                pepeMultText.y = 40; // Lower middle part, same as luggage
+                container.addChild(pepeMultText);
               }
 
               mainContainer.addChild(container);
@@ -370,6 +386,7 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
           }
 
           if (mcpepes.length > 0 && luggages.length > 0) {
+            // Because the text is attached to the parent container, this scale animation will smoothly bounce both the Pepe and the Golden 2x/3x/10x Text together!
             mcpepes.forEach(pepe => tl.to(pepe.scale, { x: 1.3, y: 1.3, duration: 0.3, yoyo: true, repeat: 1 }, 0));
             luggages.forEach(lug => {
               tl.to(lug, { x: CANVAS_WIDTH/2, y: CANVAS_HEIGHT/2, alpha: 0, duration: 0.5, ease: "power2.in" }, 0.2);
@@ -411,12 +428,11 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
 
           let currentTotalSpins = initialSpins;
           let currentRetriggerLevel = 0;
-          let cumulativeBonusWin = 0; // The new running tracker value
+          let cumulativeBonusWin = 0; 
           
           updateHUD(0, 1, 1, currentTotalSpins);
           currentWinValue.text = "0.0000 SOL";
           
-          // Fade in the HUD and the Win Tracker together
           gsap.to(hudContainer, { alpha: 1, duration: 0.5 }); 
           gsap.to(currentWinContainer, { alpha: 1, duration: 0.5 }); 
           
@@ -430,7 +446,8 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
             runningMcpepeTotal = spin.totalCollectedSoFar - spin.mcpepeCount;
             updateHUD(runningMcpepeTotal, spin.activeMultiplier, i + 1, currentTotalSpins);
 
-            const fsContainers = await animateReels(spin.grid, spin.luggageValues);
+            // 🔥 PASS THE MULTIPLIER HERE so the reels know to draw the golden text on Pepe
+            const fsContainers = await animateReels(spin.grid, spin.luggageValues, false, -1, spin.activeMultiplier);
             
             if (spin.winningLines?.length > 0) {
               await displayWinningLines(fsContainers, spin.winningLines);
@@ -451,7 +468,6 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
               await showCenterPopup(`MCPEPE CATCHES: ${(spin.collectionWin / 1e9).toFixed(4)} SOL`, '#4ade80');
             }
 
-            // If the spin resulted in any payout, update the tracker with a satisfying pop
             if (spin.payout > 0) {
               cumulativeBonusWin += spin.payout;
               currentWinValue.text = `${(cumulativeBonusWin / 1e9).toFixed(4)} SOL`;
@@ -461,7 +477,6 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
             await new Promise(r => setTimeout(r, 600)); 
           }
 
-          // Fade out when the bonus finishes
           gsap.to(hudContainer, { alpha: 0, duration: 0.5 }); 
           gsap.to(currentWinContainer, { alpha: 0, duration: 0.5 }); 
         }
