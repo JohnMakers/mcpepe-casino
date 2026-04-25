@@ -1473,12 +1473,7 @@ app.post('/api/vacation/play', async (req, res) => {
         if (!game || game.status !== "waiting_for_tx") {
             return res.status(400).json({ error: "No active session. Fetch seed first." });
         }
-
-        // ==========================================
-        // ⚠️ SECURITY PATCH TEMPORARILY BYPASSED
-        // Relying on frontend betAmount for testing to avoid Anchor IDL version crashes.
-        // Update @coral-xyz/anchor to ^0.30.0 on the backend before MainNet to re-enable.
-        // ==========================================
+        
         const actualBetLamports = Number(betAmount);
 
         const totalWager = Number(actualBetLamports);
