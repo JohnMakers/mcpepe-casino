@@ -3,26 +3,27 @@ import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import idl from '../../../idl.json'; 
-import PixiReels from './PixiReels';
+import PixiGrid from './PixiGrid';
+import ProvablyFairModal from '../../modals/ProvablyFairModal';
+import InfoModal from './InfoModal';
 
 const PROGRAM_ID = new PublicKey(idl.metadata.address);
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
-export default function Vacation() {
+export default function Patriots() {
   const { connection } = useConnection();
   const { publicKey, signTransaction, sendTransaction } = useWallet();
   
-  const [betInput, setBetInput] = useState<string>("0.1000"); 
+  const [betInput, setBetInput] = useState<string>("0.1000");
   const betAmount = Number(betInput) || 0; 
   
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [gameResult, setGameResult] = useState<any>(null);
 
-  // NEW: State to control our React overlay Modal
-  const [bonusModal, setBonusModal] = useState<{ show: boolean, spins: number, resume: (() => void) | null }>({
-    show: false, spins: 0, resume: null
-  });
+  const [isInfoOpen, setIsInfoOpen] = useState<boolean>(false);
+  const [isPFOpen, setIsPFOpen] = useState<boolean>(false);
+  const [pfData, setPfData] = useState({ hash: '', seed: '' });
 
   const handleSpin = async (isBonusBuy: boolean = false) => {
     if (!publicKey || !signTransaction || !sendTransaction) {
@@ -40,7 +41,7 @@ export default function Vacation() {
       setGameResult(null);
       setIsAnimating(false);
 
-      const seedRes = await fetch(`${BACKEND_URL}/api/vacation/seed`, {
+      const seedRes = await fetch(`${BACKEND_URL}/api/patriots/seed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ playerPubkey: publicKey.toBase58() })
@@ -48,18 +49,24 @@ export default function Vacation() {
       const seedData = await seedRes.json();
       if (!seedData.success) throw new Error(seedData.error || "Failed to fetch seed");
 
+      setPfData(prev => ({ ...prev, hash: seedData.serverSeedHash, seed: '' }));
+
       const clientSeed = Math.random().toString(36).substring(2, 15);
       const nonce = Math.floor(Math.random() * 1000000);
       
       const totalWager = isBonusBuy ? betAmount * 100 : betAmount;
-      const betLamports = Math.floor(totalWager * anchor.web3.LAMPORTS_PER_SOL);
+      const baseLamports = Math.floor(betAmount * anchor.web3.LAMPORTS_PER_SOL);
+      const feeLamports = isBonusBuy ? Math.floor(betAmount * 99 * anchor.web3.LAMPORTS_PER_SOL) : 0;
+      const totalLamports = baseLamports + feeLamports;
+
+      console.log(`🛠️ DEBUG | Attempting to charge wallet: ${totalLamports / 1e9} SOL`);
 
       const serverSeedHashBuffer = Buffer.from(seedData.serverSeedHash, 'hex');
       const hashArray = Array.from(serverSeedHashBuffer);
 
       const [gameStatePDA] = PublicKey.findProgramAddressSync(
         [
-          Buffer.from("vacation"),
+          Buffer.from("patriots"),
           publicKey.toBuffer(),
           new anchor.BN(nonce).toArrayLike(Buffer, 'le', 8)
         ],
@@ -74,13 +81,14 @@ export default function Vacation() {
       const provider = new anchor.AnchorProvider(connection, { publicKey, signTransaction } as any, { preflightCommitment: "confirmed" });
       const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
 
-      const tx = new Transaction().add(
-        await program.methods.startVacation(
-          new anchor.BN(betLamports),
+      const tx = new Transaction();
+
+      tx.add(
+        await program.methods.startPatriots(
+          new anchor.BN(baseLamports.toString()),
           hashArray,
           clientSeed,
-          new anchor.BN(nonce),
-          isBonusBuy 
+          new anchor.BN(nonce.toString())
         )
         .accounts({
           player: publicKey,
@@ -91,20 +99,35 @@ export default function Vacation() {
         .instruction()
       );
 
+      if (isBonusBuy) {
+        tx.add(
+          SystemProgram.transfer({
+            fromPubkey: publicKey,
+            toPubkey: vaultPDA,
+            lamports: feeLamports
+          })
+        );
+      }
+
       const latestBlockhash = await connection.getLatestBlockhash('confirmed');
       tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = publicKey;
 
-      const txId = await sendTransaction(tx, connection);
-      await connection.confirmTransaction({
+      const txId = await sendTransaction(tx, connection, { skipPreflight: true });
+
+      const confirmation = await connection.confirmTransaction({
         signature: txId,
         blockhash: latestBlockhash.blockhash,
         lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
       }, 'confirmed');
 
+      if (confirmation.value.err) {
+         throw new Error(`On-Chain Error: Transaction rejected by network. You may not have enough SOL.`);
+      }
+
       console.log("On-chain wager secured! Tx:", txId);
 
-      const playRes = await fetch(`${BACKEND_URL}/api/vacation/play`, {
+      const playRes = await fetch(`${BACKEND_URL}/api/patriots/play`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -112,7 +135,7 @@ export default function Vacation() {
           gamePubkey: gameStatePDA.toBase58(),
           clientSeed,
           nonce,
-          betAmount: betLamports,
+          betAmount: totalLamports, 
           isBonusBuy 
         })
       });
@@ -120,12 +143,19 @@ export default function Vacation() {
       const playData = await playRes.json();
       if (!playData.success) throw new Error(playData.error || "Backend engine failed");
 
+      console.log("Received Math Frames:", playData);
+      
+      setPfData(prev => ({ ...prev, seed: playData.serverSeed }));
       setGameResult(playData);
       setIsAnimating(true);
 
     } catch (error: any) {
       console.error("Spin Error:", error);
-      alert(error.message);
+      if (error.message?.includes("WalletSendTransactionError")) {
+         alert(`Transaction Rejected! ⚠️ If you are buying a Bonus, it costs 100x your base bet. Ensure your wallet has enough SOL to cover it.`);
+      } else {
+         alert(error.message);
+      }
     } finally {
       setIsSpinning(false);
     }
@@ -134,98 +164,97 @@ export default function Vacation() {
   return (
     <div className="flex flex-col items-center justify-start min-h-screen w-full bg-[#0a0f0c] p-6 pb-20 relative overflow-y-auto">
       
-      <div className="w-[960px] flex justify-between items-end mb-6 mt-4 shrink-0">
-        <div className="flex flex-col text-left">
-          <h1 className="text-4xl font-black text-cyan-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(6,182,212,0.6)]">
-            McPepe's Vacation
+      <ProvablyFairModal 
+        isOpen={isPFOpen} 
+        onClose={() => setIsPFOpen(false)} 
+        serverSeed={pfData.seed} 
+        serverSeedHash={pfData.hash} 
+      />
+      
+      <InfoModal 
+        isOpen={isInfoOpen} 
+        onClose={() => setIsInfoOpen(false)} 
+      />
+
+      {/* Title is now perfectly centered on its own without buttons clogging it up */}
+      <div className="w-[800px] flex justify-center items-center mb-6 mt-4 shrink-0 text-center">
+        <div className="flex flex-col">
+          <h1 className="text-4xl font-black text-red-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.6)]">
+            McPepe's Patriots
           </h1>
           <p className="text-gray-400 text-sm font-bold tracking-widest mt-2 uppercase">
-            5x3 Reels • High Volatility • Pepe Collection
+            Pay Anywhere • Liberty Mechanism (Tumble)
           </p>
         </div>
       </div>
 
-      {/* PIXI CANVAS CONTAINER */}
-      <div className="box-content w-[960px] h-[600px] border-4 border-cyan-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(6,182,212,0.2)] bg-[#050806] shrink-0">
-        
-        <div className="absolute inset-0 z-10">
-          <PixiReels 
-            playData={gameResult} 
-            onAnimationComplete={() => setIsAnimating(false)} 
-            // NEW: Pass the state setter into PixiReels
-            onShowBonusModal={(spins, resume) => setBonusModal({ show: true, spins, resume })}
-          />
-        </div>
+      <div className="box-content w-[800px] h-[600px] border-4 border-blue-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(220,38,38,0.2)] bg-[#0a0f0c] shrink-0">
 
-        {/* NEW: React OVERLAY FOR BONUS MODAL */}
-        {bonusModal.show && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md transition-opacity duration-300">
-            
-            {/* Modal Card Container */}
-            <div className="relative flex flex-col items-center bg-[#0a0f0c] border-2 border-purple-500/60 p-8 rounded-3xl shadow-[0_0_80px_rgba(168,85,247,0.3)] animate-in zoom-in-95 duration-300 max-h-[95vh] overflow-y-auto">
-              
-              <div className="relative flex-shrink-0">
-                 {/* Constrain HEIGHT instead of width so the button never gets pushed off screen */}
-                 <img 
-                    src="/vacations/vacation_freespin.png" 
-                    alt="Free Spins Awarded" 
-                    className="h-[300px] sm:h-[400px] w-auto object-contain rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-white/10" 
-                 />
-                 
-                 {/* Dynamic text injected onto the PNG */}
-                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center w-full">
-                    <span 
-                      className="text-white font-black text-6xl sm:text-7xl drop-shadow-[0_4px_4px_rgba(0,0,0,1)] tracking-tighter" 
-                      style={{ WebkitTextStroke: '2px black' }}
-                    >
-                      {bonusModal.spins}
-                    </span>
-                    <span 
-                      className="text-yellow-400 font-black text-xl sm:text-2xl uppercase tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,1)]" 
-                      style={{ WebkitTextStroke: '1px black' }}
-                    >
-                      Free Spins
-                    </span>
-                 </div>
-              </div>
+        <div 
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage: "url('/patriots/patriots_bg.png')",
+            backgroundSize: "102% 102%",
+            backgroundPosition: "top left",
+            backgroundRepeat: "no-repeat"
+          }}
+        />
 
-              {/* Continue Button */}
-              <button
-                onClick={() => {
-                  if (bonusModal.resume) bonusModal.resume(); // Tells PIXI to unpause
-                  setBonusModal({ show: false, spins: 0, resume: null });
-                }}
-                className="mt-8 px-16 py-4 w-full sm:w-auto bg-gradient-to-b from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 text-white font-black text-2xl rounded-xl uppercase tracking-widest shadow-[0_0_30px_rgba(168,85,247,0.5)] hover:shadow-[0_0_40px_rgba(168,85,247,0.8)] border border-purple-400/50 transition-all transform hover:-translate-y-1 active:translate-y-1"
-              >
-                Collect
-              </button>
-
-            </div>
-          </div>
+        {!gameResult && (
+          <div className="absolute inset-0 bg-black/60 z-10 pointer-events-none"></div>
         )}
 
         {!isSpinning && !gameResult && (
-          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/50">
-            <span className="text-cyan-400 font-black text-2xl uppercase tracking-widest opacity-90 drop-shadow-lg">
+          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+            <span className="text-blue-400 font-black text-2xl uppercase tracking-widest opacity-80 drop-shadow-lg">
               Waiting for Spin
             </span>
           </div>
         )}
         
         {isSpinning && !gameResult && (
-          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/60">
-            <span className="text-purple-400 font-black text-2xl uppercase tracking-widest animate-pulse drop-shadow-lg">
+          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+            <span className="text-red-400 font-black text-2xl uppercase tracking-widest animate-pulse drop-shadow-lg">
               Escrowing Wager...
             </span>
           </div>
         )}
+
+        {gameResult && (
+          <div className="absolute inset-0 z-30">
+            <PixiGrid 
+              playData={gameResult} 
+              onAnimationComplete={() => setIsAnimating(false)} 
+            />
+          </div>
+        )}
+
+        {/* ✨ UI FIX: Sleek Floating HUD Overlay for Info & Fair Buttons */}
+        <div className="absolute bottom-4 left-4 z-40 flex items-center gap-3">
+          <button 
+            onClick={() => setIsPFOpen(true)} 
+            className="flex items-center gap-2 bg-black/80 hover:bg-green-900/80 border border-green-500/50 text-green-400 px-4 py-2 rounded-lg text-xs font-bold tracking-widest transition-all backdrop-blur-md shadow-lg"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            FAIR
+          </button>
+          <button 
+            onClick={() => setIsInfoOpen(true)} 
+            className="flex items-center justify-center bg-black/80 hover:bg-blue-900/80 border border-blue-500/50 text-blue-400 w-10 h-10 rounded-full font-black text-lg transition-all backdrop-blur-md shadow-lg"
+          >
+            ?
+          </button>
+        </div>
+
       </div>
 
-      {/* CONTROL PANEL */}
-      <div className="flex gap-6 items-center bg-black border border-cyan-900/40 p-4 rounded-xl shrink-0">
+      <div className="flex gap-6 items-center bg-black border border-blue-900/40 p-4 rounded-xl shrink-0">
         <div className="flex flex-col">
-          <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Total Bet</label>
+          <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Bet</label>
           <div className="flex items-center gap-2">
+            
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">◎</span>
               <input 
@@ -233,27 +262,36 @@ export default function Vacation() {
                 step="0.0001"
                 min="0.0001"
                 value={betInput}
-                onChange={(e) => setBetInput(e.target.value.replace(/-/g, ''))}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/-/g, ''); 
+                  setBetInput(val);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === '-' || e.key === 'e') {
+                    e.preventDefault();
+                  }
+                }}
                 onBlur={() => {
                   let val = Number(betInput);
                   if (isNaN(val) || val < 0.0001) val = 0.0001;
                   setBetInput(val.toFixed(4));
                 }}
-                className="bg-[#0a0f0c] border-2 border-cyan-900/50 rounded-lg py-2 pl-7 pr-2 text-white font-black w-36 focus:border-cyan-500 focus:outline-none transition-all"
+                className="bg-[#0a0f0c] border-2 border-blue-900/50 rounded-lg py-2 pl-7 pr-2 text-white font-black w-36 focus:border-blue-500 focus:shadow-[0_0_15px_rgba(59,130,246,0.3)] focus:outline-none transition-all"
                 disabled={isSpinning || isAnimating}
               />
             </div>
+
             <button 
               onClick={() => setBetInput(prev => Math.max(0.0001, Number((Number(prev) / 2).toFixed(4))).toString())}
               disabled={isSpinning || isAnimating}
-              className="bg-cyan-900/30 hover:bg-cyan-800/50 border border-cyan-800/50 text-cyan-300 font-bold py-2 px-3 rounded-lg text-sm"
+              className="bg-blue-900/30 hover:bg-blue-800/50 border border-blue-800/50 text-blue-300 font-bold py-2 px-3 rounded-lg text-sm transition-all disabled:opacity-50"
             >
               1/2
             </button>
             <button 
               onClick={() => setBetInput(prev => (Number(prev) * 2).toFixed(4).toString())}
               disabled={isSpinning || isAnimating}
-              className="bg-cyan-900/30 hover:bg-cyan-800/50 border border-cyan-800/50 text-cyan-300 font-bold py-2 px-3 rounded-lg text-sm"
+              className="bg-blue-900/30 hover:bg-blue-800/50 border border-blue-800/50 text-blue-300 font-bold py-2 px-3 rounded-lg text-sm transition-all disabled:opacity-50"
             >
               2x
             </button>
@@ -266,10 +304,10 @@ export default function Vacation() {
           className={`px-12 py-4 rounded font-black text-xl uppercase tracking-widest transition-all ${
             (isSpinning || isAnimating)
               ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
-              : 'bg-cyan-700 hover:bg-cyan-600 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)]'
+              : 'bg-blue-700 hover:bg-blue-600 text-white shadow-[0_0_20px_rgba(29,78,216,0.4)] hover:shadow-[0_0_30px_rgba(29,78,216,0.6)]'
           }`}
         >
-          {isSpinning ? 'Escrowing...' : isAnimating ? 'Spinning...' : 'Spin'}
+          {isSpinning ? 'Escrowing...' : isAnimating ? 'Tumbling...' : 'Single Spin'}
         </button>
 
         <button 
@@ -278,7 +316,7 @@ export default function Vacation() {
           className={`px-8 py-2.5 rounded font-black uppercase tracking-widest transition-all flex flex-col items-center justify-center ${
             (isSpinning || isAnimating)
               ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
-              : 'bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(147,51,234,0.4)] hover:shadow-[0_0_30px_rgba(147,51,234,0.6)] border-2 border-purple-400'
+              : 'bg-green-600 hover:bg-green-500 text-white shadow-[0_0_20px_rgba(22,163,74,0.4)] hover:shadow-[0_0_30px_rgba(22,163,74,0.6)] border-2 border-green-400'
           }`}
         >
           <span className="text-lg">Buy Bonus ({(betAmount * 100).toFixed(4)} SOL)</span>
@@ -287,9 +325,9 @@ export default function Vacation() {
       </div>
 
       {gameResult && !isAnimating && (
-        <div className="mt-4 text-cyan-400 font-mono text-sm text-center shrink-0">
+        <div className="mt-4 text-green-400 font-mono text-sm text-center shrink-0">
           <p>Total Payout: {(gameResult.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(4)} SOL</p>
-          {gameResult.triggeredBonus && <p className="text-purple-400 font-bold">🎉 VACATION BONUS COMPLETE! 🎉</p>}
+          {gameResult.triggeredBonus && <p className="text-yellow-400 font-bold">🎉 FREE SPINS COMPLETED! 🎉</p>}
         </div>
       )}
     </div>
