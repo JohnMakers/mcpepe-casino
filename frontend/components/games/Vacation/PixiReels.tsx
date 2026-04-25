@@ -375,13 +375,18 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
 
         if (playData.triggeredBonus && playData.freeSpinsData) {
           
+          // 1. Read the initial spins explicitly instead of the array length
+          const initialSpins = playData.freeSpinsData.initialSpins || 10;
+          
           await new Promise<void>((resolve) => {
-             onShowBonusModal(playData.freeSpinsData.spins.length, resolve);
+             onShowBonusModal(initialSpins, resolve);
           });
 
-          // Pre-populate HUD right as the modal resolves
-          const totalSpins = playData.freeSpinsData.spins.length;
-          updateHUD(0, 1, 1, totalSpins);
+          // 2. Set up dynamic tracking for the HUD
+          let currentTotalSpins = initialSpins;
+          let currentRetriggerLevel = 0;
+          
+          updateHUD(0, 1, 1, currentTotalSpins);
           gsap.to(hudContainer, { alpha: 1, duration: 0.5 }); 
           
           const fsData = playData.freeSpinsData;
@@ -393,7 +398,7 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
             
             // Show HUD status BEFORE the reels spin
             runningMcpepeTotal = spin.totalCollectedSoFar - spin.mcpepeCount;
-            updateHUD(runningMcpepeTotal, spin.activeMultiplier, i + 1, totalSpins);
+            updateHUD(runningMcpepeTotal, spin.activeMultiplier, i + 1, currentTotalSpins);
 
             const fsContainers = await animateReels(spin.grid, spin.luggageValues);
             
@@ -402,9 +407,15 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
             }
 
             if (spin.mcpepeCount > 0) {
-              // Update HUD AFTER reels land so player sees the new Pepes fill the bar
+              // 3. Update HUD AFTER reels land so player sees the new Pepes fill the bar
               runningMcpepeTotal += spin.mcpepeCount;
-              updateHUD(runningMcpepeTotal, spin.activeMultiplier, i + 1, totalSpins);
+              
+              // 4. Dynamically increase HUD max spins upon hitting retrigger thresholds
+              if (runningMcpepeTotal >= 4 && currentRetriggerLevel === 0) { currentRetriggerLevel = 1; currentTotalSpins += 10; }
+              if (runningMcpepeTotal >= 8 && currentRetriggerLevel === 1) { currentRetriggerLevel = 2; currentTotalSpins += 10; }
+              if (runningMcpepeTotal >= 12 && currentRetriggerLevel === 2) { currentRetriggerLevel = 3; currentTotalSpins += 10; }
+
+              updateHUD(runningMcpepeTotal, spin.activeMultiplier, i + 1, currentTotalSpins);
             }
 
             if (spin.mcpepeCount > 0 && spin.collectionWin > 0) {

@@ -1572,7 +1572,8 @@ app.post('/api/vacation/play', async (req, res) => {
             freeSpinsData = { 
                 spins: spinsData, 
                 totalSpinsPlayed: currentSpinNum,
-                finalMcpepesCollected: mcpepesCollected 
+                finalMcpepesCollected: mcpepesCollected,
+                initialSpins: initialSpins // Pass the starting spins to the frontend
             };
         }
 
