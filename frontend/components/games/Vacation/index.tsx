@@ -159,27 +159,29 @@ export default function Vacation() {
 
         {/* NEW: React OVERLAY FOR BONUS MODAL */}
         {bonusModal.show && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity duration-300">
-            <div className="relative flex flex-col items-center transform transition-transform duration-500 scale-100">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md transition-opacity duration-300">
+            
+            {/* Modal Card Container */}
+            <div className="relative flex flex-col items-center bg-[#0a0f0c] border-2 border-purple-500/60 p-8 rounded-3xl shadow-[0_0_80px_rgba(168,85,247,0.3)] animate-in zoom-in-95 duration-300 max-h-[95vh] overflow-y-auto">
               
-              <div className="relative">
-                 {/* Main Graphic */}
+              <div className="relative flex-shrink-0">
+                 {/* Constrain HEIGHT instead of width so the button never gets pushed off screen */}
                  <img 
                     src="/vacations/vacation_freespin.png" 
                     alt="Free Spins Awarded" 
-                    className="w-[320px] sm:w-[400px] h-auto object-contain rounded-2xl shadow-[0_0_40px_rgba(192,132,252,0.4)] border border-purple-500/30" 
+                    className="h-[300px] sm:h-[400px] w-auto object-contain rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-white/10" 
                  />
                  
                  {/* Dynamic text injected onto the PNG */}
                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center w-full">
                     <span 
-                      className="text-white font-black text-6xl drop-shadow-[0_4px_4px_rgba(0,0,0,1)]" 
+                      className="text-white font-black text-6xl sm:text-7xl drop-shadow-[0_4px_4px_rgba(0,0,0,1)] tracking-tighter" 
                       style={{ WebkitTextStroke: '2px black' }}
                     >
                       {bonusModal.spins}
                     </span>
                     <span 
-                      className="text-yellow-400 font-black text-2xl uppercase tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,1)]" 
+                      className="text-yellow-400 font-black text-xl sm:text-2xl uppercase tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,1)]" 
                       style={{ WebkitTextStroke: '1px black' }}
                     >
                       Free Spins
@@ -193,9 +195,9 @@ export default function Vacation() {
                   if (bonusModal.resume) bonusModal.resume(); // Tells PIXI to unpause
                   setBonusModal({ show: false, spins: 0, resume: null });
                 }}
-                className="mt-6 px-12 py-3 bg-gradient-to-b from-purple-500 to-purple-700 hover:from-purple-400 hover:to-purple-600 text-white font-black text-xl rounded-full uppercase tracking-widest shadow-[0_0_20px_rgba(168,85,247,0.6)] hover:shadow-[0_0_30px_rgba(168,85,247,0.8)] border-2 border-purple-300 transition-all transform hover:scale-105 active:scale-95"
+                className="mt-8 px-16 py-4 w-full sm:w-auto bg-gradient-to-b from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 text-white font-black text-2xl rounded-xl uppercase tracking-widest shadow-[0_0_30px_rgba(168,85,247,0.5)] hover:shadow-[0_0_40px_rgba(168,85,247,0.8)] border border-purple-400/50 transition-all transform hover:-translate-y-1 active:translate-y-1"
               >
-                Continue
+                Collect
               </button>
 
             </div>
