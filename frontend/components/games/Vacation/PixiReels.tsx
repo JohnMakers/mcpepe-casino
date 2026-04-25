@@ -221,20 +221,42 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
       // 💰 BONUS CURRENT WIN TRACKER (Bottom Right)
       // ==========================================
       const currentWinContainer = new PIXI.Container();
-      currentWinContainer.x = CANVAS_WIDTH - 30; 
-      currentWinContainer.y = CANVAS_HEIGHT - 30; 
+      currentWinContainer.x = CANVAS_WIDTH - 15; // Pushed closer to the right edge
+      currentWinContainer.y = CANVAS_HEIGHT - 15; // Pushed closer to the bottom edge
       currentWinContainer.alpha = 0; 
       app.stage.addChild(currentWinContainer);
 
-      const currentWinLabel = new PIXI.Text({ text: "BONUS WIN", style: { fontSize: 16, fill: '#9ca3af', fontWeight: '900', letterSpacing: 2, align: 'right' }});
+      // Decreased font size, changed color to gold, and added a heavy black stroke so it's always readable
+      const currentWinLabel = new PIXI.Text({ 
+        text: "BONUS WIN", 
+        style: { 
+          fontSize: 14, 
+          fill: '#facc15', 
+          fontWeight: '900', 
+          letterSpacing: 2, 
+          align: 'right',
+          stroke: { color: '#000000', width: 4 },
+          dropShadow: { color: '#000000', blur: 4, distance: 2 }
+        }
+      });
       currentWinLabel.anchor.set(1, 1);
-      currentWinLabel.y = -40;
+      currentWinLabel.y = -32; // Adjusted spacing for the smaller font
 
-      const currentWinValue = new PIXI.Text({ text: "0.0000 SOL", style: { fontSize: 36, fill: '#4ade80', fontWeight: '900', dropShadow: { color: '#000', blur: 4, distance: 2 }, stroke: { color: '#000000', width: 5 }, align: 'right' }});
+      // Decreased font size from 36 to 28
+      const currentWinValue = new PIXI.Text({ 
+        text: "0.0000 SOL", 
+        style: { 
+          fontSize: 28, 
+          fill: '#4ade80', 
+          fontWeight: '900', 
+          dropShadow: { color: '#000', blur: 4, distance: 2 }, 
+          stroke: { color: '#000000', width: 5 }, 
+          align: 'right' 
+        }
+      });
       currentWinValue.anchor.set(1, 1);
 
       currentWinContainer.addChild(currentWinLabel, currentWinValue);
-
 
       // ==========================================
       // REELS AND ANIMATION LOGIC
