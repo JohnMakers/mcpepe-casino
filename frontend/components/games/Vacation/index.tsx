@@ -169,7 +169,7 @@ export default function Vacation() {
             McPepe's Vacation
           </h1>
           <p className="text-gray-400 text-sm font-bold tracking-widest mt-2 uppercase">
-            5x3 Reels • High Volatility • Pepe Collection
+            5x3 Multi-Line Slot 
           </p>
         </div>
         
