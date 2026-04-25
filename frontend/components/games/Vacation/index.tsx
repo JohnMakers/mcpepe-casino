@@ -4,6 +4,8 @@ import { PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import idl from '../../../idl.json'; 
 import PixiReels from './PixiReels';
+import ProvablyFairModal from '../../modals/ProvablyFairModal';
+import InfoModal from './InfoModal';
 
 const PROGRAM_ID = new PublicKey(idl.metadata.address);
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
@@ -19,8 +21,10 @@ export default function Vacation() {
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [gameResult, setGameResult] = useState<any>(null);
 
-  // Tracks the initial wager amount for comparison at the end of the round
-  const [lastWagerLamports, setLastWagerLamports] = useState<number>(0);
+  // Modals Data
+  const [isInfoOpen, setIsInfoOpen] = useState<boolean>(false);
+  const [isPFOpen, setIsPFOpen] = useState<boolean>(false);
+  const [pfData, setPfData] = useState({ hash: '', seed: '' });
 
   const [bonusModal, setBonusModal] = useState<{ show: boolean, spins: number, resume: (() => void) | null }>({
     show: false, spins: 0, resume: null
@@ -38,12 +42,6 @@ export default function Vacation() {
     }
 
     try {
-      const totalWager = isBonusBuy ? betAmount * 100 : betAmount;
-      const betLamports = Math.floor(totalWager * anchor.web3.LAMPORTS_PER_SOL);
-      
-      // Save the wager size to check for profit later
-      setLastWagerLamports(betLamports);
-      
       setIsSpinning(true);
       setGameResult(null);
       setIsAnimating(false);
@@ -56,8 +54,14 @@ export default function Vacation() {
       const seedData = await seedRes.json();
       if (!seedData.success) throw new Error(seedData.error || "Failed to fetch seed");
 
+      // Save hash for Provably Fair Modal
+      setPfData(prev => ({ ...prev, hash: seedData.serverSeedHash, seed: '' }));
+
       const clientSeed = Math.random().toString(36).substring(2, 15);
       const nonce = Math.floor(Math.random() * 1000000);
+      
+      const totalWager = isBonusBuy ? betAmount * 100 : betAmount;
+      const betLamports = Math.floor(totalWager * anchor.web3.LAMPORTS_PER_SOL);
 
       const serverSeedHashBuffer = Buffer.from(seedData.serverSeedHash, 'hex');
       const hashArray = Array.from(serverSeedHashBuffer);
@@ -126,6 +130,9 @@ export default function Vacation() {
       const playData = await playRes.json();
       if (!playData.success) throw new Error(playData.error || "Backend engine failed");
 
+      // Save seed for Provably Fair Modal
+      setPfData(prev => ({ ...prev, seed: playData.serverSeed }));
+
       setGameResult(playData);
       setIsAnimating(true);
 
@@ -144,6 +151,18 @@ export default function Vacation() {
   return (
     <div className="flex flex-col items-center justify-start min-h-screen w-full bg-[#0a0f0c] p-6 pb-20 relative overflow-y-auto">
       
+      <ProvablyFairModal 
+        isOpen={isPFOpen} 
+        onClose={() => setIsPFOpen(false)} 
+        serverSeed={pfData.seed} 
+        serverSeedHash={pfData.hash} 
+      />
+      
+      <InfoModal 
+        isOpen={isInfoOpen} 
+        onClose={() => setIsInfoOpen(false)} 
+      />
+
       <div className="w-[960px] flex justify-between items-end mb-6 mt-4 shrink-0">
         <div className="flex flex-col text-left">
           <h1 className="text-4xl font-black text-cyan-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(6,182,212,0.6)]">
@@ -152,6 +171,25 @@ export default function Vacation() {
           <p className="text-gray-400 text-sm font-bold tracking-widest mt-2 uppercase">
             5x3 Reels • High Volatility • Pepe Collection
           </p>
+        </div>
+        
+        {/* Modals Triggers in Header (Matches reverted layout) */}
+        <div className="flex items-center gap-3 pb-1">
+          <button 
+            onClick={() => setIsPFOpen(true)} 
+            className="flex items-center gap-2 bg-[#0d1310] hover:bg-green-900/30 border border-green-800/50 text-green-400 px-4 py-2 rounded-lg text-xs font-bold tracking-widest transition-all"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            FAIR
+          </button>
+          <button 
+            onClick={() => setIsInfoOpen(true)} 
+            className="flex items-center justify-center bg-[#0d1310] hover:bg-cyan-900/30 border border-cyan-800/50 text-cyan-400 w-10 h-10 rounded-full font-black text-lg transition-all"
+          >
+            ?
+          </button>
         </div>
       </div>
 
@@ -165,28 +203,26 @@ export default function Vacation() {
           />
         </div>
 
-        {/* CINEMATIC START BONUS MODAL */}
         {bonusModal.show && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-sm transition-opacity duration-500">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(168,85,247,0.3)_0%,_transparent_60%)] pointer-events-none"></div>
-
-            <div className="relative flex flex-col items-center animate-in zoom-in-[0.85] duration-500">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md transition-opacity duration-300">
+            <div className="relative flex flex-col items-center bg-[#0a0f0c] border-2 border-purple-500/60 p-8 rounded-3xl shadow-[0_0_80px_rgba(168,85,247,0.3)] animate-in zoom-in-95 duration-300 max-h-[95vh] overflow-y-auto">
+              
               <div className="relative flex-shrink-0">
                  <img 
                     src="/vacations/vacation_freespin.png" 
                     alt="Free Spins Awarded" 
-                    className="h-[480px] w-auto object-contain drop-shadow-[0_10px_40px_rgba(0,0,0,1)]" 
+                    className="h-[300px] sm:h-[400px] w-auto object-contain rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-white/10" 
                  />
-                 <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center w-full">
+                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center w-full">
                     <span 
-                      className="text-white font-black text-[80px] leading-none drop-shadow-[0_5px_5px_rgba(0,0,0,1)] tracking-tighter" 
-                      style={{ WebkitTextStroke: '3px black' }}
+                      className="text-white font-black text-6xl sm:text-7xl drop-shadow-[0_4px_4px_rgba(0,0,0,1)] tracking-tighter" 
+                      style={{ WebkitTextStroke: '2px black' }}
                     >
                       {bonusModal.spins}
                     </span>
                     <span 
-                      className="text-yellow-400 font-black text-3xl uppercase tracking-widest drop-shadow-[0_3px_3px_rgba(0,0,0,1)] -mt-1" 
-                      style={{ WebkitTextStroke: '2px black' }}
+                      className="text-yellow-400 font-black text-xl sm:text-2xl uppercase tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,1)]" 
+                      style={{ WebkitTextStroke: '1px black' }}
                     >
                       Free Spins
                     </span>
@@ -198,15 +234,15 @@ export default function Vacation() {
                   if (bonusModal.resume) bonusModal.resume(); 
                   setBonusModal({ show: false, spins: 0, resume: null });
                 }}
-                className="relative z-10 -mt-6 px-16 py-4 w-[320px] bg-gradient-to-b from-purple-500 via-purple-600 to-purple-900 hover:from-purple-400 hover:to-purple-700 text-white font-black text-2xl rounded-full uppercase tracking-widest shadow-[0_10px_40px_rgba(168,85,247,0.8)] border-[3px] border-purple-300/80 transition-all transform hover:scale-105 active:scale-95"
+                className="mt-8 px-16 py-4 w-full sm:w-auto bg-gradient-to-b from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 text-white font-black text-2xl rounded-xl uppercase tracking-widest shadow-[0_0_30px_rgba(168,85,247,0.5)] hover:shadow-[0_0_40px_rgba(168,85,247,0.8)] border border-purple-400/50 transition-all transform hover:-translate-y-1 active:translate-y-1"
               >
-                START BONUS
+                Collect
               </button>
+
             </div>
           </div>
         )}
 
-        {/* LOADING STATES */}
         {!isSpinning && !gameResult && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/50">
             <span className="text-cyan-400 font-black text-2xl uppercase tracking-widest opacity-90 drop-shadow-lg">
@@ -222,40 +258,9 @@ export default function Vacation() {
             </span>
           </div>
         )}
-
-        {/* NEW SUMMARY LOGIC: Only show if it's a bonus AND payout exceeds original bet */}
-        {gameResult && !isAnimating && gameResult.triggeredBonus && gameResult.payout > lastWagerLamports && (
-          <div 
-            className="absolute inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md transition-opacity duration-500 cursor-pointer"
-            onClick={() => setGameResult(null)}
-          >
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(6,182,212,0.25)_0%,_transparent_60%)] pointer-events-none"></div>
-
-            <div className="relative flex flex-col items-center animate-in zoom-in-[0.85] duration-500 pointer-events-none">
-              
-              <h2 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-cyan-600 uppercase tracking-widest drop-shadow-[0_0_30px_rgba(6,182,212,0.8)] mb-8" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
-                 EPIC WIN!
-              </h2>
-
-              <div className="flex flex-col items-center justify-center mb-6 relative">
-                <div className="absolute inset-0 bg-cyan-500/20 blur-3xl rounded-full"></div>
-                <span className="text-gray-300 font-bold uppercase tracking-widest text-lg mb-2 relative z-10">Total Payout</span>
-                <span className="text-yellow-400 font-black text-7xl tracking-tighter drop-shadow-[0_5px_15px_rgba(0,0,0,1)] relative z-10" style={{ WebkitTextStroke: '2px black' }}>
-                   {(gameResult.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(4)} SOL
-                </span>
-              </div>
-
-              <p className="text-cyan-400/60 font-bold uppercase tracking-widest mt-8 text-sm animate-pulse">
-                Click anywhere to dismiss
-              </p>
-            </div>
-          </div>
-        )}
-
       </div>
 
-      {/* CONTROL PANEL */}
-      <div className="flex gap-6 items-center bg-black border border-cyan-900/40 p-4 rounded-xl shrink-0 z-50">
+      <div className="flex gap-6 items-center bg-black border border-cyan-900/40 p-4 rounded-xl shrink-0">
         <div className="flex flex-col">
           <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Total Bet</label>
           <div className="flex items-center gap-2">
