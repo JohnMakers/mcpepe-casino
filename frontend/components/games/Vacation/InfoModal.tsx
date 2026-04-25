@@ -50,14 +50,14 @@ export default function InfoModal({ isOpen, onClose }: Props) {
           <div>
             <h3 className="text-xl font-bold text-cyan-400 uppercase tracking-widest mb-2 border-l-4 border-cyan-500 pl-3">Base Game Mechanics</h3>
             <p className="text-gray-400 leading-relaxed text-sm">
-              All symbols pay from left to right on adjacent reels starting from the leftmost reel. Only the highest win is paid per line. Scatter symbols (Passport) pay in any position. Randomly, if 2 Scatters land without a 3rd, a <strong className="text-white">Hook</strong> or <strong className="text-white">Nudge</strong> feature may trigger to pull the 3rd Scatter onto the screen.
+              All symbols pay from left to right on adjacent reels starting from the leftmost reel. Only the highest win is paid per line. Scatter symbols (Passport) do not pay cash, but they trigger the bonus. Randomly, if 2 Scatters land without a 3rd, a <strong className="text-white">Hook</strong> or <strong className="text-white">Nudge</strong> feature may trigger to pull the 3rd Scatter onto the screen.
             </p>
           </div>
           
           <div>
             <h3 className="text-xl font-bold text-purple-400 uppercase tracking-widest mb-2 border-l-4 border-purple-500 pl-3">Free Spins & McPepe Collection</h3>
             <p className="text-gray-400 leading-relaxed text-sm">
-              Hit <span className="text-white font-bold">3, 4, or 5 Scatters</span> to trigger 10, 15, or 20 Free Spins. During Free Spins, the <strong className="text-white">McPepe Wild Symbol</strong> is active. Each time a McPepe lands alongside Luggage symbols, he collects all their cash values (up to 100x each).
+              Hit <span className="text-white font-bold">3, 4, or 5 Scatters</span> to trigger 10, 15, or 20 Free Spins. During Free Spins, the <strong className="text-white">McPepe Collector Symbol</strong> is active. Each time a McPepe lands alongside Luggage symbols, he collects all their cash values (which can drop as 5x, 10x, 20x, 50x, or 100x your Total Bet).
             </p>
           </div>
 
