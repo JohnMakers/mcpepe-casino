@@ -106,60 +106,51 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
       // ==========================================
       const hudContainer = new PIXI.Container();
       hudContainer.y = 0; 
-      hudContainer.x = CANVAS_WIDTH / 2 - 450; // Total width 900
+      hudContainer.x = CANVAS_WIDTH / 2 - 450; 
       hudContainer.alpha = 0; 
       app.stage.addChild(hudContainer);
 
-      // Sleek background panel
       const hudBg = new PIXI.Graphics()
         .moveTo(0, 0)
         .lineTo(900, 0)
         .lineTo(870, 85)
         .lineTo(30, 85)
-        .lineTo(0, 0) // Closes the trapezoid shape
+        .lineTo(0, 0) 
         .fill({ color: 0x050806, alpha: 0.95 })
-        .stroke({ color: 0x9333ea, width: 3, alpha: 0.8 }); // Purple Neon Glow
+        .stroke({ color: 0x9333ea, width: 3, alpha: 0.8 }); 
       hudContainer.addChild(hudBg);
 
-      // 1. SPINS TRACKER (Left)
       const spinLabel = new PIXI.Text({ text: "FREE SPINS", style: { fontSize: 13, fill: '#c084fc', fontWeight: '900', letterSpacing: 2 }});
       spinLabel.x = 55; spinLabel.y = 15;
       const spinValue = new PIXI.Text({ text: "0 / 0", style: { fontSize: 34, fill: '#fff', fontWeight: '900', dropShadow: { color: '#9333ea', blur: 8, distance: 0 } }});
       spinValue.x = 55; spinValue.y = 35;
       hudContainer.addChild(spinLabel, spinValue);
 
-      // 2. MCPEPE COLLECTION TRACK (Center)
       const TICK_WIDTH = 36;
       const TICK_HEIGHT = 36;
-      const START_X = 180; // Shifted left to center the track and make room for the multiplier
-
-      // (WILD COLLECTION REWARDS text removed for clarity)
+      const START_X = 180; 
 
       const ticksContainers: PIXI.Container[] = [];
       
       for (let i = 0; i < 12; i++) {
-        // Create distinct groups of 4 by adding extra spacing
         const groupOffset = Math.floor(i / 4) * 25; 
         const xPos = START_X + (i * 40) + groupOffset;
         
         const tickCont = new PIXI.Container();
         tickCont.x = xPos;
-        tickCont.y = 25; // Shifted up slightly since the title is gone
+        tickCont.y = 25; 
         hudContainer.addChild(tickCont);
         ticksContainers.push(tickCont);
 
-        // Empty Outline Box
         const emptyBg = new PIXI.Graphics().roundRect(0, 0, TICK_WIDTH, TICK_HEIGHT, 8).fill({ color: 0x1f2937, alpha: 0.6 }).stroke({ color: 0x374151, width: 2 });
         tickCont.addChild(emptyBg);
 
-        // Filled Container (Holds Pepe and Glow)
         const filledCont = new PIXI.Container();
         filledCont.alpha = 0; 
-        filledCont.x = TICK_WIDTH / 2; // Set pivot to center for popping animation
+        filledCont.x = TICK_WIDTH / 2; 
         filledCont.y = TICK_HEIGHT / 2;
         tickCont.addChild(filledCont);
 
-        // Subtle green glow behind collected Pepes
         const glow = new PIXI.Graphics().circle(0, 0, 20).fill({ color: 0x4ade80, alpha: 0.4 });
         filledCont.addChild(glow);
 
@@ -174,7 +165,6 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
           filledCont.addChild(fallback);
         }
 
-        // Tier Completion Labels (2X, 3X, 10X)
         if (i === 3) {
             const arrow = new PIXI.Text({ text: "▶", style: { fontSize: 16, fill: '#4ade80' }});
             arrow.x = xPos + TICK_WIDTH + 5; arrow.y = 35;
@@ -196,8 +186,6 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
         }
       }
 
-      // 3. CURRENT MULTIPLIER (Right)
-      // Anchored to the right side so it expands leftward and never overlaps the track
       const multLabel = new PIXI.Text({ text: "MULTIPLIER", style: { fontSize: 13, fill: '#facc15', fontWeight: '900', letterSpacing: 2, align: 'right' }});
       multLabel.anchor.set(1, 0);
       multLabel.x = 845; 
@@ -209,7 +197,7 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
       multInfo.y = 35;
       
       hudContainer.addChild(multLabel, multInfo);
-      // HUD Update Engine
+
       const updateHUD = (collected: number, multiplier: number, currentSpin: number, totalSpins: number) => {
         spinValue.text = `${currentSpin} / ${totalSpins}`;
         multInfo.text = `${multiplier}X`;
@@ -221,7 +209,6 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
           const filledCont = ticksContainers[i].children[1] as PIXI.Container;
           if (i < collected && filledCont.alpha === 0) {
             filledCont.alpha = 1;
-            // Pop in animation for newly collected Pepes
             gsap.fromTo(filledCont.scale, { x: 0, y: 0 }, { x: 1, y: 1, duration: 0.5, ease: "back.out(2)" });
           } else if (i >= collected) {
             filledCont.alpha = 0;
@@ -229,6 +216,25 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
           }
         }
       };
+
+      // ==========================================
+      // 💰 BONUS CURRENT WIN TRACKER (Bottom Right)
+      // ==========================================
+      const currentWinContainer = new PIXI.Container();
+      currentWinContainer.x = CANVAS_WIDTH - 30; 
+      currentWinContainer.y = CANVAS_HEIGHT - 30; 
+      currentWinContainer.alpha = 0; 
+      app.stage.addChild(currentWinContainer);
+
+      const currentWinLabel = new PIXI.Text({ text: "BONUS WIN", style: { fontSize: 16, fill: '#9ca3af', fontWeight: '900', letterSpacing: 2, align: 'right' }});
+      currentWinLabel.anchor.set(1, 1);
+      currentWinLabel.y = -40;
+
+      const currentWinValue = new PIXI.Text({ text: "0.0000 SOL", style: { fontSize: 36, fill: '#4ade80', fontWeight: '900', dropShadow: { color: '#000', blur: 4, distance: 2 }, stroke: { color: '#000000', width: 5 }, align: 'right' }});
+      currentWinValue.anchor.set(1, 1);
+
+      currentWinContainer.addChild(currentWinLabel, currentWinValue);
+
 
       // ==========================================
       // REELS AND ANIMATION LOGIC
@@ -375,19 +381,22 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
 
         if (playData.triggeredBonus && playData.freeSpinsData) {
           
-          // 1. Read the initial spins explicitly instead of the array length
           const initialSpins = playData.freeSpinsData.initialSpins || 10;
           
           await new Promise<void>((resolve) => {
              onShowBonusModal(initialSpins, resolve);
           });
 
-          // 2. Set up dynamic tracking for the HUD
           let currentTotalSpins = initialSpins;
           let currentRetriggerLevel = 0;
+          let cumulativeBonusWin = 0; // The new running tracker value
           
           updateHUD(0, 1, 1, currentTotalSpins);
+          currentWinValue.text = "0.0000 SOL";
+          
+          // Fade in the HUD and the Win Tracker together
           gsap.to(hudContainer, { alpha: 1, duration: 0.5 }); 
+          gsap.to(currentWinContainer, { alpha: 1, duration: 0.5 }); 
           
           const fsData = playData.freeSpinsData;
           let runningMcpepeTotal = 0;
@@ -396,7 +405,6 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
             if (!isMounted) break;
             const spin = fsData.spins[i];
             
-            // Show HUD status BEFORE the reels spin
             runningMcpepeTotal = spin.totalCollectedSoFar - spin.mcpepeCount;
             updateHUD(runningMcpepeTotal, spin.activeMultiplier, i + 1, currentTotalSpins);
 
@@ -407,10 +415,8 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
             }
 
             if (spin.mcpepeCount > 0) {
-              // 3. Update HUD AFTER reels land so player sees the new Pepes fill the bar
               runningMcpepeTotal += spin.mcpepeCount;
               
-              // 4. Dynamically increase HUD max spins upon hitting retrigger thresholds
               if (runningMcpepeTotal >= 4 && currentRetriggerLevel === 0) { currentRetriggerLevel = 1; currentTotalSpins += 10; }
               if (runningMcpepeTotal >= 8 && currentRetriggerLevel === 1) { currentRetriggerLevel = 2; currentTotalSpins += 10; }
               if (runningMcpepeTotal >= 12 && currentRetriggerLevel === 2) { currentRetriggerLevel = 3; currentTotalSpins += 10; }
@@ -423,10 +429,19 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
               await showCenterPopup(`MCPEPE CATCHES: ${(spin.collectionWin / 1e9).toFixed(4)} SOL`, '#4ade80');
             }
 
+            // If the spin resulted in any payout, update the tracker with a satisfying pop
+            if (spin.payout > 0) {
+              cumulativeBonusWin += spin.payout;
+              currentWinValue.text = `${(cumulativeBonusWin / 1e9).toFixed(4)} SOL`;
+              gsap.fromTo(currentWinValue.scale, { x: 1.3, y: 1.3 }, { x: 1, y: 1, duration: 0.4, ease: "back.out(2)" });
+            }
+
             await new Promise(r => setTimeout(r, 600)); 
           }
 
+          // Fade out when the bonus finishes
           gsap.to(hudContainer, { alpha: 0, duration: 0.5 }); 
+          gsap.to(currentWinContainer, { alpha: 0, duration: 0.5 }); 
         }
 
         if (isMounted) onAnimationComplete();
