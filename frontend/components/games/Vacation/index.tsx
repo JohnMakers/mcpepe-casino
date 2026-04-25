@@ -19,10 +19,6 @@ export default function Vacation() {
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [gameResult, setGameResult] = useState<any>(null);
 
-  const [bonusModal, setBonusModal] = useState<{ show: boolean, spins: number, resume: (() => void) | null }>({
-    show: false, spins: 0, resume: null
-  });
-
   const handleSpin = async (isBonusBuy: boolean = false) => {
     if (!publicKey || !signTransaction || !sendTransaction) {
       alert("Please connect your wallet first.");
@@ -94,9 +90,7 @@ export default function Vacation() {
       tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = publicKey;
 
-      // 🔥 FIX: Added skipPreflight to prevent Phantom from falsely blocking the transaction simulation
-      const txId = await sendTransaction(tx, connection, { skipPreflight: true });
-      
+      const txId = await sendTransaction(tx, connection);
       await connection.confirmTransaction({
         signature: txId,
         blockhash: latestBlockhash.blockhash,
@@ -126,12 +120,7 @@ export default function Vacation() {
 
     } catch (error: any) {
       console.error("Spin Error:", error);
-      // 🔥 FIX: Intercept generic Phantom errors so the user knows what actually happened
-      if (error.message?.includes("WalletSendTransactionError")) {
-         alert(`Transaction Rejected! ⚠️ Ensure your wallet has enough SOL to cover the wager.`);
-      } else {
-         alert(error.message);
-      }
+      alert(error.message);
     } finally {
       setIsSpinning(false);
     }
@@ -151,55 +140,15 @@ export default function Vacation() {
         </div>
       </div>
 
+      {/* PIXI CANVAS CONTAINER */}
       <div className="box-content w-[960px] h-[600px] border-4 border-cyan-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(6,182,212,0.2)] bg-[#050806] shrink-0">
         
         <div className="absolute inset-0 z-10">
           <PixiReels 
             playData={gameResult} 
             onAnimationComplete={() => setIsAnimating(false)} 
-            onShowBonusModal={(spins, resume) => setBonusModal({ show: true, spins, resume })}
           />
         </div>
-
-        {bonusModal.show && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md transition-opacity duration-300">
-            <div className="relative flex flex-col items-center bg-[#0a0f0c] border-2 border-purple-500/60 p-8 rounded-3xl shadow-[0_0_80px_rgba(168,85,247,0.3)] animate-in zoom-in-95 duration-300 max-h-[95vh] overflow-y-auto">
-              
-              <div className="relative flex-shrink-0">
-                 <img 
-                    src="/vacations/vacation_freespin.png" 
-                    alt="Free Spins Awarded" 
-                    className="h-[300px] sm:h-[400px] w-auto object-contain rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-white/10" 
-                 />
-                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center w-full">
-                    <span 
-                      className="text-white font-black text-6xl sm:text-7xl drop-shadow-[0_4px_4px_rgba(0,0,0,1)] tracking-tighter" 
-                      style={{ WebkitTextStroke: '2px black' }}
-                    >
-                      {bonusModal.spins}
-                    </span>
-                    <span 
-                      className="text-yellow-400 font-black text-xl sm:text-2xl uppercase tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,1)]" 
-                      style={{ WebkitTextStroke: '1px black' }}
-                    >
-                      Free Spins
-                    </span>
-                 </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  if (bonusModal.resume) bonusModal.resume(); 
-                  setBonusModal({ show: false, spins: 0, resume: null });
-                }}
-                className="mt-8 px-16 py-4 w-full sm:w-auto bg-gradient-to-b from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 text-white font-black text-2xl rounded-xl uppercase tracking-widest shadow-[0_0_30px_rgba(168,85,247,0.5)] hover:shadow-[0_0_40px_rgba(168,85,247,0.8)] border border-purple-400/50 transition-all transform hover:-translate-y-1 active:translate-y-1"
-              >
-                Collect
-              </button>
-
-            </div>
-          </div>
-        )}
 
         {!isSpinning && !gameResult && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/50">
@@ -216,8 +165,43 @@ export default function Vacation() {
             </span>
           </div>
         )}
+
+        {/* ======================================================================
+            🚨 THE FIX: NEW REDESIGNED END-GAME OVERLAY 🚨
+            Replaces the full-screen separate screen from image_f173b8.jpg
+            ====================================================================== */}
+        {gameResult && !isAnimating && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity duration-300">
+            {/* Modal Card Container */}
+            <div className="relative flex flex-col items-center bg-[#0a0f0c] border-2 border-purple-500/60 p-8 rounded-3xl shadow-[0_0_80px_rgba(168,85,247,0.3)] animate-in zoom-in-95 duration-300 max-h-[95vh] overflow-y-auto">
+              
+              <h2 className="text-4xl font-black text-purple-400 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(192,132,252,0.6)] mb-6">
+                 BONUS GAME FINISHED
+              </h2>
+
+              <div className="bg-[#050806] border-2 border-cyan-800/60 p-6 rounded-xl flex flex-col items-center gap-3 mb-8 shadow-[0_0_30px_rgba(6,182,212,0.2)]">
+                <span className="text-gray-400 font-bold uppercase tracking-widest text-sm">Total Win</span>
+                <span className="text-white font-black text-6xl tracking-tighter drop-shadow-[0_1px_5px_rgba(0,0,0,1)]">
+                   {(gameResult.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(4)} SOL
+                </span>
+              </div>
+
+              {/* Continue Button */}
+              <button
+                onClick={() => {
+                   setGameResult(null); // Clear the game result to return to the game
+                }}
+                className="px-16 py-3 bg-gradient-to-b from-purple-500 to-purple-700 hover:from-purple-400 hover:to-purple-600 text-white font-black text-xl rounded-full uppercase tracking-widest shadow-[0_0_20px_rgba(168,85,247,0.6)] hover:shadow-[0_0_30px_rgba(168,85,247,0.8)] border-2 border-purple-300 transition-all transform hover:scale-105 active:scale-95"
+              >
+                Continue
+              </button>
+
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* CONTROL PANEL */}
       <div className="flex gap-6 items-center bg-black border border-cyan-900/40 p-4 rounded-xl shrink-0">
         <div className="flex flex-col">
           <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Total Bet</label>
@@ -230,10 +214,6 @@ export default function Vacation() {
                 min="0.0001"
                 value={betInput}
                 onChange={(e) => setBetInput(e.target.value.replace(/-/g, ''))}
-                // 🔥 FIX: Physically prevent negative/scientific notation keys
-                onKeyDown={(e) => {
-                  if (e.key === '-' || e.key === 'e') e.preventDefault();
-                }}
                 onBlur={() => {
                   let val = Number(betInput);
                   if (isNaN(val) || val < 0.0001) val = 0.0001;
