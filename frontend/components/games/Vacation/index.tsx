@@ -173,71 +173,85 @@ export default function Vacation() {
           </div>
         )}
 
-        {/* RESTORED & STYLED: START BONUS MODAL */}
+{/* ======================================================================
+            CINEMATIC START BONUS MODAL
+            ====================================================================== */}
         {bonusModal.show && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md transition-opacity duration-300">
-            <div className="relative flex flex-col items-center bg-[#0a0f0c] border-2 border-purple-500/60 p-6 rounded-3xl shadow-[0_0_80px_rgba(168,85,247,0.3)] animate-in zoom-in-95 duration-300">
+          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-sm transition-opacity duration-500">
+            {/* Massive background glow to blend the image into the dark canvas */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(168,85,247,0.3)_0%,_transparent_60%)] pointer-events-none"></div>
+
+            <div className="relative flex flex-col items-center animate-in zoom-in-[0.85] duration-500">
               
-              <div className="relative flex-shrink-0 mb-6">
-                 {/* Image constrained cleanly inside the premium card */}
+              <div className="relative flex-shrink-0">
+                 {/* Pure cinematic image, no ugly boxes or borders */}
                  <img 
                     src="/vacations/vacation_freespin.png" 
                     alt="Free Spins Awarded" 
-                    className="h-[280px] w-auto object-contain rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-white/10" 
+                    className="h-[480px] w-auto object-contain drop-shadow-[0_10px_40px_rgba(0,0,0,1)]" 
                  />
                  
                  {/* Dynamic text injected onto the PNG */}
-                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center w-full">
+                 <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center w-full">
                     <span 
-                      className="text-white font-black text-6xl drop-shadow-[0_4px_4px_rgba(0,0,0,1)] tracking-tighter" 
-                      style={{ WebkitTextStroke: '2px black' }}
+                      className="text-white font-black text-[80px] leading-none drop-shadow-[0_5px_5px_rgba(0,0,0,1)] tracking-tighter" 
+                      style={{ WebkitTextStroke: '3px black' }}
                     >
                       {bonusModal.spins}
                     </span>
                     <span 
-                      className="text-yellow-400 font-black text-xl uppercase tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,1)]" 
-                      style={{ WebkitTextStroke: '1px black' }}
+                      className="text-yellow-400 font-black text-3xl uppercase tracking-widest drop-shadow-[0_3px_3px_rgba(0,0,0,1)] -mt-1" 
+                      style={{ WebkitTextStroke: '2px black' }}
                     >
                       Free Spins
                     </span>
                  </div>
               </div>
 
-              {/* Continue Button */}
+              {/* Cinematic Button - overlaps the image slightly */}
               <button
                 onClick={() => {
-                  if (bonusModal.resume) bonusModal.resume(); // Tells PIXI to unpause
+                  if (bonusModal.resume) bonusModal.resume(); 
                   setBonusModal({ show: false, spins: 0, resume: null });
                 }}
-                className="px-16 py-3 w-full bg-gradient-to-b from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 text-white font-black text-xl rounded-xl uppercase tracking-widest shadow-[0_0_30px_rgba(168,85,247,0.5)] border border-purple-400/50 transition-all transform hover:-translate-y-1 active:translate-y-1"
+                className="relative z-10 -mt-6 px-16 py-4 w-[320px] bg-gradient-to-b from-purple-500 via-purple-600 to-purple-900 hover:from-purple-400 hover:to-purple-700 text-white font-black text-2xl rounded-full uppercase tracking-widest shadow-[0_10px_40px_rgba(168,85,247,0.8)] border-[3px] border-purple-300/80 transition-all transform hover:scale-105 active:scale-95"
               >
-                Start Bonus
+                START BONUS
               </button>
             </div>
           </div>
         )}
 
-        {/* STYLED: END GAME SUMMARY MODAL */}
+        {/* ======================================================================
+            CINEMATIC END GAME SUMMARY MODAL
+            ====================================================================== */}
         {gameResult && !isAnimating && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md transition-opacity duration-300">
-            <div className="relative flex flex-col items-center bg-[#0a0f0c] border-2 border-purple-500/60 p-8 rounded-3xl shadow-[0_0_80px_rgba(168,85,247,0.3)] animate-in zoom-in-95 duration-300">
-              
-              <h2 className="text-3xl font-black text-purple-400 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(192,132,252,0.6)] mb-6">
-                 GAME FINISHED
-              </h2>
+          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md transition-opacity duration-500">
+            {/* Cyan background glow */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(6,182,212,0.25)_0%,_transparent_60%)] pointer-events-none"></div>
 
-              <div className="bg-[#050806] border-2 border-cyan-800/60 p-6 rounded-xl flex flex-col items-center gap-2 mb-8 shadow-[0_0_30px_rgba(6,182,212,0.2)] min-w-[250px]">
-                <span className="text-gray-400 font-bold uppercase tracking-widest text-sm">Total Win</span>
-                <span className="text-white font-black text-5xl tracking-tighter drop-shadow-[0_1px_5px_rgba(0,0,0,1)]">
+            <div className="relative flex flex-col items-center animate-in zoom-in-[0.85] duration-500">
+              
+              <h2 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-cyan-600 uppercase tracking-widest drop-shadow-[0_0_30px_rgba(6,182,212,0.8)] mb-2" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
+                 EPIC WIN!
+              </h2>
+              <p className="text-purple-400 font-bold uppercase tracking-widest mb-10 text-xl drop-shadow-lg">
+                Bonus Feature Complete
+              </p>
+
+              <div className="flex flex-col items-center justify-center mb-12 relative">
+                <div className="absolute inset-0 bg-cyan-500/20 blur-3xl rounded-full"></div>
+                <span className="text-gray-300 font-bold uppercase tracking-widest text-lg mb-2 relative z-10">Total Payout</span>
+                <span className="text-yellow-400 font-black text-7xl tracking-tighter drop-shadow-[0_5px_15px_rgba(0,0,0,1)] relative z-10" style={{ WebkitTextStroke: '2px black' }}>
                    {(gameResult.payout / anchor.web3.LAMPORTS_PER_SOL).toFixed(4)} SOL
                 </span>
               </div>
 
               <button
                 onClick={() => setGameResult(null)}
-                className="px-16 py-3 w-full bg-gradient-to-b from-cyan-600 to-cyan-800 hover:from-cyan-500 hover:to-cyan-700 text-white font-black text-xl rounded-xl uppercase tracking-widest shadow-[0_0_20px_rgba(6,182,212,0.6)] border border-cyan-400/50 transition-all transform hover:-translate-y-1 active:translate-y-1"
+                className="px-20 py-4 bg-gradient-to-b from-cyan-500 via-cyan-600 to-cyan-900 hover:from-cyan-400 hover:to-cyan-700 text-white font-black text-2xl rounded-full uppercase tracking-widest shadow-[0_10px_40px_rgba(6,182,212,0.6)] border-[3px] border-cyan-300/80 transition-all transform hover:scale-105 active:scale-95"
               >
-                Continue
+                COLLECT
               </button>
 
             </div>
