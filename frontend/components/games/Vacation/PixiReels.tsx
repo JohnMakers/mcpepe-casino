@@ -35,28 +35,25 @@ const VAC_LINES = [
 
 const CANVAS_WIDTH = 960;
 const CANVAS_HEIGHT = 600;
-const SYMBOL_SIZE = 100;
+const SYMBOL_SIZE = 120;
 
 // ==========================================
 // 🛠️ MANUAL POSITION TUNING AREA
 // ==========================================
 
-// 1. Turn this to TRUE to see the grid, boxes, and drop line. 
-// Turn to FALSE when you are done tuning!
-const SHOW_DEBUG_GRID = true; 
+// Turn to TRUE to see the grid, boxes, and drop line for calibration.
+const SHOW_DEBUG_GRID = false; 
 
-// 2. Where do symbols spawn from before dropping? 
-// (Set to 20 so you can see it while debugging. Change to -150 for production).
+// Where do symbols spawn from before dropping? (Negative means above canvas mask)
 const DROP_START_Y = 130; 
 
-// 3. Exact X/Y resting coordinates for the 5 Columns x 3 Rows
-// Adjust these numbers to perfectly align the green boxes with your background!
+// Exact X/Y resting coordinates for the 5 Columns x 3 Rows
 const TILE_POSITIONS = [
-  [ { x: 270, y: 210 }, { x: 270, y: 340}, { x: 270, y: 480 } ], // Column 0 (Far Left)
-  [ { x: 382, y: 210 }, { x: 382, y: 340 }, { x: 382, y: 480 } ], // Column 1
-  [ { x: 494, y: 210 }, { x: 494, y: 340 }, { x: 494, y: 480 } ], // Column 2 (Middle)
-  [ { x: 606, y: 210 }, { x: 606, y: 340 }, { x: 606, y: 480 } ], // Column 3
-  [ { x: 717, y: 210 }, { x: 717, y: 340 }, { x: 717, y: 480 } ]  // Column 4 (Far Right)
+  [ { x: 270, y: 210 }, { x: 270, y: 340 }, { x: 270, y: 480 } ], 
+  [ { x: 382, y: 210 }, { x: 382, y: 340 }, { x: 382, y: 480 } ], 
+  [ { x: 494, y: 210 }, { x: 494, y: 340 }, { x: 494, y: 480 } ], 
+  [ { x: 606, y: 210 }, { x: 606, y: 340 }, { x: 606, y: 480 } ], 
+  [ { x: 717, y: 210 }, { x: 717, y: 340 }, { x: 717, y: 480 } ]  
 ];
 
 // ==========================================
@@ -105,15 +102,14 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       mainContainer.addChild(mask);
       mainContainer.mask = mask;
 
-      // 3. ✨ DRAW DEBUG GRID (Attached to app.stage so it bypasses the mask)
+      // 3. DRAW DEBUG GRID (Attached to app.stage so it bypasses the mask)
       if (SHOW_DEBUG_GRID) {
         const debugContainer = new PIXI.Container();
         app.stage.addChild(debugContainer);
 
-        // Draw Drop Line
         const dropLine = new PIXI.Graphics()
-          .moveTo(0, DROP_START_Y)
-          .lineTo(CANVAS_WIDTH, DROP_START_Y)
+          .moveTo(0, Math.max(0, DROP_START_Y))
+          .lineTo(CANVAS_WIDTH, Math.max(0, DROP_START_Y))
           .stroke({ color: 0xff0000, width: 4 });
         debugContainer.addChild(dropLine);
 
@@ -122,20 +118,16 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
         debugText.y = Math.max(0, DROP_START_Y - 25);
         debugContainer.addChild(debugText);
 
-        // Draw Bounding Boxes for Tiles
         TILE_POSITIONS.forEach((col, cIndex) => {
           col.forEach((pos, rIndex) => {
-            // Outline Box
             const box = new PIXI.Graphics()
               .rect(pos.x - SYMBOL_SIZE/2, pos.y - SYMBOL_SIZE/2, SYMBOL_SIZE, SYMBOL_SIZE)
-              .stroke({ color: 0x4ade80, width: 3, alpha: 0.8 }); // Bright Green
+              .stroke({ color: 0x4ade80, width: 3, alpha: 0.8 }); 
             
-            // Center Dot
             const centerDot = new PIXI.Graphics()
               .circle(pos.x, pos.y, 5)
-              .fill(0xff00ff); // Hot Pink
+              .fill(0xff00ff); 
             
-            // Coordinate Label
             const coordText = new PIXI.Text({ 
                 text: `C:${cIndex} R:${rIndex}\nX:${pos.x} Y:${pos.y}`, 
                 style: { fill: '#4ade80', fontSize: 12, align: 'center', fontWeight: 'bold', stroke: {color: '#000', width: 3} }
@@ -163,25 +155,103 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       winInfoText.anchor.set(0.5, 1); winInfoText.x = CANVAS_WIDTH / 2; winInfoText.y = CANVAS_HEIGHT - 10; winInfoText.alpha = 0;
       app.stage.addChild(winInfoText);
 
+      // ==========================================
+      // PROGRESSIVE MULTIPLIER HUD (Visual Ladder)
+      // ==========================================
       const hudContainer = new PIXI.Container();
-      hudContainer.y = 20;
-      hudContainer.alpha = 0;
+      hudContainer.y = 12;
+      hudContainer.x = CANVAS_WIDTH / 2 - 325; // Center it perfectly
+      hudContainer.alpha = 0; // Hidden until Bonus
       app.stage.addChild(hudContainer);
 
-      const hudBg = new PIXI.Graphics().roundRect(CANVAS_WIDTH / 2 - 250, 0, 500, 60, 15).fill({ color: 0x000000, alpha: 0.8 });
-      hudBg.stroke({ color: 0x4ade80, width: 3 });
+      // Background Panel (Taller to fit McPepe heads and milestones)
+      const hudBg = new PIXI.Graphics().roundRect(0, 0, 650, 95, 12).fill({ color: 0x050806, alpha: 0.95 });
+      hudBg.stroke({ color: 0x4ade80, width: 2, alpha: 0.5 });
       hudContainer.addChild(hudBg);
 
-      const hudText = new PIXI.Text({ text: "MCPEPES: 0/4  |  MULT: 1x", style: { fontSize: 24, fontWeight: '900', fill: '#ffffff' }});
-      hudText.anchor.set(0.5); hudText.x = CANVAS_WIDTH / 2; hudText.y = 30;
-      hudContainer.addChild(hudText);
+      // Top Text
+      const hudTitle = new PIXI.Text({ text: "MCPEPE PROGRESSION", style: { fontSize: 14, fontWeight: '900', fill: '#9ca3af', tracking: 2 }});
+      hudTitle.x = 20; hudTitle.y = 8;
+      hudContainer.addChild(hudTitle);
+
+      const multInfo = new PIXI.Text({ text: "CURRENT: 1X", style: { fontSize: 20, fontWeight: '900', fill: '#facc15', dropShadow: { color: '#000', blur: 2, distance: 2 } }});
+      multInfo.x = 480; multInfo.y = 5;
+      hudContainer.addChild(multInfo);
+
+      // The 12 Progression Ticks
+      const ticksContainers: PIXI.Container[] = [];
+      const TICK_WIDTH = 42;
+      const TICK_HEIGHT = 42;
+      const TICK_SPACING = 50;
+      const START_X = 25;
+
+      for (let i = 0; i < 12; i++) {
+        const tickCont = new PIXI.Container();
+        tickCont.x = START_X + (i * TICK_SPACING);
+        tickCont.y = 30;
+        hudContainer.addChild(tickCont);
+        ticksContainers.push(tickCont);
+
+        // Empty state (Dark Gray Block)
+        const emptyBg = new PIXI.Graphics().roundRect(0, 0, TICK_WIDTH, TICK_HEIGHT, 6).fill(0x1f2937);
+        tickCont.addChild(emptyBg);
+
+        // Filled state (McPepe Sprite + Overlay Text)
+        const filledCont = new PIXI.Container();
+        filledCont.alpha = 0; // Hidden initially
+        tickCont.addChild(filledCont);
+
+        try {
+          const pepe = PIXI.Sprite.from('/vacations/vacation_mcpepe.png');
+          pepe.width = TICK_WIDTH;
+          pepe.height = TICK_HEIGHT;
+          filledCont.addChild(pepe);
+        } catch (e) {
+          const fallback = new PIXI.Graphics().roundRect(0, 0, TICK_WIDTH, TICK_HEIGHT, 6).fill(0x4ade80);
+          filledCont.addChild(fallback);
+        }
+
+        // Bracket Multiplier Text logic
+        let bracketMult = "1X";
+        if (i >= 4 && i < 8) bracketMult = "2X";
+        if (i >= 8 && i < 12) bracketMult = "3X";
+
+        const mText = new PIXI.Text({ text: bracketMult, style: { fontSize: 14, fill: '#facc15', fontWeight: '900', stroke: {color: '#000000', width: 4} }});
+        mText.anchor.set(0.5);
+        mText.x = TICK_WIDTH / 2;
+        mText.y = TICK_HEIGHT - 6; 
+        filledCont.addChild(mText);
+
+        // Milestone Indicators under the specific triggering boxes
+        if (i === 3) { 
+          const lbl = new PIXI.Text({ text: "2X", style: { fontSize: 13, fill: '#fff', fontWeight: 'bold' }});
+          lbl.x = tickCont.x + 10; lbl.y = 75;
+          hudContainer.addChild(lbl);
+        }
+        if (i === 7) { 
+          const lbl = new PIXI.Text({ text: "3X", style: { fontSize: 13, fill: '#fff', fontWeight: 'bold' }});
+          lbl.x = tickCont.x + 10; lbl.y = 75;
+          hudContainer.addChild(lbl);
+        }
+        if (i === 11) { 
+          const lbl = new PIXI.Text({ text: "10X", style: { fontSize: 15, fill: '#facc15', fontWeight: '900' }});
+          lbl.x = tickCont.x + 4; lbl.y = 74;
+          hudContainer.addChild(lbl);
+        }
+      }
 
       const updateHUD = (collected: number, multiplier: number) => {
-        let nextTarget = 4;
-        if (collected >= 4) nextTarget = 8;
-        if (collected >= 8) nextTarget = 12;
-        if (collected >= 12) hudText.text = `MAX LEVEL REACHED!  |  MULT: 10x`;
-        else hudText.text = `MCPEPES: ${collected}/${nextTarget}  |  MULT: ${multiplier}x`;
+        multInfo.text = `CURRENT: ${multiplier}X`;
+        
+        for (let i = 0; i < 12; i++) {
+          const filledCont = ticksContainers[i].children[1] as PIXI.Container;
+          if (i < collected) {
+            filledCont.alpha = 1;
+            gsap.fromTo(filledCont.scale, { x: 0, y: 0 }, { x: 1, y: 1, duration: 0.3, ease: "back.out(2)" });
+          } else {
+            filledCont.alpha = 0;
+          }
+        }
       };
 
       const animateReels = async (targetGrid: number[][], luggageValues: any[] = [], isNudge = false, hookCol = -1): Promise<PIXI.Container[][]> => {
@@ -189,8 +259,7 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
           const activeContainers: PIXI.Container[][] = Array.from({ length: 5 }, () => []);
           const tl = gsap.timeline({ onComplete: () => resolve(activeContainers) });
           
-          // Clear previous grid (preserves background and mask)
-          while(mainContainer.children.length > 2) {
+          while(mainContainer.children.length > (SHOW_DEBUG_GRID ? 4 : 2)) {
              mainContainer.removeChildAt(mainContainer.children.length - 1);
           }
 
@@ -332,16 +401,26 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
           gsap.to(hudContainer, { alpha: 1, duration: 0.5 }); 
           
           const fsData = playData.freeSpinsData;
+          let runningMcpepeTotal = 0;
           
           for (let i = 0; i < fsData.spins.length; i++) {
             if (!isMounted) break;
             const spin = fsData.spins[i];
             
-            updateHUD(spin.totalCollectedSoFar, spin.activeMultiplier);
+            // Increment UI *before* the spin fully processes for better tension
+            runningMcpepeTotal = spin.totalCollectedSoFar - spin.mcpepeCount;
+            updateHUD(runningMcpepeTotal, spin.activeMultiplier);
+
             const fsContainers = await animateReels(spin.grid, spin.luggageValues);
             
             if (spin.winningLines?.length > 0) {
               await displayWinningLines(fsContainers, spin.winningLines);
+            }
+
+            if (spin.mcpepeCount > 0) {
+              // Update HUD visually instantly as they land
+              runningMcpepeTotal += spin.mcpepeCount;
+              updateHUD(runningMcpepeTotal, spin.activeMultiplier);
             }
 
             if (spin.mcpepeCount > 0 && spin.collectionWin > 0) {
