@@ -1478,9 +1478,14 @@ app.post('/api/vacation/play', async (req, res) => {
         // 🔒 SECURITY PATCH: FETCH ON-CHAIN STATE
         // ==========================================
         const provider = new anchor.AnchorProvider(connection, new anchor.Wallet(houseKeypair), { commitment: "confirmed" });
-        const program = new anchor.Program(idl, PROGRAM_ID, provider);
         
-        const gameStateAcc = await program.account.vacationState.fetch(gamePubkey);
+        // 🛠️ CRITICAL FIX 1: Deep clone the IDL so Anchor doesn't corrupt the cached JSON on subsequent spins!
+        const freshIdl = JSON.parse(JSON.stringify(idl));
+        const program = new anchor.Program(freshIdl, PROGRAM_ID, provider);
+        
+        // 🛠️ CRITICAL FIX 2: Explicitly cast the string into a PublicKey object
+        const gamePubkeyObj = new anchor.web3.PublicKey(gamePubkey);
+        const gameStateAcc = await program.account.vacationState.fetch(gamePubkeyObj);
         
         const actualBetLamports = gameStateAcc.betAmount.toNumber();
         const isBonusBuy = gameStateAcc.isBonusBuy;
