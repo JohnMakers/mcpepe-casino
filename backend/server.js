@@ -1347,7 +1347,7 @@ function evaluateVacationGrid(grid, lineBet, serverSeed = "", clientSeed = "", n
             if (sym === VACATION_SYMBOLS.PASSPORT_SCATTER) scatterCount++;
             if (sym === VACATION_SYMBOLS.MCPEPE) mcpepeCount++;
             
-            f (sym === VACATION_SYMBOLS.LUGGAGE) {
+            if (sym === VACATION_SYMBOLS.LUGGAGE) {
                 let prizeFloat = getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++);
                 
                 // NEW: Weighted Probability Distribution for Briefcases
