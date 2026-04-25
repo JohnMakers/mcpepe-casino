@@ -1253,8 +1253,6 @@ const VAC_PAYTABLE = {
     [VACATION_SYMBOLS.COCKTAIL]: { 2: 10, 3: 40, 4: 400, 5: 1000 },
     [VACATION_SYMBOLS.JETSKI]: { 2: 10, 3: 40, 4: 400, 5: 1000 },
     [VACATION_SYMBOLS.YACHT]: { 2: 20, 3: 100, 4: 1000, 5: 2000 },
-    // Note: MCPEPE (Collector) is removed from the paytable because he will NOT drop in the base game anymore.
-    [VACATION_SYMBOLS.PASSPORT_SCATTER]: { 3: 20, 4: 150, 5: 2000 } // Scatter pays directly as a multiplier of TOTAL bet
 };
 
 // 10 Fixed Paylines (Classic setup)
@@ -1362,11 +1360,6 @@ function evaluateVacationGrid(grid, lineBet, serverSeed = "", clientSeed = "", n
                 totalLuggageMult += prizeMult;
             }
         }
-    }
-
-    // Scatter pays on TOTAL bet (lineBet * 10 lines)
-    if (VAC_PAYTABLE[VACATION_SYMBOLS.PASSPORT_SCATTER][scatterCount]) {
-        payout += (lineBet * 10) * VAC_PAYTABLE[VACATION_SYMBOLS.PASSPORT_SCATTER][scatterCount];
     }
 
     // 2. Evaluate 10 Standard Lines
@@ -1507,10 +1500,10 @@ app.post('/api/vacation/play', async (req, res) => {
             
             // DYNAMIC SPINS: 3 Scatters = 10, 4 Scatters = 15, 5 Scatters = 20
             let totalSpinsAwarded = 10;
-            if (!isBonusBuy) {
-                if (baseEval.scatterCount === 4) totalSpinsAwarded = 15;
-                if (baseEval.scatterCount >= 5) totalSpinsAwarded = 20;
-            }
+            
+            // Allow Bonus Buys to benefit from lucky 4 or 5 scatter triggers
+            if (baseEval.scatterCount === 4) totalSpinsAwarded = 15;
+            if (baseEval.scatterCount >= 5) totalSpinsAwarded = 20;
 
             let currentSpinNum = 0;
             const totalBet = lineBet * 10;
