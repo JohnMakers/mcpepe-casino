@@ -44,7 +44,7 @@ const SYMBOL_SIZE = 120;
 // Turn to TRUE to see the grid, boxes, and drop line for calibration.
 const SHOW_DEBUG_GRID = false; 
 
-// Where do symbols spawn from before dropping? (Negative means above canvas mask)
+// Where do symbols spawn from before dropping?
 const DROP_START_Y = 130; 
 
 // Exact X/Y resting coordinates for the 5 Columns x 3 Rows
@@ -170,7 +170,7 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       hudContainer.addChild(hudBg);
 
       // Top Text
-      const hudTitle = new PIXI.Text({ text: "MCPEPE PROGRESSION", style: { fontSize: 14, fontWeight: '900', fill: '#9ca3af', tracking: 2 }});
+      const hudTitle = new PIXI.Text({ text: "MCPEPE PROGRESSION", style: { fontSize: 14, fontWeight: '900', fill: '#9ca3af', letterSpacing: 2 }});
       hudTitle.x = 20; hudTitle.y = 8;
       hudContainer.addChild(hudTitle);
 
