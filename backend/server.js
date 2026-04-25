@@ -1280,11 +1280,11 @@ const BASE_VAC_REEL_STRIPS = [
 
 // Free Spins Strips (Symbol 10 / McPepe is heavily injected to trigger collections)
 const FS_VAC_REEL_STRIPS = [
-    [0,0,0,0,1,1,1,1,6,2,3,4,0,0,0,5,10,1,1,1,6,2,3,4,0,0,0,7,1,1,1,6,2,3,4,0,0,0,8,1,1,1,6,2,3,4,0,0,0,9,1,1,1,6,2,3,4,0,0,0,1,1,1,6,2,3,4,0,0,0,1,1,1,2,3,4],
-    [2,2,2,2,3,3,3,3,6,4,0,1,2,2,2,5,10,3,3,3,6,4,0,1,2,2,2,7,3,3,3,6,4,0,1,2,2,2,8,3,3,3,6,4,0,1,2,2,2,9,3,3,3,6,4,0,1,2,2,2,3,3,3,6,4,0,1,2,2,2,3,3,3,4,0,1],
-    [4,4,4,4,0,0,0,0,6,1,2,3,4,4,4,5,10,0,0,0,6,1,2,3,4,4,4,7,0,0,0,6,1,2,3,4,4,4,8,0,0,0,6,1,2,3,4,4,4,9,0,0,0,6,1,2,3,4,4,4,0,0,0,6,1,2,3,4,4,4,0,0,0,1,2,3],
-    [1,1,1,1,2,2,2,2,6,3,4,0,1,1,1,5,10,2,2,2,6,3,4,0,1,1,1,7,2,2,2,6,3,4,0,1,1,1,8,2,2,2,6,3,4,0,1,1,1,9,2,2,2,6,3,4,0,1,1,1,2,2,2,6,3,4,0,1,1,1,2,2,2,3,4,0],
-    [3,3,3,3,4,4,4,4,6,0,1,2,3,3,3,5,10,4,4,4,6,0,1,2,3,3,3,7,4,4,4,6,0,1,2,3,3,3,8,4,4,4,6,0,1,2,3,3,3,9,4,4,4,6,0,1,2,3,3,3,4,4,4,6,0,1,2,3,3,3,4,4,4,0,1,2]
+    [0,6,0,1,6,2,3,4,0,6,5,10,1,6,2,3,4,0,6,7,1,6,2,3,4,0,6,8,1,6,2,3,4,0,6,9,1,6,2,3,4,0,6,1,2,3,4,0,6,1,2,3,4,10,0,1,2,3,4,0,1,2,3,4,0,1,2,3,4,0,1,2,3,4,0,1,2,3,4,6],
+    [1,6,2,3,6,4,0,10,1,5,6,2,3,7,6,4,0,1,6,2,3,8,6,4,0,1,6,2,3,9,6,4,0,10,1,6,2,3,4,0,6,1,2,3,4,6,0,1,2,3,6,4,0,1,2,6,3,4,0,1,2,3,4,0,6,1,2,3,4,0,1,2,3,4,0,1,2,3,4,0],
+    [2,6,3,4,6,0,1,10,2,5,6,3,4,7,6,0,1,2,6,3,4,8,6,0,1,2,6,3,4,9,6,0,1,10,2,6,3,4,0,1,6,2,3,4,0,6,1,2,3,4,6,0,1,2,3,6,4,0,1,2,3,4,0,1,6,2,3,4,0,1,2,3,4,0,1,2,3,4,0,1],
+    [3,6,4,0,6,1,2,10,3,5,6,4,0,7,6,1,2,3,6,4,0,8,6,1,2,3,6,4,0,9,6,1,2,10,3,6,4,0,1,2,6,3,4,0,1,6,2,3,4,0,6,1,2,3,4,6,0,1,2,3,4,0,1,2,6,3,4,0,1,2,3,4,0,1,2,3,4,0,1,2],
+    [4,6,0,1,6,2,3,10,4,5,6,0,1,7,6,2,3,4,6,0,1,8,6,2,3,4,6,0,1,9,6,2,3,10,4,6,0,1,2,3,6,4,0,1,2,6,3,4,0,1,6,2,3,4,0,6,1,2,3,4,0,1,2,3,6,4,0,1,2,3,4,0,1,2,3,4,0,1,2,3]
 ];
 const LUGGAGE_PRIZES = [2, 5, 10, 25, 50, 100];
 
@@ -1347,7 +1347,7 @@ function evaluateVacationGrid(grid, lineBet, serverSeed = "", clientSeed = "", n
             if (sym === VACATION_SYMBOLS.LUGGAGE) {
                 let prizeFloat = getVacationFloat(serverSeed, clientSeed, nonce, counterRef.val++);
                 
-                // HIGH VOLATILITY DISTRIBUTION (Nerfed for Casino Protection)
+                // HIGH VOLATILITY DISTRIBUTION
                 let prizeMult;
                 if (prizeFloat < 0.60) prizeMult = 2;       // 60% chance (Tiny win)
                 else if (prizeFloat < 0.85) prizeMult = 5;  // 25% chance (Small win)
@@ -1362,6 +1362,12 @@ function evaluateVacationGrid(grid, lineBet, serverSeed = "", clientSeed = "", n
         }
     }
 
+    // 🛑 CRITICAL FIX: Hard Cap Scatters to 5 so we don't break the UI or award 30+ starting spins accidentally.
+    scatterCount = Math.min(scatterCount, 5); 
+
+    // 🛑 CRITICAL FIX: Scatters DO NOT PAY CASH. They only trigger the bonus.
+    // (The `if (VAC_PAYTABLE[VACATION_SYMBOLS.PASSPORT_SCATTER])` block has been permanently deleted).
+
     // 2. Evaluate 10 Standard Lines
     for (let i = 0; i < VAC_LINES.length; i++) {
         let line = VAC_LINES[i];
@@ -1370,7 +1376,9 @@ function evaluateVacationGrid(grid, lineBet, serverSeed = "", clientSeed = "", n
         
         for (let col = 0; col < 5; col++) {
             let sym = grid[col][line[col]];
-            if (sym === VACATION_SYMBOLS.PASSPORT_SCATTER) break; // Scatters break lines
+            
+            // If the symbol is a scatter, it immediately breaks the payline
+            if (sym === VACATION_SYMBOLS.PASSPORT_SCATTER) break;
             
             if (firstSym === -1) {
                 firstSym = sym;
@@ -1459,14 +1467,30 @@ function processNearMiss(initialGrid, initialStops, serverSeed, clientSeed, nonc
 // THE PLAY ENDPOINT (Final Big Bass Integration)
 app.post('/api/vacation/play', async (req, res) => {
     try {
-        const { playerPubkey, gamePubkey, clientSeed, nonce, betAmount, isBonusBuy } = req.body;
+        const { playerPubkey, gamePubkey, clientSeed, nonce } = req.body;
 
         const game = activeVacationGames.get(playerPubkey);
         if (!game || game.status !== "waiting_for_tx") {
             return res.status(400).json({ error: "No active session. Fetch seed first." });
         }
 
-        const totalWager = Number(betAmount);
+        // ==========================================
+        // 🔒 SECURITY PATCH: FETCH ON-CHAIN STATE
+        // ==========================================
+        const provider = new anchor.AnchorProvider(connection, new anchor.Wallet(houseKeypair), { commitment: "confirmed" });
+        const program = new anchor.Program(idl, PROGRAM_ID, provider);
+        
+        const gameStateAcc = await program.account.vacationState.fetch(gamePubkey);
+        
+        const actualBetLamports = gameStateAcc.betAmount.toNumber();
+        const isBonusBuy = gameStateAcc.isBonusBuy;
+        
+        if (gameStateAcc.nonce.toNumber() !== nonce) {
+            throw new Error("Nonce mismatch! Possible replay attack.");
+        }
+        // ==========================================
+
+        const totalWager = Number(actualBetLamports);
         const actualBaseBet = isBonusBuy ? totalWager / 100 : totalWager;
         const lineBet = actualBaseBet / 10; 
 
@@ -1498,24 +1522,24 @@ app.post('/api/vacation/play', async (req, res) => {
             let spinsData = [];
             let mcpepesCollected = 0;
             
-            // DYNAMIC SPINS: 3 Scatters = 10, 4 Scatters = 15, 5 Scatters = 20
-            let totalSpinsAwarded = 10;
-            
-            // Allow Bonus Buys to benefit from lucky 4 or 5 scatter triggers
-            if (baseEval.scatterCount === 4) totalSpinsAwarded = 15;
-            if (baseEval.scatterCount >= 5) totalSpinsAwarded = 20;
+            // DYNAMIC INITIAL SPINS: 3 Scatters = 10, 4 Scatters = 15, 5 Scatters = 20
+            let initialSpins = 10;
+            if (baseEval.scatterCount === 4) initialSpins = 15;
+            if (baseEval.scatterCount === 5) initialSpins = 20;
 
+            let totalSpinsAwarded = initialSpins;
             let currentSpinNum = 0;
+            let retriggerLevel = 0; // 🛑 CRITICAL FIX: Explicit tracking to prevent 30-spin desyncs
+
             const totalBet = lineBet * 10;
 
             while (currentSpinNum < totalSpinsAwarded) {
-                // Determine current multiplier tier
-                let currentMultiplier = 1;
-                if (currentSpinNum >= 30) currentMultiplier = 10;      // Level 4 
-                else if (currentSpinNum >= 20) currentMultiplier = 3;  // Level 3 
-                else if (currentSpinNum >= 10) currentMultiplier = 2;  // Level 2 
+                // Multipliers are tied to the BATCH of spins, anchoring off the initial spins granted
+                let activeMultiplier = 1;
+                if (currentSpinNum >= initialSpins + 20) activeMultiplier = 10;
+                else if (currentSpinNum >= initialSpins + 10) activeMultiplier = 3;
+                else if (currentSpinNum >= initialSpins) activeMultiplier = 2;
 
-                // Spin using FS strips
                 const { grid: fsGrid } = spinVacationReels(game.serverSeed, clientSeed, nonce, currentCounter, true, false);
                 const fsEval = evaluateVacationGrid(fsGrid, lineBet, game.serverSeed, clientSeed, nonce, currentCounter);
                 
@@ -1524,19 +1548,26 @@ app.post('/api/vacation/play', async (req, res) => {
 
                 // Execute the Collection Mechanic
                 if (fsEval.mcpepeCount > 0 && fsEval.totalLuggageMult > 0) {
-                    collectionWin = (totalBet * fsEval.totalLuggageMult) * fsEval.mcpepeCount * currentMultiplier;
+                    collectionWin = (totalBet * fsEval.totalLuggageMult) * fsEval.mcpepeCount * activeMultiplier;
                     spinPayout += collectionWin;
                 }
 
                 totalPayout += spinPayout;
-
-                // Track Progress
                 mcpepesCollected += fsEval.mcpepeCount;
 
-                // Retrigger Logic
-                if (mcpepesCollected >= 4 && totalSpinsAwarded === 10) totalSpinsAwarded = 20; 
-                if (mcpepesCollected >= 8 && totalSpinsAwarded === 20) totalSpinsAwarded = 30; 
-                if (mcpepesCollected >= 12 && totalSpinsAwarded === 30) totalSpinsAwarded = 40; 
+                // Explicit Retrigger Logic (Independent of totalSpinsAwarded)
+                if (mcpepesCollected >= 4 && retriggerLevel === 0) {
+                    retriggerLevel = 1;
+                    totalSpinsAwarded += 10;
+                }
+                if (mcpepesCollected >= 8 && retriggerLevel === 1) {
+                    retriggerLevel = 2;
+                    totalSpinsAwarded += 10;
+                }
+                if (mcpepesCollected >= 12 && retriggerLevel === 2) {
+                    retriggerLevel = 3;
+                    totalSpinsAwarded += 10;
+                }
 
                 spinsData.push({
                     grid: fsGrid,
@@ -1545,7 +1576,7 @@ app.post('/api/vacation/play', async (req, res) => {
                     collectionWin: collectionWin,
                     mcpepeCount: fsEval.mcpepeCount,
                     luggageValues: fsEval.luggageValues,
-                    activeMultiplier: currentMultiplier,
+                    activeMultiplier: activeMultiplier,
                     totalCollectedSoFar: mcpepesCollected
                 });
 
