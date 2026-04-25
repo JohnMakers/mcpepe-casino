@@ -131,11 +131,9 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
       // 2. MCPEPE COLLECTION TRACK (Center)
       const TICK_WIDTH = 36;
       const TICK_HEIGHT = 36;
-      const START_X = 210;
+      const START_X = 180; // Shifted left to center the track and make room for the multiplier
 
-      const trackTitle = new PIXI.Text({ text: "WILD COLLECTION REWARDS", style: { fontSize: 13, fill: '#9ca3af', fontWeight: '900', letterSpacing: 2 }});
-      trackTitle.x = START_X; trackTitle.y = 10;
-      hudContainer.addChild(trackTitle);
+      // (WILD COLLECTION REWARDS text removed for clarity)
 
       const ticksContainers: PIXI.Container[] = [];
       
@@ -146,7 +144,7 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
         
         const tickCont = new PIXI.Container();
         tickCont.x = xPos;
-        tickCont.y = 32;
+        tickCont.y = 25; // Shifted up slightly since the title is gone
         hudContainer.addChild(tickCont);
         ticksContainers.push(tickCont);
 
@@ -179,32 +177,38 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
         // Tier Completion Labels (2X, 3X, 10X)
         if (i === 3) {
             const arrow = new PIXI.Text({ text: "▶", style: { fontSize: 16, fill: '#4ade80' }});
-            arrow.x = xPos + TICK_WIDTH + 5; arrow.y = 42;
+            arrow.x = xPos + TICK_WIDTH + 5; arrow.y = 35;
             const lbl = new PIXI.Text({ text: "2X", style: { fontSize: 16, fill: '#fff', fontWeight: '900', dropShadow: { color: '#000', blur: 2, distance: 2 } }});
-            lbl.x = xPos + TICK_WIDTH - 5; lbl.y = 12;
+            lbl.x = xPos + TICK_WIDTH - 5; lbl.y = 5;
             hudContainer.addChild(arrow, lbl);
         }
         if (i === 7) {
             const arrow = new PIXI.Text({ text: "▶", style: { fontSize: 16, fill: '#4ade80' }});
-            arrow.x = xPos + TICK_WIDTH + 5; arrow.y = 42;
+            arrow.x = xPos + TICK_WIDTH + 5; arrow.y = 35;
             const lbl = new PIXI.Text({ text: "3X", style: { fontSize: 16, fill: '#fff', fontWeight: '900', dropShadow: { color: '#000', blur: 2, distance: 2 } }});
-            lbl.x = xPos + TICK_WIDTH - 5; lbl.y = 12;
+            lbl.x = xPos + TICK_WIDTH - 5; lbl.y = 5;
             hudContainer.addChild(arrow, lbl);
         }
         if (i === 11) {
             const lbl = new PIXI.Text({ text: "10X", style: { fontSize: 22, fill: '#facc15', fontWeight: '900', dropShadow: { color: '#ca8a04', blur: 6, distance: 0 } }});
-            lbl.x = xPos + TICK_WIDTH + 5; lbl.y = 35;
+            lbl.x = xPos + TICK_WIDTH + 5; lbl.y = 28;
             hudContainer.addChild(lbl);
         }
       }
 
       // 3. CURRENT MULTIPLIER (Right)
-      const multLabel = new PIXI.Text({ text: "MULTIPLIER", style: { fontSize: 13, fill: '#facc15', fontWeight: '900', letterSpacing: 2 }});
-      multLabel.x = 760; multLabel.y = 15;
-      const multInfo = new PIXI.Text({ text: "1X", style: { fontSize: 34, fill: '#fff', fontWeight: '900', dropShadow: { color: '#ca8a04', blur: 8, distance: 0 } }});
-      multInfo.x = 760; multInfo.y = 35;
+      // Anchored to the right side so it expands leftward and never overlaps the track
+      const multLabel = new PIXI.Text({ text: "MULTIPLIER", style: { fontSize: 13, fill: '#facc15', fontWeight: '900', letterSpacing: 2, align: 'right' }});
+      multLabel.anchor.set(1, 0);
+      multLabel.x = 845; 
+      multLabel.y = 15;
+      
+      const multInfo = new PIXI.Text({ text: "1X", style: { fontSize: 34, fill: '#fff', fontWeight: '900', dropShadow: { color: '#ca8a04', blur: 8, distance: 0 }, align: 'right' }});
+      multInfo.anchor.set(1, 0);
+      multInfo.x = 845; 
+      multInfo.y = 35;
+      
       hudContainer.addChild(multLabel, multInfo);
-
       // HUD Update Engine
       const updateHUD = (collected: number, multiplier: number, currentSpin: number, totalSpins: number) => {
         spinValue.text = `${currentSpin} / ${totalSpins}`;
