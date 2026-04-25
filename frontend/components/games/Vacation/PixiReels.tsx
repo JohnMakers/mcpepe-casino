@@ -112,7 +112,11 @@ export default function PixiReels({ playData, onAnimationComplete, onShowBonusMo
 
       // Sleek background panel
       const hudBg = new PIXI.Graphics()
-        .path().moveTo(0, 0).lineTo(900, 0).lineTo(870, 85).lineTo(30, 85).closePath()
+        .moveTo(0, 0)
+        .lineTo(900, 0)
+        .lineTo(870, 85)
+        .lineTo(30, 85)
+        .lineTo(0, 0) // Closes the trapezoid shape
         .fill({ color: 0x050806, alpha: 0.95 })
         .stroke({ color: 0x9333ea, width: 3, alpha: 0.8 }); // Purple Neon Glow
       hudContainer.addChild(hudBg);
