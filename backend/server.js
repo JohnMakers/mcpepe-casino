@@ -817,17 +817,18 @@ const PATRIOTS_SYMBOLS = {
     GREEN_GEM: 4, APPLE: 5, MELON: 6, SCATTER: 7, BOMB: 8, 
     GRAPE: 9, BANANA: 10 
 };
-// Paytable Multipliers (Base: 1 Unit)
+
+// V4 Buffed Paytable - Increased base values by ~50% to bring RTP to 96%
 const PAYTABLE = {
-    [PATRIOTS_SYMBOLS.GOLDEN_MCPEPE]: { 8: 10, 10: 25, 12: 50 },
-    [PATRIOTS_SYMBOLS.PEPE_HEART]: { 8: 2.5, 10: 10, 12: 25 },
-    [PATRIOTS_SYMBOLS.PURPLE_DIAMOND]: { 8: 2, 10: 5, 12: 15 },
-    [PATRIOTS_SYMBOLS.BLUE_OVAL]: { 8: 1.5, 10: 2.5, 12: 12 },
-    [PATRIOTS_SYMBOLS.GREEN_GEM]: { 8: 1, 10: 1.5, 12: 10 },
-    [PATRIOTS_SYMBOLS.APPLE]: { 8: 0.8, 10: 1.2, 12: 8 },
-    [PATRIOTS_SYMBOLS.MELON]: { 8: 0.5, 10: 1, 12: 5 },
-    [PATRIOTS_SYMBOLS.GRAPE]: { 8: 0.4, 10: 0.9, 12: 4 },
-    [PATRIOTS_SYMBOLS.BANANA]: { 8: 0.25, 10: 0.75, 12: 2 }
+    [PATRIOTS_SYMBOLS.GOLDEN_MCPEPE]: { 8: 15, 10: 40, 12: 75 },
+    [PATRIOTS_SYMBOLS.PEPE_HEART]: { 8: 4, 10: 15, 12: 35 },
+    [PATRIOTS_SYMBOLS.PURPLE_DIAMOND]: { 8: 3, 10: 7.5, 12: 20 },
+    [PATRIOTS_SYMBOLS.BLUE_OVAL]: { 8: 2, 10: 4, 12: 15 },
+    [PATRIOTS_SYMBOLS.GREEN_GEM]: { 8: 1.5, 10: 2.5, 12: 12 },
+    [PATRIOTS_SYMBOLS.APPLE]: { 8: 1.2, 10: 2, 12: 10 },
+    [PATRIOTS_SYMBOLS.MELON]: { 8: 0.8, 10: 1.5, 12: 7.5 },
+    [PATRIOTS_SYMBOLS.GRAPE]: { 8: 0.6, 10: 1.2, 12: 5 },
+    [PATRIOTS_SYMBOLS.BANANA]: { 8: 0.4, 10: 1, 12: 3 }
 };
 
 // Provably Fair RNG for individual symbols
@@ -839,24 +840,23 @@ function getDeterministicFloat(serverSeed, clientSeed, nonce, counter) {
 }
 
 function generateSymbol(randomFloat, isFreeSpins) {
-    // Sweet Bonanza High-Volatility Math Profile (Sum = 1000 base)
-    // Hit Frequency ~33%, Bonus Trigger ~1 in 180 spins
+    // V3 Weights: "Goldilocks" balance between V1 (Too tight) and V2 (Too loose)
     const weights = [
-        { symbol: PATRIOTS_SYMBOLS.BANANA, weight: 180 },       // 18% (P >= 8 is ~14%)
-        { symbol: PATRIOTS_SYMBOLS.GRAPE, weight: 160 },        // 16% (P >= 8 is ~8.4%)
-        { symbol: PATRIOTS_SYMBOLS.MELON, weight: 140 },        // 14% 
-        { symbol: PATRIOTS_SYMBOLS.APPLE, weight: 130 },        // 13%
-        { symbol: PATRIOTS_SYMBOLS.GREEN_GEM, weight: 120 },    // 12%
-        { symbol: PATRIOTS_SYMBOLS.BLUE_OVAL, weight: 100 },    // 10%
-        { symbol: PATRIOTS_SYMBOLS.PURPLE_DIAMOND, weight: 80 },// 8%
-        { symbol: PATRIOTS_SYMBOLS.PEPE_HEART, weight: 55 },    // 5.5%
-        { symbol: PATRIOTS_SYMBOLS.GOLDEN_MCPEPE, weight: 20 }, // 2% (Very Rare)
-        { symbol: PATRIOTS_SYMBOLS.SCATTER, weight: 15 }        // 1.5% 
+        { symbol: PATRIOTS_SYMBOLS.BANANA, weight: 190 },       
+        { symbol: PATRIOTS_SYMBOLS.GRAPE, weight: 165 },        
+        { symbol: PATRIOTS_SYMBOLS.MELON, weight: 145 },        
+        { symbol: PATRIOTS_SYMBOLS.APPLE, weight: 130 },        
+        { symbol: PATRIOTS_SYMBOLS.GREEN_GEM, weight: 115 },    
+        { symbol: PATRIOTS_SYMBOLS.BLUE_OVAL, weight: 95 },    
+        { symbol: PATRIOTS_SYMBOLS.PURPLE_DIAMOND, weight: 75 },
+        { symbol: PATRIOTS_SYMBOLS.PEPE_HEART, weight: 50 },    
+        { symbol: PATRIOTS_SYMBOLS.GOLDEN_MCPEPE, weight: 20 }, 
+        { symbol: PATRIOTS_SYMBOLS.SCATTER, weight: 15 }        
     ];
 
     if (isFreeSpins) {
-        // Add a 3.5% chance for a multiplier bomb to drop during bonus rounds
-        weights.push({ symbol: PATRIOTS_SYMBOLS.BOMB, weight: 35 });
+        // V3 Bomb Spawn: Reduced from 75 to 55 to prevent infinite multiplier stacking
+        weights.push({ symbol: PATRIOTS_SYMBOLS.BOMB, weight: 55 }); 
     }
 
     const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
@@ -866,22 +866,22 @@ function generateSymbol(randomFloat, isFreeSpins) {
         if (rand < w.weight) return w.symbol;
         rand -= w.weight;
     }
-    return PATRIOTS_SYMBOLS.BANANA; // Fallback
+    return PATRIOTS_SYMBOLS.BANANA; 
 }
 
 function getBombMultiplier(randomFloat) {
-    // True High-Volatility Distribution (Sum = 1000)
+    // V3 Bomb Weights: Keeping the top-end high, but adding slightly more 2x/3x "dud" bombs 
     const bombWeights = [
-        { mult: 2, weight: 250 },   // 25% chance
-        { mult: 3, weight: 200 },   // 20% chance
-        { mult: 5, weight: 150 },   // 15% chance
-        { mult: 8, weight: 120 },   // 12% chance
-        { mult: 10, weight: 100 },  // 10% chance
-        { mult: 15, weight: 60 },   // 6% chance
-        { mult: 20, weight: 45 },   // 4.5% chance
-        { mult: 25, weight: 45 },   // 4.5% chance
-        { mult: 50, weight: 20 },   // 2% chance
-        { mult: 100, weight: 10 }   // 1% chance (Rare Jackpot)
+        { mult: 2, weight: 220 },   
+        { mult: 3, weight: 180 },   
+        { mult: 5, weight: 150 },   
+        { mult: 8, weight: 110 },   
+        { mult: 10, weight: 100 },  
+        { mult: 15, weight: 70 },   
+        { mult: 20, weight: 60 },   
+        { mult: 25, weight: 50 },   
+        { mult: 50, weight: 40 },   
+        { mult: 100, weight: 20 }   
     ];
     
     let totalWeight = bombWeights.reduce((sum, w) => sum + w.weight, 0);
@@ -891,7 +891,7 @@ function getBombMultiplier(randomFloat) {
         if (rand < bw.weight) return bw.mult;
         rand -= bw.weight;
     }
-    return 2; // Fallback
+    return 2; 
 }
 
 

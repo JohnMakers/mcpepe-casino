@@ -13,13 +13,11 @@ export default function InfoModal({ isOpen, onClose }: Props) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
       onClick={onClose}
     >
-      {/* ✨ FIX: Added stopPropagation so clicking inside the modal doesn't trigger the close */}
       <div 
         className="bg-[#0a0f0c] border border-blue-800 max-w-3xl w-full max-h-[85vh] rounded-xl p-8 shadow-[0_0_50px_rgba(220,38,38,0.15)] overflow-y-auto custom-scrollbar"
         onClick={(e) => e.stopPropagation()}
       >
         
-        {/* ✨ FIX: Removed sticky, top-0, and backdrop-blur classes so it scrolls naturally */}
         <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-800">
           <h2 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
             <span className="text-red-500">McPepe's</span> Patriots Rules
@@ -31,7 +29,7 @@ export default function InfoModal({ isOpen, onClose }: Props) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-[#111814] border border-gray-800 p-4 rounded-lg text-center">
             <p className="text-gray-500 text-xs font-bold tracking-widest uppercase mb-1">RTP</p>
-            <p className="text-blue-400 font-black text-xl">~96.5%</p>
+            <p className="text-blue-400 font-black text-xl">~96.7%</p>
           </div>
           <div className="bg-[#111814] border border-gray-800 p-4 rounded-lg text-center">
             <p className="text-gray-500 text-xs font-bold tracking-widest uppercase mb-1">Volatility</p>
@@ -78,7 +76,7 @@ export default function InfoModal({ isOpen, onClose }: Props) {
         <div className="space-y-3">
           {/* Header */}
           <div className="grid grid-cols-5 text-gray-500 text-xs font-bold uppercase tracking-widest pb-2 px-2">
-            <div className="col-span-2">Symbol & Drop Rate</div>
+            <div className="col-span-2">Symbol</div>
             <div className="text-center">8 - 9</div>
             <div className="text-center">10 - 11</div>
             <div className="text-center text-yellow-400">12+</div>
@@ -90,12 +88,11 @@ export default function InfoModal({ isOpen, onClose }: Props) {
               <img src="/patriots/patriots_beer.png" alt="Beer" className="w-12 h-12 object-contain" />
               <div>
                 <p className="text-white font-bold text-sm">Patriot Beer</p>
-                <p className="text-gray-500 text-xs">2.0% Spawn</p>
               </div>
             </div>
-            <div className="text-center text-gray-300 font-mono">10.00</div>
-            <div className="text-center text-gray-300 font-mono">25.00</div>
-            <div className="text-center text-yellow-400 font-mono font-bold">50.00</div>
+            <div className="text-center text-gray-300 font-mono">15.00</div>
+            <div className="text-center text-gray-300 font-mono">40.00</div>
+            <div className="text-center text-yellow-400 font-mono font-bold">75.00</div>
           </div>
 
           {/* Torch */}
@@ -104,12 +101,11 @@ export default function InfoModal({ isOpen, onClose }: Props) {
               <img src="/patriots/patriots_torch.png" alt="Torch" className="w-12 h-12 object-contain" />
               <div>
                 <p className="text-white font-bold text-sm">Liberty Torch</p>
-                <p className="text-gray-500 text-xs">5.5% Spawn</p>
               </div>
             </div>
-            <div className="text-center text-gray-300 font-mono">2.50</div>
-            <div className="text-center text-gray-300 font-mono">10.00</div>
-            <div className="text-center text-yellow-400 font-mono font-bold">25.00</div>
+            <div className="text-center text-gray-300 font-mono">4.00</div>
+            <div className="text-center text-gray-300 font-mono">15.00</div>
+            <div className="text-center text-yellow-400 font-mono font-bold">35.00</div>
           </div>
 
           {/* Musket */}
@@ -118,12 +114,11 @@ export default function InfoModal({ isOpen, onClose }: Props) {
               <img src="/patriots/patriots_musket.png" alt="Musket" className="w-12 h-12 object-contain" />
               <div>
                 <p className="text-white font-bold text-sm">Crossed Muskets</p>
-                <p className="text-gray-500 text-xs">8.0% Spawn</p>
               </div>
             </div>
-            <div className="text-center text-gray-300 font-mono">2.00</div>
-            <div className="text-center text-gray-300 font-mono">5.00</div>
-            <div className="text-center text-yellow-400 font-mono font-bold">15.00</div>
+            <div className="text-center text-gray-300 font-mono">3.00</div>
+            <div className="text-center text-gray-300 font-mono">7.50</div>
+            <div className="text-center text-yellow-400 font-mono font-bold">20.00</div>
           </div>
 
           {/* Flag */}
@@ -132,12 +127,11 @@ export default function InfoModal({ isOpen, onClose }: Props) {
               <img src="/patriots/patriots_waveflag.png" alt="Flag" className="w-12 h-12 object-contain" />
               <div>
                 <p className="text-white font-bold text-sm">Waving Flag</p>
-                <p className="text-gray-500 text-xs">10.0% Spawn</p>
               </div>
             </div>
-            <div className="text-center text-gray-300 font-mono">1.50</div>
-            <div className="text-center text-gray-300 font-mono">2.50</div>
-            <div className="text-center text-yellow-400 font-mono font-bold">12.00</div>
+            <div className="text-center text-gray-300 font-mono">2.00</div>
+            <div className="text-center text-gray-300 font-mono">4.00</div>
+            <div className="text-center text-yellow-400 font-mono font-bold">15.00</div>
           </div>
 
           {/* Truck */}
@@ -146,12 +140,11 @@ export default function InfoModal({ isOpen, onClose }: Props) {
               <img src="/patriots/patriots_truck.png" alt="Truck" className="w-12 h-12 object-contain" />
               <div>
                 <p className="text-white font-bold text-sm">Patriot Truck</p>
-                <p className="text-gray-500 text-xs">12.0% Spawn</p>
               </div>
             </div>
-            <div className="text-center text-gray-300 font-mono">1.00</div>
             <div className="text-center text-gray-300 font-mono">1.50</div>
-            <div className="text-center text-yellow-400 font-mono font-bold">10.00</div>
+            <div className="text-center text-gray-300 font-mono">2.50</div>
+            <div className="text-center text-yellow-400 font-mono font-bold">12.00</div>
           </div>
 
           {/* Salute */}
@@ -160,12 +153,11 @@ export default function InfoModal({ isOpen, onClose }: Props) {
               <img src="/patriots/patriots_salute.png" alt="Salute" className="w-12 h-12 object-contain" />
               <div>
                 <p className="text-white font-bold text-sm">Salute</p>
-                <p className="text-gray-500 text-xs">13.0% Spawn</p>
               </div>
             </div>
-            <div className="text-center text-gray-300 font-mono">0.80</div>
             <div className="text-center text-gray-300 font-mono">1.20</div>
-            <div className="text-center text-yellow-400 font-mono font-bold">8.00</div>
+            <div className="text-center text-gray-300 font-mono">2.00</div>
+            <div className="text-center text-yellow-400 font-mono font-bold">10.00</div>
           </div>
 
           {/* Lincoln */}
@@ -174,12 +166,11 @@ export default function InfoModal({ isOpen, onClose }: Props) {
               <img src="/patriots/patriots_lincoln.png" alt="Lincoln" className="w-12 h-12 object-contain" />
               <div>
                 <p className="text-white font-bold text-sm">Top Hat</p>
-                <p className="text-gray-500 text-xs">14.0% Spawn</p>
               </div>
             </div>
-            <div className="text-center text-gray-300 font-mono">0.50</div>
-            <div className="text-center text-gray-300 font-mono">1.00</div>
-            <div className="text-center text-yellow-400 font-mono font-bold">5.00</div>
+            <div className="text-center text-gray-300 font-mono">0.80</div>
+            <div className="text-center text-gray-300 font-mono">1.50</div>
+            <div className="text-center text-yellow-400 font-mono font-bold">7.50</div>
           </div>
 
           {/* Eagle */}
@@ -188,12 +179,11 @@ export default function InfoModal({ isOpen, onClose }: Props) {
               <img src="/patriots/patriots_eagle.png" alt="Eagle" className="w-12 h-12 object-contain" />
               <div>
                 <p className="text-white font-bold text-sm">Bald Eagle</p>
-                <p className="text-gray-500 text-xs">16.0% Spawn</p>
               </div>
             </div>
-            <div className="text-center text-gray-300 font-mono">0.40</div>
-            <div className="text-center text-gray-300 font-mono">0.90</div>
-            <div className="text-center text-yellow-400 font-mono font-bold">4.00</div>
+            <div className="text-center text-gray-300 font-mono">0.60</div>
+            <div className="text-center text-gray-300 font-mono">1.20</div>
+            <div className="text-center text-yellow-400 font-mono font-bold">5.00</div>
           </div>
 
           {/* Limo */}
@@ -202,16 +192,27 @@ export default function InfoModal({ isOpen, onClose }: Props) {
               <img src="/patriots/patriots_limo.png" alt="Limo" className="w-12 h-12 object-contain" />
               <div>
                 <p className="text-white font-bold text-sm">Presidential Limo</p>
-                <p className="text-gray-500 text-xs">18.0% Spawn</p>
               </div>
             </div>
-            <div className="text-center text-gray-300 font-mono">0.25</div>
-            <div className="text-center text-gray-300 font-mono">0.75</div>
-            <div className="text-center text-yellow-400 font-mono font-bold">2.00</div>
+            <div className="text-center text-gray-300 font-mono">0.40</div>
+            <div className="text-center text-gray-300 font-mono">1.00</div>
+            <div className="text-center text-yellow-400 font-mono font-bold">3.00</div>
+          </div>
+
+          {/* Banana */}
+          <div className="bg-[#111814] rounded-lg p-3 grid grid-cols-5 items-center border border-gray-800/50 hover:border-gray-600 transition-colors">
+            <div className="col-span-2 flex items-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center bg-yellow-500/20 rounded-full border border-yellow-500/50 text-xl">🍌</div>
+              <div>
+                <p className="text-white font-bold text-sm">Banana</p>
+              </div>
+            </div>
+            <div className="text-center text-gray-300 font-mono">0.40</div>
+            <div className="text-center text-gray-300 font-mono">1.00</div>
+            <div className="text-center text-yellow-400 font-mono font-bold">3.00</div>
           </div>
 
         </div>
-
       </div>
     </div>
   );
