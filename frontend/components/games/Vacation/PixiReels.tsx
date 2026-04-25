@@ -5,6 +5,8 @@ import gsap from 'gsap';
 interface PixiReelsProps {
   playData: any | null;
   onAnimationComplete: () => void;
+  // NEW: Callback to trigger the React modal and wait for resolution
+  onShowBonusModal: (spins: number, resume: () => void) => void;
 }
 
 const SYMBOL_MAP: Record<number, string> = {
@@ -35,19 +37,11 @@ const VAC_LINES = [
 
 const CANVAS_WIDTH = 960;
 const CANVAS_HEIGHT = 600;
-const SYMBOL_SIZE = 120;
+const SYMBOL_SIZE = 110;
 
-// ==========================================
-// 🛠️ MANUAL POSITION TUNING AREA
-// ==========================================
-
-// Turn to TRUE to see the grid, boxes, and drop line for calibration.
 const SHOW_DEBUG_GRID = false; 
-
-// Where do symbols spawn from before dropping?
 const DROP_START_Y = 130; 
 
-// Exact X/Y resting coordinates for the 5 Columns x 3 Rows
 const TILE_POSITIONS = [
   [ { x: 270, y: 210 }, { x: 270, y: 340 }, { x: 270, y: 480 } ], 
   [ { x: 382, y: 210 }, { x: 382, y: 340 }, { x: 382, y: 480 } ], 
@@ -56,9 +50,7 @@ const TILE_POSITIONS = [
   [ { x: 717, y: 210 }, { x: 717, y: 340 }, { x: 717, y: 480 } ]  
 ];
 
-// ==========================================
-
-export default function PixiReels({ playData, onAnimationComplete }: PixiReelsProps) {
+export default function PixiReels({ playData, onAnimationComplete, onShowBonusModal }: PixiReelsProps) {
   const pixiContainer = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -87,7 +79,6 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       const mainContainer = new PIXI.Container();
       app.stage.addChild(mainContainer);
 
-      // 1. Draw Default Background (Always visible)
       try {
         const bg = PIXI.Sprite.from('/vacations/vacation_bg.png');
         bg.width = CANVAS_WIDTH;
@@ -97,54 +88,12 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
         console.warn("Background asset failed to load");
       }
 
-      // 2. Draw the Mask (Clips symbols so they don't overlap the UI)
       const mask = new PIXI.Graphics().rect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT).fill(0xffffff);
       mainContainer.addChild(mask);
       mainContainer.mask = mask;
 
-      // 3. DRAW DEBUG GRID (Attached to app.stage so it bypasses the mask)
-      if (SHOW_DEBUG_GRID) {
-        const debugContainer = new PIXI.Container();
-        app.stage.addChild(debugContainer);
-
-        const dropLine = new PIXI.Graphics()
-          .moveTo(0, Math.max(0, DROP_START_Y))
-          .lineTo(CANVAS_WIDTH, Math.max(0, DROP_START_Y))
-          .stroke({ color: 0xff0000, width: 4 });
-        debugContainer.addChild(dropLine);
-
-        const debugText = new PIXI.Text({ text: "DROP START LINE", style: { fill: '#ff0000', fontSize: 16, fontWeight: '900', stroke: {color: '#000', width: 4} }});
-        debugText.x = 10;
-        debugText.y = Math.max(0, DROP_START_Y - 25);
-        debugContainer.addChild(debugText);
-
-        TILE_POSITIONS.forEach((col, cIndex) => {
-          col.forEach((pos, rIndex) => {
-            const box = new PIXI.Graphics()
-              .rect(pos.x - SYMBOL_SIZE/2, pos.y - SYMBOL_SIZE/2, SYMBOL_SIZE, SYMBOL_SIZE)
-              .stroke({ color: 0x4ade80, width: 3, alpha: 0.8 }); 
-            
-            const centerDot = new PIXI.Graphics()
-              .circle(pos.x, pos.y, 5)
-              .fill(0xff00ff); 
-            
-            const coordText = new PIXI.Text({ 
-                text: `C:${cIndex} R:${rIndex}\nX:${pos.x} Y:${pos.y}`, 
-                style: { fill: '#4ade80', fontSize: 12, align: 'center', fontWeight: 'bold', stroke: {color: '#000', width: 3} }
-            });
-            coordText.anchor.set(0.5);
-            coordText.x = pos.x;
-            coordText.y = pos.y + SYMBOL_SIZE/2 + 20;
-
-            debugContainer.addChild(box, centerDot, coordText);
-          });
-        });
-      }
-
-      // Stop here if there is no playData (This preserves the background on page load!)
       if (!playData) return;
 
-      // UI Text Elements
       const centerText = new PIXI.Text({ text: "", style: { fontSize: 60, fontWeight: '900', fill: '#c084fc', stroke: { color: '#000000', width: 8 } }});
       centerText.anchor.set(0.5); centerText.x = CANVAS_WIDTH / 2; centerText.y = CANVAS_HEIGHT / 2; centerText.alpha = 0;
       app.stage.addChild(centerText);
@@ -155,21 +104,16 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       winInfoText.anchor.set(0.5, 1); winInfoText.x = CANVAS_WIDTH / 2; winInfoText.y = CANVAS_HEIGHT - 10; winInfoText.alpha = 0;
       app.stage.addChild(winInfoText);
 
-      // ==========================================
-      // PROGRESSIVE MULTIPLIER HUD (Visual Ladder)
-      // ==========================================
       const hudContainer = new PIXI.Container();
       hudContainer.y = 12;
-      hudContainer.x = CANVAS_WIDTH / 2 - 325; // Center it perfectly
-      hudContainer.alpha = 0; // Hidden until Bonus
+      hudContainer.x = CANVAS_WIDTH / 2 - 325; 
+      hudContainer.alpha = 0; 
       app.stage.addChild(hudContainer);
 
-      // Background Panel (Taller to fit McPepe heads and milestones)
       const hudBg = new PIXI.Graphics().roundRect(0, 0, 650, 95, 12).fill({ color: 0x050806, alpha: 0.95 });
       hudBg.stroke({ color: 0x4ade80, width: 2, alpha: 0.5 });
       hudContainer.addChild(hudBg);
 
-      // Top Text
       const hudTitle = new PIXI.Text({ text: "MCPEPE PROGRESSION", style: { fontSize: 14, fontWeight: '900', fill: '#9ca3af', letterSpacing: 2 }});
       hudTitle.x = 20; hudTitle.y = 8;
       hudContainer.addChild(hudTitle);
@@ -178,7 +122,6 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
       multInfo.x = 480; multInfo.y = 5;
       hudContainer.addChild(multInfo);
 
-      // The 12 Progression Ticks
       const ticksContainers: PIXI.Container[] = [];
       const TICK_WIDTH = 42;
       const TICK_HEIGHT = 42;
@@ -192,13 +135,11 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
         hudContainer.addChild(tickCont);
         ticksContainers.push(tickCont);
 
-        // Empty state (Dark Gray Block)
         const emptyBg = new PIXI.Graphics().roundRect(0, 0, TICK_WIDTH, TICK_HEIGHT, 6).fill(0x1f2937);
         tickCont.addChild(emptyBg);
 
-        // Filled state (McPepe Sprite + Overlay Text)
         const filledCont = new PIXI.Container();
-        filledCont.alpha = 0; // Hidden initially
+        filledCont.alpha = 0; 
         tickCont.addChild(filledCont);
 
         try {
@@ -211,7 +152,6 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
           filledCont.addChild(fallback);
         }
 
-        // Bracket Multiplier Text logic
         let bracketMult = "1X";
         if (i >= 4 && i < 8) bracketMult = "2X";
         if (i >= 8 && i < 12) bracketMult = "3X";
@@ -222,7 +162,6 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
         mText.y = TICK_HEIGHT - 6; 
         filledCont.addChild(mText);
 
-        // Milestone Indicators under the specific triggering boxes
         if (i === 3) { 
           const lbl = new PIXI.Text({ text: "2X", style: { fontSize: 13, fill: '#fff', fontWeight: 'bold' }});
           lbl.x = tickCont.x + 10; lbl.y = 75;
@@ -242,7 +181,6 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
 
       const updateHUD = (collected: number, multiplier: number) => {
         multInfo.text = `CURRENT: ${multiplier}X`;
-        
         for (let i = 0; i < 12; i++) {
           const filledCont = ticksContainers[i].children[1] as PIXI.Container;
           if (i < collected) {
@@ -259,7 +197,7 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
           const activeContainers: PIXI.Container[][] = Array.from({ length: 5 }, () => []);
           const tl = gsap.timeline({ onComplete: () => resolve(activeContainers) });
           
-          while(mainContainer.children.length > (SHOW_DEBUG_GRID ? 4 : 2)) {
+          while(mainContainer.children.length > 2) {
              mainContainer.removeChildAt(mainContainer.children.length - 1);
           }
 
@@ -267,17 +205,14 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
             for (let row = 0; row < 3; row++) {
               const symType = targetGrid[col][row];
               const container = new PIXI.Container();
-              
               const targetPos = TILE_POSITIONS[col][row];
-              const finalX = targetPos.x;
-              const finalY = targetPos.y;
               
-              container.x = finalX;
+              container.x = targetPos.x;
 
               if (isNudge) {
-                container.y = finalY - 140; 
+                container.y = targetPos.y - 140; 
               } else if (col === hookCol) {
-                container.y = finalY + 500; 
+                container.y = targetPos.y + 500; 
               } else {
                 container.y = DROP_START_Y; 
               }
@@ -304,11 +239,11 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
               activeContainers[col][row] = container;
 
               if (col === hookCol) {
-                tl.to(container, { y: finalY - 20, duration: 0.5, ease: "power2.out", delay: row * 0.05 }, 0);
-                tl.to(container, { y: finalY, duration: 0.2, ease: "bounce.out" }, ">");
+                tl.to(container, { y: targetPos.y - 20, duration: 0.5, ease: "power2.out", delay: row * 0.05 }, 0);
+                tl.to(container, { y: targetPos.y, duration: 0.2, ease: "bounce.out" }, ">");
               } else {
-                tl.to(container, { y: finalY + 20, duration: 0.4, ease: "power2.in", delay: col * 0.15 + (row * 0.02) }, 0);
-                tl.to(container, { y: finalY, duration: 0.15, ease: "back.out(2)" }, `>${col * 0.15}`); 
+                tl.to(container, { y: targetPos.y + 20, duration: 0.4, ease: "power2.in", delay: col * 0.15 + (row * 0.02) }, 0);
+                tl.to(container, { y: targetPos.y, duration: 0.15, ease: "back.out(2)" }, `>${col * 0.15}`); 
               }
             }
           }
@@ -396,8 +331,17 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
            await showCenterPopup(`TOTAL WIN: ${(playData.payout / 1e9).toFixed(4)} SOL`, '#facc15');
         }
 
+        // ==========================================
+        // 🚨 TRIGGER THE REACT MODAL HERE
+        // ==========================================
         if (playData.triggeredBonus && playData.freeSpinsData) {
-          await showCenterPopup("FREE SPINS!", '#c084fc');
+          
+          // Wait for the user to click "Continue" on the React Modal
+          await new Promise<void>((resolve) => {
+             onShowBonusModal(playData.freeSpinsData.spins.length, resolve);
+          });
+
+          // Once resolved, proceed with the UI fade in and spin loops
           gsap.to(hudContainer, { alpha: 1, duration: 0.5 }); 
           
           const fsData = playData.freeSpinsData;
@@ -407,7 +351,6 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
             if (!isMounted) break;
             const spin = fsData.spins[i];
             
-            // Increment UI *before* the spin fully processes for better tension
             runningMcpepeTotal = spin.totalCollectedSoFar - spin.mcpepeCount;
             updateHUD(runningMcpepeTotal, spin.activeMultiplier);
 
@@ -418,7 +361,6 @@ export default function PixiReels({ playData, onAnimationComplete }: PixiReelsPr
             }
 
             if (spin.mcpepeCount > 0) {
-              // Update HUD visually instantly as they land
               runningMcpepeTotal += spin.mcpepeCount;
               updateHUD(runningMcpepeTotal, spin.activeMultiplier);
             }

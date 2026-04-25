@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
-import idl from '../../../idl.json'; // Make sure your IDL is updated!
+import idl from '../../../idl.json'; 
 import PixiReels from './PixiReels';
 
 const PROGRAM_ID = new PublicKey(idl.metadata.address);
@@ -12,12 +12,17 @@ export default function Vacation() {
   const { connection } = useConnection();
   const { publicKey, signTransaction, sendTransaction } = useWallet();
   
-  const [betInput, setBetInput] = useState<string>("0.1000"); // Base bet represents the TOTAL $1.00 equivalent
+  const [betInput, setBetInput] = useState<string>("0.1000"); 
   const betAmount = Number(betInput) || 0; 
   
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [gameResult, setGameResult] = useState<any>(null);
+
+  // NEW: State to control our React overlay Modal
+  const [bonusModal, setBonusModal] = useState<{ show: boolean, spins: number, resume: (() => void) | null }>({
+    show: false, spins: 0, resume: null
+  });
 
   const handleSpin = async (isBonusBuy: boolean = false) => {
     if (!publicKey || !signTransaction || !sendTransaction) {
@@ -35,7 +40,6 @@ export default function Vacation() {
       setGameResult(null);
       setIsAnimating(false);
 
-      // 1. Fetch Provably Fair Seed
       const seedRes = await fetch(`${BACKEND_URL}/api/vacation/seed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -47,14 +51,12 @@ export default function Vacation() {
       const clientSeed = Math.random().toString(36).substring(2, 15);
       const nonce = Math.floor(Math.random() * 1000000);
       
-      // Bonus Buy costs 100x the base bet
       const totalWager = isBonusBuy ? betAmount * 100 : betAmount;
       const betLamports = Math.floor(totalWager * anchor.web3.LAMPORTS_PER_SOL);
 
       const serverSeedHashBuffer = Buffer.from(seedData.serverSeedHash, 'hex');
       const hashArray = Array.from(serverSeedHashBuffer);
 
-      // 2. Build Solana Transaction
       const [gameStatePDA] = PublicKey.findProgramAddressSync(
         [
           Buffer.from("vacation"),
@@ -78,7 +80,7 @@ export default function Vacation() {
           hashArray,
           clientSeed,
           new anchor.BN(nonce),
-          isBonusBuy // Pass the boolean flag to the contract
+          isBonusBuy 
         )
         .accounts({
           player: publicKey,
@@ -93,7 +95,6 @@ export default function Vacation() {
       tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = publicKey;
 
-      // 3. Send & Confirm Escrow
       const txId = await sendTransaction(tx, connection);
       await connection.confirmTransaction({
         signature: txId,
@@ -103,7 +104,6 @@ export default function Vacation() {
 
       console.log("On-chain wager secured! Tx:", txId);
 
-      // 4. Resolve on Backend
       const playRes = await fetch(`${BACKEND_URL}/api/vacation/play`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,7 +120,6 @@ export default function Vacation() {
       const playData = await playRes.json();
       if (!playData.success) throw new Error(playData.error || "Backend engine failed");
 
-      // 5. Trigger Frontend Animation
       setGameResult(playData);
       setIsAnimating(true);
 
@@ -149,13 +148,59 @@ export default function Vacation() {
       {/* PIXI CANVAS CONTAINER */}
       <div className="box-content w-[960px] h-[600px] border-4 border-cyan-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(6,182,212,0.2)] bg-[#050806] shrink-0">
         
-        {/* Always render PIXI to show the background by default */}
         <div className="absolute inset-0 z-10">
           <PixiReels 
             playData={gameResult} 
             onAnimationComplete={() => setIsAnimating(false)} 
+            // NEW: Pass the state setter into PixiReels
+            onShowBonusModal={(spins, resume) => setBonusModal({ show: true, spins, resume })}
           />
         </div>
+
+        {/* NEW: React OVERLAY FOR BONUS MODAL */}
+        {bonusModal.show && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity duration-300">
+            <div className="relative flex flex-col items-center transform transition-transform duration-500 scale-100">
+              
+              <div className="relative">
+                 {/* Main Graphic */}
+                 <img 
+                    src="/vacations/vacation_freespin.png" 
+                    alt="Free Spins Awarded" 
+                    className="w-[320px] sm:w-[400px] h-auto object-contain rounded-2xl shadow-[0_0_40px_rgba(192,132,252,0.4)] border border-purple-500/30" 
+                 />
+                 
+                 {/* Dynamic text injected onto the PNG */}
+                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center w-full">
+                    <span 
+                      className="text-white font-black text-6xl drop-shadow-[0_4px_4px_rgba(0,0,0,1)]" 
+                      style={{ WebkitTextStroke: '2px black' }}
+                    >
+                      {bonusModal.spins}
+                    </span>
+                    <span 
+                      className="text-yellow-400 font-black text-2xl uppercase tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,1)]" 
+                      style={{ WebkitTextStroke: '1px black' }}
+                    >
+                      Free Spins
+                    </span>
+                 </div>
+              </div>
+
+              {/* Continue Button */}
+              <button
+                onClick={() => {
+                  if (bonusModal.resume) bonusModal.resume(); // Tells PIXI to unpause
+                  setBonusModal({ show: false, spins: 0, resume: null });
+                }}
+                className="mt-6 px-12 py-3 bg-gradient-to-b from-purple-500 to-purple-700 hover:from-purple-400 hover:to-purple-600 text-white font-black text-xl rounded-full uppercase tracking-widest shadow-[0_0_20px_rgba(168,85,247,0.6)] hover:shadow-[0_0_30px_rgba(168,85,247,0.8)] border-2 border-purple-300 transition-all transform hover:scale-105 active:scale-95"
+              >
+                Continue
+              </button>
+
+            </div>
+          </div>
+        )}
 
         {!isSpinning && !gameResult && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/50">
