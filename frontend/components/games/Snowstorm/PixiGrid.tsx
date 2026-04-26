@@ -9,7 +9,7 @@ const DEBUG_MODE = true;
 
 const CANVAS_WIDTH = 1000;
 const CANVAS_HEIGHT = 700;
-const SYMBOL_SIZE = 125;
+const SYMBOL_SIZE = 135;
 
 // The Mask defines the visual "window" of the slot.
 const MASK_TOP = 115; 
