@@ -5,22 +5,29 @@ import gsap from 'gsap';
 // ==========================================
 // ⚙️ UI CONFIGURATION & DEBUG MODE ⚙️
 // ==========================================
-// Set to true to overlay bright hitboxes, grid centers, and the mask boundaries.
-// Tweak these variables, save the file, and watch the UI update instantly!
 const DEBUG_MODE = true; 
 
 const CANVAS_WIDTH = 1000;
 const CANVAS_HEIGHT = 700;
-
-// Grid layout variables
 const SYMBOL_SIZE = 140;
-const SPACING_X = 180;
-const SPACING_Y = 175;
 
 // The Mask defines the visual "window" of the slot.
-// Symbols above MASK_TOP or below MASK_BOTTOM will be invisible!
 const MASK_TOP = 110; 
 const MASK_BOTTOM = CANVAS_HEIGHT - 100;
+
+// 🎯 THE PRECISION COORDINATE GRID
+// Manually adjust the X and Y for every single tile on the board
+const TILE_POSITIONS = [
+    // ROW 0 (Top Row)
+    [ { x: 320, y: 175 },  { x: 500, y: 175 },  { x: 680, y: 175 } ],
+    // ROW 1 (Middle Row)
+    [ { x: 320, y: 350 },  { x: 500, y: 350 },  { x: 680, y: 350 } ],
+    // ROW 2 (Bottom Row)
+    [ { x: 320, y: 525 },  { x: 500, y: 525 },  { x: 680, y: 525 } ]
+];
+
+// The exact Y pixel coordinate where symbols spawn before dropping
+const SPAWN_Y = MASK_TOP - SYMBOL_SIZE; 
 
 // ==========================================
 
@@ -87,37 +94,38 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       bg.height = CANVAS_HEIGHT;
       app.stage.addChild(bg);
 
-      // Create an isolated container for just the spinning reels
+      // Container for the spinning reels
       const gridContainer = new PIXI.Container();
       app.stage.addChild(gridContainer);
       gridContainerRef.current = gridContainer;
       
-      // 🛠️ CREATE VISUAL MASK
-      // Anything inside gridContainer outside this rectangle is invisible
+      // 🛠️ MASK LOGIC
       const gridMask = new PIXI.Graphics();
       gridMask.rect(0, MASK_TOP, CANVAS_WIDTH, MASK_BOTTOM - MASK_TOP);
       gridMask.fill(0xffffff);
       app.stage.addChild(gridMask);
       gridContainer.mask = gridMask;
 
-      // 🛠️ DEBUG MODE OVERLAYS
+      // 🛠️ DEBUG OVERLAYS (Now uses TILE_POSITIONS)
       if (DEBUG_MODE) {
           const debugGraphics = new PIXI.Graphics();
           
-          // Draw green mask boundaries (Spawn & Vanish lines)
+          // Spawn Line (Yellow)
+          debugGraphics.moveTo(0, SPAWN_Y);
+          debugGraphics.lineTo(CANVAS_WIDTH, SPAWN_Y);
+          debugGraphics.stroke({ color: 0xffff00, width: 2, alpha: 0.8 });
+
+          // Mask Boundaries (Green)
           debugGraphics.rect(0, MASK_TOP, CANVAS_WIDTH, MASK_BOTTOM - MASK_TOP);
           debugGraphics.stroke({ color: 0x00ff00, width: 4 }); 
           
-          // Draw red center dots and purple hitboxes
-          const startX = (CANVAS_WIDTH - (SPACING_X * 2)) / 2;
-          const startY = (CANVAS_HEIGHT - (SPACING_Y * 2)) / 2;
-          
-          for (let c = 0; c < 3; c++) {
-            for (let r = 0; r < 3; r++) {
-               const cx = startX + (c * SPACING_X);
-               const cy = startY + (r * SPACING_Y);
-               debugGraphics.circle(cx, cy, 6).fill(0xff0000);
-               debugGraphics.rect(cx - SYMBOL_SIZE/2, cy - SYMBOL_SIZE/2, SYMBOL_SIZE, SYMBOL_SIZE).stroke({ color: 0xff00ff, width: 2, alpha: 0.6 });
+          // Hitboxes and Center points
+          for (let r = 0; r < 3; r++) {
+            for (let c = 0; c < 3; c++) {
+               const pos = TILE_POSITIONS[r][c];
+               debugGraphics.circle(pos.x, pos.y, 6).fill(0xff0000); // Center dot
+               // Bounding box
+               debugGraphics.rect(pos.x - SYMBOL_SIZE/2, pos.y - SYMBOL_SIZE/2, SYMBOL_SIZE, SYMBOL_SIZE).stroke({ color: 0xff00ff, width: 2, alpha: 0.6 });
             }
           }
           app.stage.addChild(debugGraphics);
@@ -147,9 +155,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
     // Clear previous spin results
     container.removeChildren();
 
-    const startX = (CANVAS_WIDTH - (SPACING_X * 2)) / 2;
-    const startY = (CANVAS_HEIGHT - (SPACING_Y * 2)) / 2;
-
     // Track sprites to pulse them later on a win
     const spriteMatrix: PIXI.Sprite[][] = [[], [], []];
 
@@ -157,14 +162,15 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       for (let r = 0; r < 3; r++) {
         const symbolId = playData.matrix[r][c];
         const sprite = PIXI.Sprite.from(SYMBOL_MAP[symbolId]);
+        const targetPos = TILE_POSITIONS[r][c];
         
         sprite.anchor.set(0.5);
         sprite.width = SYMBOL_SIZE;
         sprite.height = SYMBOL_SIZE;
         
-        sprite.x = startX + (c * SPACING_X);
-        // Start cleanly hidden just above the top mask line
-        sprite.y = MASK_TOP - SYMBOL_SIZE; 
+        // Spawn precisely at the exact X coordinate, but at the SPAWN_Y height
+        sprite.x = targetPos.x;
+        sprite.y = SPAWN_Y; 
 
         container.addChild(sprite);
         
@@ -172,8 +178,8 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         spriteMatrix[r][c] = sprite;
 
         gsap.to(sprite, {
-          y: startY + (r * SPACING_Y),
-          duration: 0.4 + (c * 0.2), // Reels drop sequentially left-to-right
+          y: targetPos.y, // Drop exactly to its precision coordinate
+          duration: 0.4 + (c * 0.2), 
           ease: "bounce.out",
         });
       }
@@ -192,9 +198,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                const c = coord[1];
                const sprite = spriteMatrix[r][c];
                if (sprite) {
-                   // Pop the winning symbols to the front of the layer index
                    container.addChild(sprite); 
-                   // Pulse the scale up and down
                    gsap.to(sprite.scale, { x: 1.35, y: 1.35, duration: 0.25, yoyo: true, repeat: 3, ease: "sine.inOut" });
                }
             });
