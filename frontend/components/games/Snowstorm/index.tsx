@@ -42,8 +42,7 @@ export default function McPepeSnowstorm() {
       );
       const [vaultPDA] = PublicKey.findProgramAddressSync([Buffer.from("vault")], PROGRAM_ID);
 
-      const provider = new anchor.AnchorProvider(connection, { publicKey, signTransaction, signAllTransactions: async (txs) => txs } as any, {});
-      const program = new anchor.Program(idl as any, PROGRAM_ID, provider);
+      const provider = new anchor.AnchorProvider(connection, { publicKey, signTransaction, signAllTransactions: async (txs: any[]) => txs } as any, {});      const program = new anchor.Program(idl as any, PROGRAM_ID, provider);
 
       const tx = await program.methods.startSnowstorm(new anchor.BN(lamports), Array.from(Buffer.from(serverSeedHash, 'hex')), clientSeed, new anchor.BN(nonce))
         .accounts({
