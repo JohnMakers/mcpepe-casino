@@ -75,7 +75,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
         // Preload Textures
         Object.values(SYMBOL_MAP).forEach(url => {
-            if (!PIXI.Assets.cache.has(url)) PIXI.Assets.add(url, url);
+            if (!PIXI.Assets.cache.has(url)) PIXI.Assets.add({ alias: url, src: url });
         });
         PIXI.Assets.load(Object.values(SYMBOL_MAP));
 
