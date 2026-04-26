@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 use crate::patriots::state::PatriotsState;
+use crate::constants::HOUSE_AUTHORITY;
+use crate::errors::CustomError;
 
 #[error_code]
 pub enum PatriotsError {
@@ -66,7 +68,9 @@ pub struct ResolvePatriots<'info> {
         bump = game_state.bump
     )]
     pub game_state: Account<'info, PatriotsState>,
-    #[account(mut)]
+    // 🔒 C-7 FIX: only the canonical House key may resolve a Patriots round
+    // (and receive the rent refund via `close = house`).
+    #[account(mut, address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
     pub house: Signer<'info>,
     /// CHECK: Safe
     #[account(mut, seeds = [b"vault"], bump)]
@@ -91,6 +95,14 @@ pub fn resolve_patriots(
         hash.to_bytes() == game_state.server_seed_hash,
         PatriotsError::InvalidServerSeed
     );
+
+    // 🔒 C-7 FIX: enforce the documented 21,100x max-win cap on-chain. Even if
+    // the house key is compromised, payouts above the cap are rejected.
+    const MAX_WIN_MULTIPLIER: u128 = 21_100;
+    let max_payout = (game_state.bet_amount as u128)
+        .checked_mul(MAX_WIN_MULTIPLIER)
+        .ok_or(CustomError::MathOverflow)?;
+    require!((payout as u128) <= max_payout, CustomError::PayoutTooLarge);
 
     // 2. Transfer Winnings if > 0
     if payout > 0 {

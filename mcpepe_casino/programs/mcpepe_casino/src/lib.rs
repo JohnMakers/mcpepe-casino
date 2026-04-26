@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 
+pub mod constants;
 pub mod errors;
 pub mod coinflip;
 pub mod whackd; 
@@ -66,8 +67,14 @@ pub mod mcpepe_casino {
         rps::play_hand(ctx, bet_amount, player_move)
     }
 
-    pub fn rps_resolve_hand(ctx: Context<ResolveHand>, house_move: u8, secret_salt: [u8; 16], hashed_commitment: [u8; 32]) -> Result<()> {
-        rps::resolve_hand(ctx, house_move, secret_salt, hashed_commitment)
+    pub fn rps_resolve_hand(ctx: Context<ResolveHand>, house_move: u8, secret_salt: [u8; 16]) -> Result<()> {
+        rps::resolve_hand(ctx, house_move, secret_salt)
+    }
+
+    /// 🔒 C-8: House commits SHA256(house_move || salt) for the upcoming hand.
+    /// Must be called before the player calls `rps_play_hand`.
+    pub fn rps_commit_hand(ctx: Context<CommitHand>, hashed_commitment: [u8; 32]) -> Result<()> {
+        rps::commit_hand(ctx, hashed_commitment)
     }
 
     pub fn rps_settle_streak(ctx: Context<SettleStreak>) -> Result<()> {

@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::roulette::state::{RouletteGameState, RouletteBet, BetType};
+use crate::constants::HOUSE_AUTHORITY;
 use crate::errors::CustomError;
 
 pub fn start_roulette(
@@ -154,13 +155,15 @@ fn get_multiplier(bet_type: &BetType) -> u64 {
 #[derive(Accounts)]
 #[instruction(server_seed_hash: [u8; 32], client_seed: String, nonce: u64, bets: Vec<RouletteBet>)]
 pub struct StartRoulette<'info> {
-    #[account(init, payer = player, space = 1024)] 
+    #[account(init, payer = player, space = 1024)]
     pub game_state: Box<Account<'info, RouletteGameState>>,
     #[account(mut)]
     pub player: Signer<'info>,
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: SystemAccount<'info>,
-    /// CHECK: Master Authority
+    // 🔒 C-3 FIX: pin the recorded authority to the canonical House key.
+    /// CHECK: Constrained via address.
+    #[account(address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
     pub authority: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
@@ -173,6 +176,8 @@ pub struct ResolveRoulette<'info> {
     pub player: SystemAccount<'info>,
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: SystemAccount<'info>,
+    // 🔒 C-3 FIX: only the canonical House signer may resolve.
+    #[account(address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }

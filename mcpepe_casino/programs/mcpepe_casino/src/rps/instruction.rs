@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
 use crate::rps::state::*;
+use crate::constants::HOUSE_AUTHORITY;
+use crate::errors::CustomError;
 use solana_program::hash::hash;
 
 const MULTIPLIERS: [u64; 6] = [19, 36, 68, 130, 245, 465];
@@ -39,8 +41,31 @@ pub struct PlayHand<'info> {
 pub struct ResolveHand<'info> {
     #[account(mut)]
     pub game_state: Account<'info, RpsGameState>,
+    // 🔒 C-8 FIX: only the canonical House key may resolve a hand.
+    #[account(mut, address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
+    pub house_authority: Signer<'info>,
+}
+
+/// 🔒 C-8 FIX: explicit commit step. The House writes its commitment to the
+/// game_state account *before* the player calls `play_hand`, so the player can
+/// safely lock in their move knowing the commitment cannot be retroactively
+/// chosen.
+#[derive(Accounts)]
+pub struct CommitHand<'info> {
     #[account(mut)]
-    pub house_authority: Signer<'info>, 
+    pub game_state: Account<'info, RpsGameState>,
+    #[account(mut, address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
+    pub house_authority: Signer<'info>,
+}
+
+pub fn commit_hand(ctx: Context<CommitHand>, hashed_commitment: [u8; 32]) -> Result<()> {
+    let game_state = &mut ctx.accounts.game_state;
+    // Cannot overwrite a commitment for a round that has already locked the
+    // player's move — that would let the house re-commit after seeing the move.
+    require!(!game_state.is_active, GameError::GameAlreadyActive);
+    game_state.pending_commitment = hashed_commitment;
+    game_state.commitment_set = true;
+    Ok(())
 }
 
 #[derive(Accounts)]
@@ -69,9 +94,11 @@ pub fn initialize_rps_game(ctx: Context<InitializeRpsGame>) -> Result<()> {
 
 pub fn play_hand(ctx: Context<PlayHand>, bet_amount: u64, player_move: u8) -> Result<()> {
     let game_state = &mut ctx.accounts.game_state;
-    
+
     require!(player_move >= 1 && player_move <= 3, GameError::InvalidMove);
     require!(!game_state.is_active, GameError::GameAlreadyActive);
+    // 🔒 C-8 FIX: refuse to lock a wager unless the house has committed first.
+    require!(game_state.commitment_set, GameError::CommitmentMissing);
     
     // 🔥 THE FIX: Prevent double charging. Only take SOL if there is no locked bet.
     if game_state.bet_amount == 0 {
@@ -92,15 +119,27 @@ pub fn play_hand(ctx: Context<PlayHand>, bet_amount: u64, player_move: u8) -> Re
     Ok(())
 }
 
-pub fn resolve_hand(ctx: Context<ResolveHand>, house_move: u8, secret_salt: [u8; 16], hashed_commitment: [u8; 32]) -> Result<()> {
+pub fn resolve_hand(ctx: Context<ResolveHand>, house_move: u8, secret_salt: [u8; 16]) -> Result<()> {
     let game_state = &mut ctx.accounts.game_state;
     require!(game_state.is_active, GameError::GameNotActive);
-    
-    let mut preimage = Vec::new();
+    require!(game_state.commitment_set, GameError::CommitmentMissing);
+    require!(house_move >= 1 && house_move <= 3, GameError::InvalidMove);
+
+    // 🔒 C-8 FIX: verify reveal against the *stored* commitment that was
+    // written by `commit_hand` BEFORE the player locked their move. The
+    // hashed_commitment can no longer be supplied as an argument.
+    let mut preimage = Vec::with_capacity(1 + 16);
     preimage.push(house_move);
     preimage.extend_from_slice(&secret_salt);
     let verify_hash = hash(&preimage);
-    require!(verify_hash.to_bytes() == hashed_commitment, GameError::InvalidHash);
+    require!(
+        verify_hash.to_bytes() == game_state.pending_commitment,
+        GameError::InvalidHash
+    );
+
+    // Consume the commitment — house must commit again for the next hand.
+    game_state.commitment_set = false;
+    game_state.pending_commitment = [0u8; 32];
 
     let p_move = game_state.player_move;
     let h_move = house_move;
@@ -171,4 +210,6 @@ pub enum GameError {
     GameIsActive,
     #[msg("Invalid House Authority signer.")]
     InvalidAuthority,
+    #[msg("House has not committed for the current round.")]
+    CommitmentMissing,
 }

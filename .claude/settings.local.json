@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(wc -l \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\backend\\\\server.js\")"
+      "Bash(wc -l \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\backend\\\\server.js\")",
+      "Bash(grep -n \"roulette/seed\\\\|activeRouletteSeeds\\\\|/api/roulette/resolve\" \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\backend\\\\server.js\")",
+      "Bash(cd \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\backend\")",
+      "Bash(npm install express-rate-limit --silent)",
+      "Bash(cd \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\mcpepe_casino\")",
+      "Bash(cargo check -p mcpepe_casino)"
     ]
   }
 }

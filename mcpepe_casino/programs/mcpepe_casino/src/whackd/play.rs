@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::whackd::state::WhackdGame;
+use crate::constants::HOUSE_AUTHORITY;
 use crate::errors::CustomError;
 
 pub fn start_whackd(
@@ -41,6 +42,15 @@ pub fn resolve_whackd(
 ) -> Result<()> {
     let game = &mut ctx.accounts.whackd_game;
     require!(game.state == 0, CustomError::GameAlreadyResolved);
+
+    // 🔒 C-5 FIX: structural bound on revealed_mask. The board only has 25
+    // tiles; any bit above position 24 indicates a malformed payload.
+    require!(revealed_mask >> 25 == 0, CustomError::InvalidRevealedMask);
+    let successful_reveals_check = revealed_mask.count_ones() as u8;
+    require!(
+        successful_reveals_check as u16 + game.mine_count as u16 <= 25,
+        CustomError::InvalidRevealedMask
+    );
 
     let revealed_hash = anchor_lang::solana_program::hash::hash(unhashed_server_seed.as_bytes());
     require!(game.server_seed_hash == revealed_hash.to_bytes(), CustomError::SeedMismatch);
@@ -100,7 +110,27 @@ pub fn resolve_whackd(
 pub fn cancel_abandoned_whackd(ctx: Context<CancelWhackd>) -> Result<()> {
     let game = &mut ctx.accounts.whackd_game;
     require!(game.state == 0, CustomError::GameAlreadyResolved);
-    game.state = 2; 
+
+    // 🔒 C-10 FIX: refund the player's escrow before marking the game closed.
+    // Prevents the historical "house cancels open game and keeps the bet" rug.
+    let refund = game.bet_amount;
+    if refund > 0 {
+        let bump = ctx.bumps.vault;
+        let seeds = &[b"vault".as_ref(), &[bump]];
+        let signer = &[&seeds[..]];
+
+        let cpi_context = CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: ctx.accounts.vault.to_account_info(),
+                to: ctx.accounts.player.to_account_info(),
+            },
+            signer,
+        );
+        anchor_lang::system_program::transfer(cpi_context, refund)?;
+    }
+
+    game.state = 2;
     Ok(())
 }
 
@@ -129,8 +159,10 @@ pub struct StartWhackd<'info> {
     pub whackd_game: Account<'info, WhackdGame>,
     #[account(mut)]
     pub player: Signer<'info>,
-    /// CHECK: Used as a reference for house authority
-    pub authority: UncheckedAccount<'info>, 
+    // 🔒 C-5 FIX: pin authority to canonical House key.
+    /// CHECK: Constrained via address.
+    #[account(address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
+    pub authority: UncheckedAccount<'info>,
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: SystemAccount<'info>,
     pub system_program: Program<'info, System>,
@@ -143,7 +175,9 @@ pub struct ResolveWhackd<'info> {
     /// CHECK: Target for payout
     #[account(mut)]
     pub player: UncheckedAccount<'info>,
-    pub authority: Signer<'info>, 
+    // 🔒 C-5 FIX: pin to canonical constant.
+    #[account(address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
+    pub authority: Signer<'info>,
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: SystemAccount<'info>,
     pub system_program: Program<'info, System>,
@@ -151,7 +185,15 @@ pub struct ResolveWhackd<'info> {
 
 #[derive(Accounts)]
 pub struct CancelWhackd<'info> {
-    #[account(mut, has_one = authority)]
+    #[account(mut, has_one = authority, has_one = player)]
     pub whackd_game: Account<'info, WhackdGame>,
-    pub authority: Signer<'info>, 
+    /// CHECK: Refund recipient, must equal whackd_game.player via has_one.
+    #[account(mut)]
+    pub player: UncheckedAccount<'info>,
+    #[account(mut, seeds = [b"vault"], bump)]
+    pub vault: SystemAccount<'info>,
+    // 🔒 C-5/C-10 FIX: pin to canonical constant; cancellation is privileged.
+    #[account(address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }

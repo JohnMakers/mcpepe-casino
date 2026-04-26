@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::coinflip::state::GameState;
+use crate::constants::HOUSE_AUTHORITY;
 use crate::errors::CustomError;
 
 pub fn initialize_game(ctx: Context<InitializeGame>, server_seed_hash: [u8; 32]) -> Result<()> {
@@ -98,21 +99,25 @@ pub fn resolve_coinflip(ctx: Context<ResolveCoinflip>, unhashed_server_seed: Str
 pub struct InitializeGame<'info> {
     #[account(init, payer = authority, space = 250)]
     pub game_state: Account<'info, GameState>,
-    #[account(mut)]
-    pub authority: Signer<'info>, 
+    // 🔒 C-2 FIX: only the real House can ever initialise a coinflip game-state.
+    #[account(mut, address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct PlayCoinflip<'info> {
+    // game_state.authority must equal HOUSE_AUTHORITY because Initialize pins it.
     #[account(mut, has_one = authority)]
     pub game_state: Account<'info, GameState>,
     #[account(mut)]
-    pub player: Signer<'info>, 
+    pub player: Signer<'info>,
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: SystemAccount<'info>,
-    /// CHECK: Safe via constraint
-    pub authority: UncheckedAccount<'info>, 
+    // 🔒 C-2 FIX: pin to canonical constant (defence in depth on top of has_one).
+    /// CHECK: Constrained via address.
+    #[account(address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
+    pub authority: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -121,10 +126,12 @@ pub struct ResolveCoinflip<'info> {
     #[account(mut, has_one = authority, has_one = player, close = vault)]
     pub game_state: Account<'info, GameState>,
     #[account(mut)]
-    pub player: SystemAccount<'info>, 
+    pub player: SystemAccount<'info>,
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: SystemAccount<'info>,
-    pub authority: Signer<'info>, 
+    // 🔒 C-2 FIX: only the canonical House key may resolve.
+    #[account(address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -132,7 +139,9 @@ pub struct ResolveCoinflip<'info> {
 pub struct WithdrawProfits<'info> {
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: SystemAccount<'info>,
-    #[account(mut)]
-    pub authority: Signer<'info>, 
-    pub system_program: Program<'info, System>, // Added missing system_program
+    // 🔒 C-1 FIX: pin to the canonical house authority constant.
+    // No other signer can drain the vault.
+    #[account(mut, address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }

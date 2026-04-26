@@ -28,4 +28,16 @@ pub enum CustomError {
     MaxStepsReached,
     #[msg("No profits to withdraw. You must pump at least once.")]
     NoProfitsToWithdraw,
+    #[msg("Signer is not the authorised House authority.")]
+    UnauthorizedHouse,
+    #[msg("Payout exceeds the maximum allowed for this bet.")]
+    PayoutTooLarge,
+    #[msg("Escrowed bet on-chain does not match the requested bet amount.")]
+    BetEscrowMismatch,
+    #[msg("Invalid revealed mask: cannot exceed 25 tiles.")]
+    InvalidRevealedMask,
+    #[msg("Game state already initialised by another wallet.")]
+    AlreadyInitialised,
+    #[msg("Invalid multiplier for cash-out.")]
+    InvalidMultiplier,
 }

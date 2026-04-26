@@ -4,6 +4,7 @@ const cors = require('cors');
 const { Connection, Keypair, Transaction } = require('@solana/web3.js');
 const crypto = require('crypto');
 const anchor = require('@coral-xyz/anchor');
+const rateLimit = require('express-rate-limit');
 
 const idl = require('./idl.json'); 
 
@@ -20,13 +21,63 @@ process.on('unhandledRejection', (err) => console.error('FATAL CRASH (Rejection)
 
 const app = express();
 
+// 🔒 B-H2 FIX: lock CORS to an explicit allowlist when running in production.
+// Set ALLOWED_ORIGINS in .env as a comma-separated list, e.g.
+//   ALLOWED_ORIGINS=https://mcpepe.casino,https://app.mcpepe.casino
+// In non-production the previous wildcard behaviour is preserved for local dev.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+const isProd = process.env.NODE_ENV === 'production';
+
 app.use(cors({
-    origin: '*', 
+    origin: (origin, cb) => {
+        // No Origin header (curl, server-to-server) → allow only in non-prod.
+        if (!origin) return cb(null, !isProd);
+        if (!isProd && ALLOWED_ORIGINS.length === 0) return cb(null, true);
+        if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+        return cb(new Error(`CORS blocked: ${origin}`));
+    },
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '64kb' }));
+
+// 🔒 B-H3 FIX: rate limiting. Global cap protects against blanket spam, then a
+// tighter limit is applied to the wager-spawning / payout endpoints so a single
+// IP cannot exhaust house fee-payer SOL or fill the in-memory game maps.
+const globalLimiter = rateLimit({
+    windowMs: 60_000,        // 1 minute
+    max: 120,                // 120 req/min/IP across all endpoints
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: "Too many requests, slow down." }
+});
+const wagerLimiter = rateLimit({
+    windowMs: 60_000,
+    max: 30,                 // 30 wager-affecting calls/min/IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: "Too many wager requests." }
+});
+app.use(globalLimiter);
+// Apply the stricter limit to every game-mutating route.
+app.use([
+    '/api/play-coinflip',
+    '/api/whackd/init',
+    '/api/whackd/click',
+    '/api/whackd/cashout',
+    '/api/rps/resolve',
+    '/api/roulette/seed',
+    '/api/roulette/resolve',
+    '/api/blackjack/seed',
+    '/api/blackjack/init',
+    '/api/blackjack/action',
+    '/api/patriots/seed',
+    '/api/patriots/play',
+], wagerLimiter);
 
 const rawRpc = process.env.RPC_URL || "https://api.devnet.solana.com";
 const RPC_URL = rawRpc.replace(/["']/g, "").trim(); 
@@ -44,7 +95,24 @@ const houseKeypair = Keypair.fromSecretKey(houseSecretKey);
 console.log("🛡️ House Authority Pubkey:", houseKeypair.publicKey.toBase58());
 console.log(`🔌 Connected to RPC: ${RPC_URL.includes("api.devnet") ? "Public (Warning: Rate Limits)" : "Custom"}`);
 
-const activeWhackdGames = new Map(); 
+const activeWhackdGames = new Map();
+
+// =============================================================================
+// 🔒 B-C3 HELPER: read on-chain `bet_amount` from a game-state account.
+// Layout for BlackjackGame and PatriotsState both start with:
+//   [0..8]   anchor discriminator
+//   [8..40]  player: Pubkey (32 bytes)
+//   [40..48] bet_amount: u64 little-endian
+// Returns a BigInt (lamports) so we can directly compare against request body.
+// =============================================================================
+async function readOnChainBetAmount(gameStatePubkeyStr) {
+    const acc = await connection.getAccountInfo(new anchor.web3.PublicKey(gameStatePubkeyStr), "confirmed");
+    if (!acc || acc.data.length < 48) {
+        throw new Error("Game state account not found or malformed.");
+    }
+    return acc.data.readBigUInt64LE(40);
+}
+
 
 // ==========================================
 // COINFLIP ENDPOINT
@@ -342,7 +410,8 @@ app.post('/api/rps/resolve', async (req, res) => {
         const playerPubkey = new anchor.web3.PublicKey(playerPubkeyStr);
         const gameStatePubkey = new anchor.web3.PublicKey(gameStatePubkeyStr);
 
-        const houseMove = Math.floor(Math.random() * 3) + 1; 
+        // 🔒 B-H1 FIX: cryptographically-secure house move (was Math.random()).
+        const houseMove = crypto.randomInt(1, 4); // upper bound exclusive → 1..3
         const secretSalt = crypto.randomBytes(16);
         
         const preimage = Buffer.concat([Buffer.from([houseMove]), secretSalt]);
@@ -410,17 +479,26 @@ app.post('/api/rps/resolve', async (req, res) => {
 // ==========================================
 // ROULETTE ENDPOINTS
 // ==========================================
+// 🔒 B-C2 FIX: hold each player's pre-bet server seed server-side. Returning
+// it before the player commits to bets fully breaks the commit-reveal scheme.
+const activeRouletteSeeds = new Map();
+
 app.post('/api/roulette/seed', (req, res) => {
     try {
+        const { playerPubkey } = req.body || {};
+        if (!playerPubkey) {
+            return res.status(400).json({ success: false, error: "Missing playerPubkey." });
+        }
+
         const serverSeed = crypto.randomBytes(32).toString('hex');
         const serverSeedHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
-        
-        // For Devnet testing we return the unhashed seed to the client so it can be verified.
-        // In Mainnet, store serverSeed in a DB and ONLY return the Hash!
-        res.json({ 
+
+        // Stash for reveal at /api/roulette/resolve. Only the HASH leaves the server.
+        activeRouletteSeeds.set(playerPubkey, { serverSeed, serverSeedHash, createdAt: Date.now() });
+
+        res.json({
             success: true,
-            serverSeedHash, 
-            serverSeed 
+            serverSeedHash
         });
     } catch (error) {
         console.error("❌ Roulette Seed Error:", error);
@@ -430,11 +508,19 @@ app.post('/api/roulette/seed', (req, res) => {
 
 app.post('/api/roulette/resolve', async (req, res) => {
     try {
-        const { playerPublicKey, serverSeed, gamePda } = req.body;
-        
-        if (!playerPublicKey || !serverSeed || !gamePda) {
+        const { playerPublicKey, gamePda } = req.body;
+
+        if (!playerPublicKey || !gamePda) {
             return res.status(400).json({ success: false, error: "Missing required parameters" });
         }
+
+        // 🔒 B-C2 FIX: server holds the canonical serverSeed; clients can no
+        // longer supply it (and therefore can no longer pre-compute outcomes).
+        const seedRec = activeRouletteSeeds.get(playerPublicKey);
+        if (!seedRec) {
+            return res.status(400).json({ success: false, error: "No active roulette seed for this player. Fetch /api/roulette/seed first." });
+        }
+        const serverSeed = seedRec.serverSeed;
 
         const playerPubkeyObj = new anchor.web3.PublicKey(playerPublicKey);
         const gameStatePubkeyObj = new anchor.web3.PublicKey(gamePda);
@@ -493,7 +579,9 @@ app.post('/api/roulette/resolve', async (req, res) => {
         }
 
         console.log(`✅ [HOUSE] Roulette Resolved successfully! TX: ${resolveSignature}`);
-        res.json({ success: true, txSignature: resolveSignature });
+        // 🔒 B-C2 FIX: reveal seed only AFTER on-chain resolve, then evict.
+        activeRouletteSeeds.delete(playerPublicKey);
+        res.json({ success: true, txSignature: resolveSignature, serverSeed });
 
     } catch (error) {
         console.error("❌ Roulette Resolve Error:", error);
@@ -560,7 +648,7 @@ function getHandInfo(hand) {
     return { total, isSoft, isBlackjack: hand.length === 2 && total === 21 };
 }
 
-app.post('/api/blackjack/init', (req, res) => {
+app.post('/api/blackjack/init', async (req, res) => {
     try {
         const { playerPubkey, gamePubkey, clientSeed, betAmount } = req.body;
         if (!playerPubkey || !gamePubkey) return res.status(400).json({ error: "Missing keys" });
@@ -568,6 +656,20 @@ app.post('/api/blackjack/init', (req, res) => {
         const game = activeBlackjackGames.get(playerPubkey);
         if (!game || game.status !== "waiting_for_tx") {
             return res.status(400).json({ error: "Game session not initialized. Fetch seed first." });
+        }
+
+        // 🔒 B-C3 FIX: ensure the betAmount the client claims matches what was
+        // actually escrowed on-chain. Without this, a player could escrow 0.01 SOL
+        // and claim payouts based on a fictional 10 SOL "bet".
+        try {
+            const onChainBet = await readOnChainBetAmount(gamePubkey);
+            if (onChainBet !== BigInt(betAmount)) {
+                return res.status(400).json({
+                    error: `Bet mismatch: body=${betAmount} on-chain=${onChainBet.toString()}`
+                });
+            }
+        } catch (e) {
+            return res.status(400).json({ error: `Could not verify on-chain bet: ${e.message}` });
         }
 
         const serverSeed = game.serverSeed;
@@ -716,7 +818,22 @@ app.post('/api/blackjack/action', async (req, res) => {
             }
 
             game.status = "resolved";
-            
+
+            // 🔒 B-C3 FIX: final cross-check that the total escrowed amount on
+            // chain equals the off-chain accounting (initial bet + double + split)
+            // before the house signs the payout transfer.
+            try {
+                const onChainBet = await readOnChainBetAmount(game.gamePubkey);
+                const offChainTotal = BigInt(game.betAmount) + BigInt(game.splitBetAmount || 0);
+                if (onChainBet !== offChainTotal) {
+                    console.error(`❌ Blackjack escrow mismatch — on-chain=${onChainBet}, off-chain=${offChainTotal}`);
+                    return res.status(400).json({ error: "Escrow vs accounting mismatch; refusing payout." });
+                }
+            } catch (e) {
+                console.error("❌ Blackjack escrow verification failed:", e.message);
+                return res.status(500).json({ error: "Could not verify escrow before payout." });
+            }
+
             // Settle On-Chain
             await resolveBlackjackOnChain(playerPubkey, game.serverSeed, game.payout);
             activeBlackjackGames.delete(playerPubkey);
@@ -1089,6 +1206,20 @@ app.post('/api/patriots/play', async (req, res) => {
         const game = activePatriotsGames.get(playerPubkey);
         if (!game || game.status !== "waiting_for_tx") {
             return res.status(400).json({ error: "No active session. Fetch seed first." });
+        }
+
+        // 🔒 B-C3 FIX: betAmount drives every payout multiplier, so it MUST match
+        // the lamports actually escrowed on-chain. Otherwise a player can claim a
+        // 10 SOL bet while only escrowing 0.01 SOL.
+        try {
+            const onChainBet = await readOnChainBetAmount(gamePubkey);
+            if (onChainBet !== BigInt(betAmount)) {
+                return res.status(400).json({
+                    error: `Bet mismatch: body=${betAmount} on-chain=${onChainBet.toString()}`
+                });
+            }
+        } catch (e) {
+            return res.status(400).json({ error: `Could not verify on-chain bet: ${e.message}` });
         }
 
         // If Bonus Buy, the mathematical base bet is 100x smaller than the escrowed wager

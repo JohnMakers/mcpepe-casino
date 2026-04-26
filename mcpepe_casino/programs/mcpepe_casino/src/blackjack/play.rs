@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
 use crate::blackjack::state::BlackjackGame;
+use crate::constants::HOUSE_AUTHORITY;
+use crate::errors::CustomError;
 
 #[derive(Accounts)]
 #[instruction(bet_amount: u64, server_seed_hash: [u8; 32], client_seed: String, nonce: u64)]
@@ -49,8 +51,9 @@ pub struct ResolveBlackjack<'info> {
         close = player // Closes the state account and refunds rent to the player
     )]
     pub game: Account<'info, BlackjackGame>,
-    #[account(mut)]
-    pub house: Signer<'info>, // Only house can resolve
+    // 🔒 C-6 FIX: only the canonical House key may resolve a blackjack hand.
+    #[account(mut, address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
+    pub house: Signer<'info>,
     /// CHECK: Vault PDA
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: SystemAccount<'info>,
@@ -128,10 +131,19 @@ pub fn resolve_blackjack(
     payout: u64,
 ) -> Result<()> {
     let game = &ctx.accounts.game;
-    
+
     // Verify Provably Fair Seed exactly matches what was committed
     let hash = anchor_lang::solana_program::hash::hash(unhashed_server_seed.as_bytes());
-    require!(hash.to_bytes() == game.server_seed_hash, anchor_lang::error::ErrorCode::ConstraintRaw);
+    require!(hash.to_bytes() == game.server_seed_hash, CustomError::SeedMismatch);
+
+    // 🔒 C-6 FIX: hard upper bound on the payout the (already-trusted) house can
+    // request. The biggest legitimate blackjack outcome is split + double-down +
+    // insurance, which caps at ~5x the original bet. This prevents a compromised
+    // house key from issuing arbitrary transfers from the shared vault.
+    let max_payout = (game.bet_amount as u128)
+        .checked_mul(5)
+        .ok_or(CustomError::MathOverflow)?;
+    require!((payout as u128) <= max_payout, CustomError::PayoutTooLarge);
 
     if payout > 0 {
         let bump = ctx.bumps.vault;
