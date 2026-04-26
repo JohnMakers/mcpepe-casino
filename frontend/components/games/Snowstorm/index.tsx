@@ -28,7 +28,8 @@ export default function McPepeSnowstorm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ playerPublicKey: publicKey.toBase58(), betAmount })
       });
-      // 🚨 FIX: Destructure BOTH the hash and the unhashed seed
+      
+      // 🚨 CRITICAL FIX: Extract the unhashedServerSeed alongside the hash!
       const { serverSeedHash, unhashedServerSeed } = await initRes.json();
 
       // 2. Generate Client Seed & Nonce
@@ -43,7 +44,8 @@ export default function McPepeSnowstorm() {
       );
       const [vaultPDA] = PublicKey.findProgramAddressSync([Buffer.from("vault")], PROGRAM_ID);
 
-      const provider = new anchor.AnchorProvider(connection, { publicKey, signTransaction, signAllTransactions: async (txs: any[]) => txs } as any, {});      const program = new anchor.Program(idl as any, PROGRAM_ID, provider);
+      const provider = new anchor.AnchorProvider(connection, { publicKey, signTransaction, signAllTransactions: async (txs: any[]) => txs } as any, {});
+      const program = new anchor.Program(idl as any, PROGRAM_ID, provider);
 
       const tx = await program.methods.startSnowstorm(new anchor.BN(lamports), Array.from(Buffer.from(serverSeedHash, 'hex')), clientSeed, new anchor.BN(nonce))
         .accounts({
@@ -63,7 +65,7 @@ export default function McPepeSnowstorm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerPublicKey: publicKey.toBase58(),
-          serverSeed: unhashedServerSeed, // 🚨 FIX: Send the unhashed seed!
+          serverSeed: unhashedServerSeed, // 🚨 CRITICAL FIX: Send the unhashed seed back!
           clientSeed,
           nonce,
           betAmount: lamports
