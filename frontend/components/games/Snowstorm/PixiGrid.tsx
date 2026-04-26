@@ -201,9 +201,9 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                 container.addChild(sprite); 
                 // 🔥 REFINED ANIMATION: Small, slight constant slow pulsate
                 gsap.to(sprite.scale, { 
-                  x: 1.1, 
-                  y: 1.1, 
-                  duration: 0.8, 
+                  x: 1.03, 
+                  y: 1.03, 
+                  duration: 1.2, 
                   yoyo: true, 
                   repeat: -1, 
                   ease: "sine.inOut" });
