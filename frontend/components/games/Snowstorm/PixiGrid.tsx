@@ -2,328 +2,255 @@ import React, { useEffect, useRef } from 'react';
 import * as PIXI from 'pixi.js';
 import gsap from 'gsap';
 
+// ==========================================
+// ⚙️ UI CONFIGURATION & DEBUG MODE ⚙️
+// ==========================================
+const DEBUG_MODE = false; 
+
 const CANVAS_WIDTH = 1000;
 const CANVAS_HEIGHT = 700;
 const SYMBOL_SIZE = 137;
 
+// The Mask defines the visual "window" of the slot.
 const MASK_TOP = 130; 
 const MASK_BOTTOM = CANVAS_HEIGHT - 100;
 
-// 🎯 EXACT TILE COORDINATES
+// 🎯 THE PRECISION COORDINATE GRID
+// Manually adjust the X and Y for every single tile on the board
 const TILE_POSITIONS = [
+    // ROW 0 (Top Row)
     [ { x: 325.4, y: 211 },  { x: 500.3, y: 211 },  { x: 676.3, y: 211 } ],
+    // ROW 1 (Middle Row)
     [ { x: 325.4, y: 367 },  { x: 500.3, y: 367 },  { x: 676.3, y: 367 } ],
+    // ROW 2 (Bottom Row)
     [ { x: 325.4, y: 522 },  { x: 500.3, y: 522 },  { x: 676.3, y: 522 } ]
 ];
 
+// The exact Y pixel coordinate where symbols spawn before dropping
+const SPAWN_Y = MASK_TOP - SYMBOL_SIZE; 
+
+// ==========================================
+
 const PAYLINES = [
-    [[1,0], [1,1], [1,2]], 
-    [[0,0], [0,1], [0,2]], 
-    [[2,0], [2,1], [2,2]], 
-    [[0,0], [1,1], [2,2]], 
-    [[2,0], [1,1], [0,2]]  
+    [[1,0], [1,1], [1,2]], // Line 1: Middle Horizontal
+    [[0,0], [0,1], [0,2]], // Line 2: Top Horizontal
+    [[2,0], [2,1], [2,2]], // Line 3: Bottom Horizontal
+    [[0,0], [1,1], [2,2]], // Line 4: Diagonal Down
+    [[2,0], [1,1], [0,2]]  // Line 5: Diagonal Up
 ];
 
 const SYMBOL_MAP: Record<number, string> = {
-    0: '/snowstorm/snowstorm_mcpepe.png',
-    1: '/snowstorm/snowstorm_snowman.png',
-    2: '/snowstorm/snowstorm_polar.png',
-    3: '/snowstorm/snowstorm_snowmobile.png',
-    4: '/snowstorm/snowstorm_ski.png',
-    5: '/snowstorm/snowstorm_boots.png',
-    6: '/snowstorm/snowstorm_gloves.png',
-    7: '/snowstorm/snowstorm_cocoamug.png',
-    8: '/snowstorm/snowstorm_snowflake.png'
+  0: '/snowstorm/snowstorm_mcpepe.png',       
+  1: '/snowstorm/snowstorm_snowman.png',      
+  2: '/snowstorm/snowstorm_polar.png',     
+  3: '/snowstorm/snowstorm_snowmobile.png',   
+  4: '/snowstorm/snowstorm_ski.png',      
+  5: '/snowstorm/snowstorm_boots.png',     
+  6: '/snowstorm/snowstorm_gloves.png',    
+  7: '/snowstorm/snowstorm_cocoamug.png',       
+  8: '/snowstorm/snowstorm_snowflake.png'
 };
 
 interface PixiGridProps {
-    playData: any;
-    onAnimationComplete: () => void;
+  playData: any;
+  onAnimationComplete: () => void;
 }
 
 export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProps) {
-    const canvasRef = useRef<HTMLDivElement>(null);
-    const appRef = useRef<PIXI.Application | null>(null);
-    const containerRef = useRef<PIXI.Container | null>(null);
+  const pixiContainer = useRef<HTMLDivElement>(null);
+  const appRef = useRef<PIXI.Application | null>(null);
+  const gridContainerRef = useRef<PIXI.Container | null>(null);
 
-    // 🚀 PIXIJS v8 ASYNC INITIALIZATION
-    useEffect(() => {
-        if (!canvasRef.current || appRef.current) return;
-        let isMounted = true;
+  // 1. INITIALIZE PIXI ONCE
+  useEffect(() => {
+    if (!pixiContainer.current) return;
+    let isCancelled = false;
 
-        const app = new PIXI.Application();
-        appRef.current = app;
+    const initPixi = async () => {
+      const app = new PIXI.Application();
+      await app.init({
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT,
+        backgroundAlpha: 0,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true,
+      });
 
-        const initPixi = async () => {
-            await app.init({
-                width: CANVAS_WIDTH,
-                height: CANVAS_HEIGHT,
-                backgroundAlpha: 0,
-                resolution: window.devicePixelRatio || 1,
-                autoDensity: true,
-            });
+      if (isCancelled) {
+        app.destroy(true, true);
+        return;
+      }
 
-            if (!isMounted) {
-                app.destroy(true, { children: true });
-                return;
+      appRef.current = app;
+      if (pixiContainer.current) {
+        pixiContainer.current.innerHTML = ''; 
+        pixiContainer.current.appendChild(app.canvas);
+      }
+
+      // Background
+      await PIXI.Assets.load('/snowstorm/snowstorm_bg.png');
+      const bg = PIXI.Sprite.from('/snowstorm/snowstorm_bg.png');
+      bg.width = CANVAS_WIDTH;
+      bg.height = CANVAS_HEIGHT;
+      app.stage.addChild(bg);
+
+      // Container for the spinning reels
+      const gridContainer = new PIXI.Container();
+      app.stage.addChild(gridContainer);
+      gridContainerRef.current = gridContainer;
+      
+      // 🛠️ MASK LOGIC
+      const gridMask = new PIXI.Graphics();
+      gridMask.rect(0, MASK_TOP, CANVAS_WIDTH, MASK_BOTTOM - MASK_TOP);
+      gridMask.fill(0xffffff);
+      app.stage.addChild(gridMask);
+      gridContainer.mask = gridMask;
+
+      // 🛠️ DEBUG OVERLAYS (Now uses TILE_POSITIONS)
+      if (DEBUG_MODE) {
+          const debugGraphics = new PIXI.Graphics();
+          
+          // Spawn Line (Yellow)
+          debugGraphics.moveTo(0, SPAWN_Y);
+          debugGraphics.lineTo(CANVAS_WIDTH, SPAWN_Y);
+          debugGraphics.stroke({ color: 0xffff00, width: 2, alpha: 0.8 });
+
+          // Mask Boundaries (Green)
+          debugGraphics.rect(0, MASK_TOP, CANVAS_WIDTH, MASK_BOTTOM - MASK_TOP);
+          debugGraphics.stroke({ color: 0x00ff00, width: 4 }); 
+          
+          // Hitboxes and Center points
+          for (let r = 0; r < 3; r++) {
+            for (let c = 0; c < 3; c++) {
+               const pos = TILE_POSITIONS[r][c];
+               debugGraphics.circle(pos.x, pos.y, 6).fill(0xff0000); // Center dot
+               // Bounding box
+               debugGraphics.rect(pos.x - SYMBOL_SIZE/2, pos.y - SYMBOL_SIZE/2, SYMBOL_SIZE, SYMBOL_SIZE).stroke({ color: 0xff00ff, width: 2, alpha: 0.6 });
             }
+          }
+          app.stage.addChild(debugGraphics);
+      }
 
-            // 🔥 FIX 1: Enforce Canvas CSS Dimensions
-            const style = app.canvas.style as CSSStyleDeclaration;
-            style.width = '100%';
-            style.height = '100%';
-            style.position = 'absolute';
-            canvasRef.current?.appendChild(app.canvas);
+      await PIXI.Assets.load(Object.values(SYMBOL_MAP));
+    };
 
-            const mainContainer = new PIXI.Container();
-            app.stage.addChild(mainContainer);
+    initPixi();
 
-            // 🔥 FIX 2: Load the Background Image directly into Pixi
-            try {
-                await PIXI.Assets.load('/snowstorm/snowstorm_bg.png');
-                const bg = PIXI.Sprite.from('/snowstorm/snowstorm_bg.png');
-                bg.width = CANVAS_WIDTH;
-                bg.height = CANVAS_HEIGHT;
-                mainContainer.addChild(bg);
-            } catch (e) {
-                console.warn("Background asset failed to load");
-            }
+    return () => {
+      isCancelled = true;
+      if (appRef.current) {
+        appRef.current.destroy(true, true);
+        appRef.current = null;
+      }
+    };
+  }, []); 
 
-            const container = new PIXI.Container();
-            mainContainer.addChild(container);
-            containerRef.current = container;
+  // 2. TRIGGER SPIN ANIMATIONS
+  useEffect(() => {
+    if (!playData || !playData.matrix || !appRef.current || !gridContainerRef.current) return;
 
-            // Visual Window Mask
-            const mask = new PIXI.Graphics().rect(0, MASK_TOP, CANVAS_WIDTH, MASK_BOTTOM - MASK_TOP).fill(0xffffff);
-            mainContainer.addChild(mask);
-            container.mask = mask;
+    const app = appRef.current;
+    const container = gridContainerRef.current;
+    
+    // Clear previous spin results
+    container.removeChildren();
 
-            // Preload Symbol Textures
-            Object.values(SYMBOL_MAP).forEach(url => {
-                if (!PIXI.Assets.cache.has(url)) PIXI.Assets.add({ alias: url, src: url });
-            });
-            await PIXI.Assets.load(Object.values(SYMBOL_MAP));
+    // Track sprites to pulse them later on a win
+    const spriteMatrix: PIXI.Sprite[][] = [[], [], []];
 
-            // 🔥 FIX 3: Draw a default static grid if no spin data exists yet
-            if (!playData) {
-                const defaultMatrix = [
-                    [8, 5, 2],
-                    [7, 4, 1],
-                    [6, 3, 8]
-                ];
-                for (let col = 0; col < 3; col++) {
-                    for (let row = 0; row < 3; row++) {
-                        const symVal = defaultMatrix[row][col];
-                        const texture = PIXI.Texture.from(SYMBOL_MAP[symVal]);
-                        const sprite = new PIXI.Sprite(texture);
-                        sprite.width = SYMBOL_SIZE;
-                        sprite.height = SYMBOL_SIZE;
-                        sprite.anchor.set(0.5);
-                        sprite.x = TILE_POSITIONS[row][col].x;
-                        sprite.y = TILE_POSITIONS[row][col].y;
-                        container.addChild(sprite);
-                    }
-                }
-            }
-        };
-
-        initPixi();
-
-        return () => {
-            isMounted = false;
-            if (appRef.current) {
-                appRef.current.destroy(true, { children: true });
-                appRef.current = null;
-            }
-        };
-    }, []);
-
-    // 🎬 MAIN SPIN TIMELINE
-    useEffect(() => {
-        if (!playData || !appRef.current || !containerRef.current) return;
-
-        const app = appRef.current;
-        const container = containerRef.current;
-
-        container.removeChildren();
-        gsap.killTweensOf("*");
-
-        const baseMatrix = playData.initialMatrix || playData.matrix;
-        const finalMatrix = playData.matrix;
+    for (let c = 0; c < 3; c++) {
+      for (let r = 0; r < 3; r++) {
+        const symbolId = playData.matrix[r][c];
+        const sprite = PIXI.Sprite.from(SYMBOL_MAP[symbolId]);
+        const targetPos = TILE_POSITIONS[r][c];
         
-        const spriteMatrix: PIXI.Sprite[][] = [
-            [null as any, null as any, null as any],
-            [null as any, null as any, null as any],
-            [null as any, null as any, null as any]
-        ];
+        sprite.anchor.set(0.5);
+        sprite.width = SYMBOL_SIZE;
+        sprite.height = SYMBOL_SIZE;
+        
+        // Spawn precisely at the exact X coordinate, but at the SPAWN_Y height
+        sprite.x = targetPos.x;
+        sprite.y = SPAWN_Y; 
 
-        const tl = gsap.timeline({ 
-            onComplete: () => {
-                onAnimationComplete();
-            } 
+        container.addChild(sprite);
+        
+        if (!spriteMatrix[r]) spriteMatrix[r] = [];
+        spriteMatrix[r][c] = sprite;
+
+        gsap.to(sprite, {
+          y: targetPos.y, // Drop exactly to its precision coordinate
+          duration: 0.4 + (c * 0.2), 
+          ease: "bounce.out",
         });
+      }
+    }
 
-        let currentTime = 0;
-
-        // 1. DROP INITIAL GRID
-        for (let col = 0; col < 3; col++) {
-            for (let row = 0; row < 3; row++) {
-                const symVal = baseMatrix[row][col];
-                const texture = PIXI.Texture.from(SYMBOL_MAP[symVal]);
-                const sprite = new PIXI.Sprite(texture);
-
-                sprite.width = SYMBOL_SIZE;
-                sprite.height = SYMBOL_SIZE;
-                sprite.anchor.set(0.5);
-
-                const targetPos = TILE_POSITIONS[row][col];
-                sprite.x = targetPos.x;
-                sprite.y = MASK_TOP - 150; 
-
-                spriteMatrix[row][col] = sprite;
-                container.addChild(sprite);
-
-                tl.to(sprite, {
-                    y: targetPos.y,
-                    duration: 0.4,
-                    ease: "back.out(1.2)"
-                }, currentTime + (col * 0.15) + (row * 0.05));
-            }
-        }
-
-        currentTime += 0.4 + (2 * 0.15) + (2 * 0.05) + 0.3; 
-
-        // 2. THE RESPIN CUTSCENE
-        if (playData.respinData) {
-            const spinCol = playData.respinData.spin;
-            const heldCols = playData.respinData.held;
-
-            const respinText = new PIXI.Text({
-                text: "SNOWSTORM RESPIN!",
-                style: {
-                    fontFamily: 'Arial', fontSize: 58, fontWeight: '900',
-                    fill: '#00ffff', stroke: { color: '#000000', width: 6 },
-                    dropShadow: { color: '#000000', blur: 8, distance: 4, alpha: 0.9 }
-                }
+    // Evaluate features after reels land
+    const timeoutId = setTimeout(() => {
+      
+      // 🏆 WINNING LINE PULSE EFFECT
+      if (playData.winningLines && playData.winningLines.length > 0) {
+        playData.winningLines.forEach((win: any) => {
+          const lineCoords = PAYLINES[win.lineIndex];
+          if (lineCoords) {
+            lineCoords.forEach(coord => {
+              const r = coord[0];
+              const c = coord[1];
+              const sprite = spriteMatrix[r][c];
+              if (sprite) {
+                container.addChild(sprite); 
+                // 🔥 REFINED ANIMATION: Small, slight constant slow pulsate
+                gsap.to(sprite.scale, { 
+                  x: 0.4, 
+                  y: 0.4, 
+                  duration: 1.2, 
+                  yoyo: true, 
+                  repeat: -1, 
+                  ease: "sine.inOut" });
+               }
             });
-            respinText.anchor.set(0.5);
-            respinText.x = CANVAS_WIDTH / 2;
-            respinText.y = CANVAS_HEIGHT / 2;
-            respinText.scale.set(0);
-            app.stage.addChild(respinText);
+          }
+        });
+      }
 
-            tl.to(respinText.scale, { x: 1, y: 1, duration: 0.5, ease: "back.out(1.7)" }, currentTime);
+      // ❄️ BLIZZARD MULTIPLIER TEXT
+      if (playData.multiplier > 1) {
+          const multText = new PIXI.Text({
+              text: `BLIZZARD MULTIPLIER: ${playData.multiplier}X!`,
+              style: {
+                  fontFamily: 'Arial', 
+                  fontSize: 54, 
+                  fontWeight: '900',
+                  fill: '#00ffff', 
+                  stroke: { color: '#ffffff', width: 6 }, 
+                  dropShadow: { color: '#000000', blur: 6, distance: 4, alpha: 0.9 }
+              }
+          });
+          multText.anchor.set(0.5);
+          multText.x = CANVAS_WIDTH / 2;
+          multText.y = CANVAS_HEIGHT / 2;
+          multText.scale.set(0.1);
+          app.stage.addChild(multText);
 
-            heldCols.forEach((col: number) => {
-                for (let row = 0; row < 3; row++) {
-                    tl.to(spriteMatrix[row][col], { tint: 0xaaffff, duration: 0.3 }, currentTime);
-                }
-            });
+          gsap.to(multText.scale, { x: 1, y: 1, duration: 0.5, ease: "back.out(1.7)" });
+          gsap.to(multText, { 
+              alpha: 0, 
+              duration: 0.5, 
+              delay: 2.5,
+              onComplete: () => app.stage.removeChild(multText)
+          });
+      }
+      onAnimationComplete();
+    }, 1200);
 
-            currentTime += 1.0; 
+    return () => clearTimeout(timeoutId);
+  }, [playData]); 
 
-            tl.to(respinText, { alpha: 0, duration: 0.3 }, currentTime);
-
-            for (let row = 0; row < 3; row++) {
-                const oldSprite = spriteMatrix[row][spinCol];
-                tl.to(oldSprite, {
-                    y: MASK_BOTTOM + 200,
-                    duration: 0.4,
-                    ease: "power2.in"
-                }, currentTime + (row * 0.05));
-            }
-
-            currentTime += 0.5;
-
-            for (let row = 0; row < 3; row++) {
-                const newSymVal = finalMatrix[row][spinCol];
-                const texture = PIXI.Texture.from(SYMBOL_MAP[newSymVal]);
-                const newSprite = new PIXI.Sprite(texture);
-
-                newSprite.width = SYMBOL_SIZE;
-                newSprite.height = SYMBOL_SIZE;
-                newSprite.anchor.set(0.5);
-
-                const targetPos = TILE_POSITIONS[row][spinCol];
-                newSprite.x = targetPos.x;
-                newSprite.y = MASK_TOP - 150; 
-
-                spriteMatrix[row][spinCol] = newSprite;
-                container.addChild(newSprite);
-
-                tl.to(newSprite, {
-                    y: targetPos.y,
-                    duration: 0.5,
-                    ease: "back.out(1.4)"
-                }, currentTime + (row * 0.1));
-            }
-
-            currentTime += 0.8;
-
-            heldCols.forEach((col: number) => {
-                for (let row = 0; row < 3; row++) {
-                    tl.to(spriteMatrix[row][col], { tint: 0xffffff, duration: 0.3 }, currentTime);
-                }
-            });
-            
-            currentTime += 0.3;
-        }
-
-        // 3. WINNING LINES & MULTIPLIER POPUP
-        tl.add(() => {
-            if (playData.winningLines && playData.winningLines.length > 0) {
-                playData.winningLines.forEach((win: any) => {
-                    const lineCoords = PAYLINES[win.lineIndex];
-                    if (lineCoords) {
-                        lineCoords.forEach(coord => {
-                            const r = coord[0];
-                            const c = coord[1];
-                            const sprite = spriteMatrix[r][c];
-                            if (sprite) {
-                                container.addChild(sprite); 
-                                // Clean subtle 1.04 pulsate
-                                gsap.to(sprite.scale, { 
-                                    x: 1.04, 
-                                    y: 1.04, 
-                                    duration: 1.2, 
-                                    yoyo: true, 
-                                    repeat: -1, 
-                                    ease: "sine.inOut" 
-                                });
-                            }
-                        });
-                    }
-                });
-            }
-
-            if (playData.multiplier > 1) {
-                const multText = new PIXI.Text({
-                    text: `BLIZZARD MULTIPLIER: ${playData.multiplier}X!`,
-                    style: {
-                        fontFamily: 'Arial', fontSize: 54, fontWeight: '900',
-                        fill: '#00ffff', stroke: { color: '#ffffff', width: 6 }, 
-                        dropShadow: { color: '#000000', blur: 6, distance: 4, alpha: 0.9 }
-                    }
-                });
-                multText.anchor.set(0.5);
-                multText.x = CANVAS_WIDTH / 2;
-                multText.y = CANVAS_HEIGHT / 2;
-                multText.scale.set(0);
-                app.stage.addChild(multText);
-
-                gsap.to(multText.scale, { x: 1, y: 1, duration: 0.5, ease: "back.out(1.7)" });
-                gsap.to(multText, { 
-                    alpha: 0, duration: 0.5, delay: 2.0,
-                    onComplete: () => app.stage.removeChild(multText)
-                });
-            }
-        }, currentTime);
-
-    }, [playData]);
-
-    return (
-        <div className="relative w-full max-w-5xl aspect-[10/7] mx-auto overflow-hidden">
-            <div ref={canvasRef} className="absolute inset-0 w-full h-full" />
-        </div>
-    );
+  return (
+    <div 
+      ref={pixiContainer} 
+      style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}` }}
+      className="flex justify-center items-center rounded-2xl overflow-hidden shadow-2xl shadow-blue-900/50 border-[6px] border-blue-400 bg-blue-950/80 backdrop-blur-sm max-w-full h-auto" 
+    />
+  );
 }
