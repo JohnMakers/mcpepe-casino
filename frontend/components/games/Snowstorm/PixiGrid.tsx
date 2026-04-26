@@ -9,7 +9,7 @@ const DEBUG_MODE = true;
 
 const CANVAS_WIDTH = 1000;
 const CANVAS_HEIGHT = 700;
-const SYMBOL_SIZE = 140;
+const SYMBOL_SIZE = 110;
 
 // The Mask defines the visual "window" of the slot.
 const MASK_TOP = 110; 
@@ -19,11 +19,11 @@ const MASK_BOTTOM = CANVAS_HEIGHT - 100;
 // Manually adjust the X and Y for every single tile on the board
 const TILE_POSITIONS = [
     // ROW 0 (Top Row)
-    [ { x: 320, y: 175 },  { x: 500, y: 175 },  { x: 680, y: 175 } ],
+    [ { x: 323, y: 190 },  { x: 500, y: 190 },  { x: 677, y: 190 } ],
     // ROW 1 (Middle Row)
-    [ { x: 320, y: 350 },  { x: 500, y: 350 },  { x: 680, y: 350 } ],
+    [ { x: 323, y: 360 },  { x: 500, y: 360 },  { x: 677, y: 360 } ],
     // ROW 2 (Bottom Row)
-    [ { x: 320, y: 525 },  { x: 500, y: 525 },  { x: 680, y: 525 } ]
+    [ { x: 323, y: 525 },  { x: 500, y: 525 },  { x: 677, y: 525 } ]
 ];
 
 // The exact Y pixel coordinate where symbols spawn before dropping
