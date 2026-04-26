@@ -27,15 +27,15 @@ const SPACING = 140;
 export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProps) {
   const pixiContainer = useRef<HTMLDivElement>(null);
   const appRef = useRef<PIXI.Application | null>(null);
+  const gridContainerRef = useRef<PIXI.Container | null>(null);
 
+  // 1. INITIALIZE PIXI ONCE
   useEffect(() => {
     if (!pixiContainer.current) return;
-
     let isCancelled = false;
-    const app = new PIXI.Application();
 
-    const setupPixi = async () => {
-      // PixiJS v8 requires async initialization
+    const initPixi = async () => {
+      const app = new PIXI.Application();
       await app.init({
         width: CANVAS_WIDTH,
         height: CANVAS_HEIGHT,
@@ -44,31 +44,34 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         autoDensity: true,
       });
 
-      // Prevent race conditions if the component unmounts before init finishes
       if (isCancelled) {
         app.destroy(true, true);
         return;
       }
 
-      // 'app.view' is now 'app.canvas' in v8
+      appRef.current = app;
       if (pixiContainer.current) {
+        pixiContainer.current.innerHTML = ''; // Prevent React Strict Mode duplicate canvas injection
         pixiContainer.current.appendChild(app.canvas);
       }
-      appRef.current = app;
 
-      // Background
+      // Preload and mount Background
+      await PIXI.Assets.load('/snowstorm/snowstorm_bg.png');
       const bg = PIXI.Sprite.from('/snowstorm/snowstorm_bg.png');
       bg.width = CANVAS_WIDTH;
       bg.height = CANVAS_HEIGHT;
       app.stage.addChild(bg);
 
-      // Trigger spin if we have data
-      if (playData && playData.matrix) {
-        animateSpin(app, playData.matrix, playData);
-      }
+      // Create an isolated container for just the spinning reels
+      const gridContainer = new PIXI.Container();
+      app.stage.addChild(gridContainer);
+      gridContainerRef.current = gridContainer;
+      
+      // Preload symbols so they don't pop-in visually on the first spin
+      await PIXI.Assets.load(Object.values(SYMBOL_MAP));
     };
 
-    setupPixi();
+    initPixi();
 
     return () => {
       isCancelled = true;
@@ -77,21 +80,24 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         appRef.current = null;
       }
     };
-  }, [playData]);
+  }, []); // <-- Empty array ensures we only boot up WebGL once!
 
-  const animateSpin = (app: PIXI.Application, matrix: number[][], data: any) => {
-    const container = new PIXI.Container();
-    app.stage.addChild(container);
+  // 2. TRIGGER SPIN ANIMATIONS
+  useEffect(() => {
+    if (!playData || !playData.matrix || !appRef.current || !gridContainerRef.current) return;
+
+    const app = appRef.current;
+    const container = gridContainerRef.current;
+    
+    // Clear previous spin results
+    container.removeChildren();
 
     const startX = (CANVAS_WIDTH - (SPACING * 2)) / 2;
     const startY = (CANVAS_HEIGHT - (SPACING * 2)) / 2;
 
-    const sprites: PIXI.Sprite[] = [];
-
-    // Construct Grid
     for (let c = 0; c < 3; c++) {
       for (let r = 0; r < 3; r++) {
-        const symbolId = matrix[r][c];
+        const symbolId = playData.matrix[r][c];
         const sprite = PIXI.Sprite.from(SYMBOL_MAP[symbolId]);
         
         sprite.anchor.set(0.5);
@@ -99,26 +105,23 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         sprite.height = SYMBOL_SIZE;
         
         sprite.x = startX + (c * SPACING);
-        sprite.y = startY - 400; // Start off-screen top
+        sprite.y = startY - 400; // Drop from top
 
         container.addChild(sprite);
-        sprites.push(sprite);
 
-        // Spin Drop Animation
         gsap.to(sprite, {
           y: startY + (r * SPACING),
-          duration: 0.4 + (c * 0.2), // Reel delay
+          duration: 0.4 + (c * 0.2), // Cascading delay from left to right
           ease: "bounce.out",
         });
       }
     }
 
-    // After reels land, check mechanics
-    setTimeout(() => {
-      // 1. Blizzard Multiplier Wheel Effect
-      if (data.multiplier > 1) {
+    // Wait for animation to finish, then evaluate features
+    const timeoutId = setTimeout(() => {
+      if (playData.multiplier > 1) {
           const multText = new PIXI.Text({
-              text: `BLIZZARD MULTIPLIER: ${data.multiplier}X!`,
+              text: `BLIZZARD MULTIPLIER: ${playData.multiplier}X!`,
               style: {
                   fontFamily: 'Arial', 
                   fontSize: 48, 
@@ -134,12 +137,25 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           app.stage.addChild(multText);
 
           gsap.to(multText.scale, { x: 1, y: 1, duration: 0.5, ease: "back.out(1.7)" });
-          gsap.to(multText, { alpha: 0, duration: 0.5, delay: 2 });
+          gsap.to(multText, { 
+              alpha: 0, 
+              duration: 0.5, 
+              delay: 2,
+              onComplete: () => app.stage.removeChild(multText)
+          });
       }
-
       onAnimationComplete();
     }, 1500);
-  };
 
-  return <div ref={pixiContainer} className="flex justify-center rounded-xl overflow-hidden shadow-2xl shadow-blue-900/50 border-4 border-blue-300" />;
+    return () => clearTimeout(timeoutId);
+  }, [playData]); // Only re-runs when new spin data hits
+
+  return (
+    <div 
+      ref={pixiContainer} 
+      // Ensure the container has explicit dimensions to prevent collapsing while Pixi initializes
+      style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, maxWidth: '100%' }}
+      className="flex justify-center items-center rounded-xl overflow-hidden shadow-2xl shadow-blue-900/50 border-4 border-blue-300 bg-blue-950" 
+    />
+  );
 }

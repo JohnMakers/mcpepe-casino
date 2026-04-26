@@ -28,7 +28,8 @@ export default function McPepeSnowstorm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ playerPublicKey: publicKey.toBase58(), betAmount })
       });
-      const { serverSeedHash } = await initRes.json();
+      // 🚨 FIX: Destructure BOTH the hash and the unhashed seed
+      const { serverSeedHash, unhashedServerSeed } = await initRes.json();
 
       // 2. Generate Client Seed & Nonce
       const clientSeed = Math.random().toString(36).substring(2, 15);
@@ -62,7 +63,7 @@ export default function McPepeSnowstorm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerPublicKey: publicKey.toBase58(),
-          serverSeed: serverSeedHash, // Note: Send the real serverSeed in production cache to verify!
+          serverSeed: unhashedServerSeed, // 🚨 FIX: Send the unhashed seed!
           clientSeed,
           nonce,
           betAmount: lamports
