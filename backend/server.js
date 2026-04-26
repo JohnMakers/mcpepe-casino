@@ -1750,7 +1750,7 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
             }
         }
 
-        // 3. Snowstorm Respin Logic (Stacked reels, no win)
+        // 3. Snowstorm Respin Logic
         let respinData = null;
         if (totalWinFactor === 0) {
             const col0 = [matrix[0][0], matrix[1][0], matrix[2][0]];
@@ -1781,7 +1781,10 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
 
         if (totalWinFactor > 800) totalWinFactor = 800;
         
-    // 5. Blockchain Resolution CPI (Armored with Retry Loop)
+        // 🔥 CRITICAL FIX: The missing payout calculation that was crashing the server
+        const totalPayout = Math.floor(betAmount * totalWinFactor);
+        
+        // 5. Blockchain Resolution CPI (Armored with Retry Loop)
         const [gameStatePDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("snowstorm"), new anchor.web3.PublicKey(playerPublicKey).toBuffer(), new anchor.BN(nonce).toArrayLike(Buffer, 'le', 8)], 
             PROGRAM_ID
@@ -1794,7 +1797,7 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
         seedLengthBuffer.writeUInt32LE(seedBuffer.length, 0);
         
         const payoutBuffer = Buffer.alloc(8);
-        payoutBuffer.writeBigUInt64LE(BigInt(Math.floor(totalPayout)));
+        payoutBuffer.writeBigUInt64LE(BigInt(totalPayout));
 
         const ixData = Buffer.concat([sighash, seedLengthBuffer, seedBuffer, payoutBuffer]);
         
@@ -1820,14 +1823,13 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
                 tx.feePayer = houseKeypair.publicKey;
                 tx.sign(houseKeypair);
 
-                // skipPreflight prevents Anchor from crashing on simulation if the RPC is lagging
                 txSig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
                 const confirmation = await connection.confirmTransaction({ signature: txSig, blockhash, lastValidBlockHeight }, "confirmed");
                 
                 if (confirmation.value.err) {
                     throw new Error(`On-chain rejection: ${JSON.stringify(confirmation.value.err)}`);
                 }
-                break; // Success! Break out of the loop
+                break; 
             } catch (err) {
                 console.log(`⚠️ Network retry for Snowstorm Payout... (${retries} left). Error: ${err.message}`);
                 await new Promise(r => setTimeout(r, 2000));
@@ -1836,7 +1838,6 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
             }
         }
 
-        // Return the final result to the frontend
         res.json({
             success: true,
             txSig,
@@ -1850,7 +1851,8 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
 
     } catch (err) {
         console.error("Snowstorm Resolve Error:", err);
-        res.status(500).json({ error: "Failed to resolve on-chain." });
+        // Added the raw error message to the response so if anything else fails, it prints to your console instead of a generic 500
+        res.status(500).json({ error: err.message || "Failed to resolve on-chain." });
     }
 });
 
