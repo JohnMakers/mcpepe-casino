@@ -83,25 +83,28 @@ export default function McPepeSnowstorm() {
   };
 
   return (
-    <div className="flex flex-col items-center bg-blue-950 min-h-screen py-10">
-      <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-300 drop-shadow-lg mb-8 uppercase tracking-widest">
+    <div className="flex flex-col items-center bg-blue-950 min-h-screen py-10 w-full">
+      <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-300 drop-shadow-lg mb-8 uppercase tracking-widest text-center">
         McPepe Snowstorm
       </h1>
       
-      <div className="mb-6">
+      {/* 🛠️ UPDATED: Added a responsive max-width wrapper so the larger canvas scales beautifully */}
+      <div className="mb-6 w-full max-w-5xl flex justify-center px-4">
         <PixiGrid 
           playData={playData} 
           onAnimationComplete={() => setIsSpinning(false)} 
         />
       </div>
 
-      {playData && playData.payout > 0 && !isSpinning && (
-        <div className="text-3xl text-green-400 font-bold mb-4 animate-pulse">
-          YOU WON {(playData.payout / 1e9).toFixed(4)} SOL!
-        </div>
-      )}
+      <div className="h-16 flex items-center justify-center">
+        {playData && playData.payout > 0 && !isSpinning && (
+          <div className="text-4xl text-green-400 font-black animate-pulse drop-shadow-[0_0_15px_rgba(74,222,128,0.8)]">
+            WINNER: {(playData.payout / 1e9).toFixed(4)} SOL!
+          </div>
+        )}
+      </div>
 
-      <div className="flex gap-4 items-center bg-blue-900/50 p-4 rounded-xl border-2 border-blue-500">
+      <div className="flex gap-4 items-center bg-blue-900/50 p-4 rounded-xl border-2 border-blue-500 mt-4">
         <span className="text-white font-bold text-xl">BET:</span>
         <input 
           type="number" 
@@ -116,10 +119,10 @@ export default function McPepeSnowstorm() {
         <button 
           onClick={handleSpin}
           disabled={isSpinning}
-          className={`ml-4 px-10 py-3 rounded-lg font-black uppercase tracking-widest transition-all ${
+          className={`ml-4 px-12 py-4 rounded-lg font-black text-xl uppercase tracking-widest transition-all ${
             isSpinning 
               ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-              : 'bg-gradient-to-r from-blue-400 to-cyan-300 hover:from-blue-300 hover:to-cyan-200 text-blue-900 shadow-[0_0_20px_rgba(103,232,249,0.5)]'
+              : 'bg-gradient-to-r from-blue-400 to-cyan-300 hover:from-blue-300 hover:to-cyan-200 text-blue-900 shadow-[0_0_20px_rgba(103,232,249,0.5)] hover:scale-105'
           }`}
         >
           {isSpinning ? 'BLIZZARD INCOMING...' : 'SPIN'}

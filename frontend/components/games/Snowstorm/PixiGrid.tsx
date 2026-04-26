@@ -2,10 +2,35 @@ import React, { useEffect, useRef } from 'react';
 import * as PIXI from 'pixi.js';
 import gsap from 'gsap';
 
-interface PixiGridProps {
-  playData: any;
-  onAnimationComplete: () => void;
-}
+// ==========================================
+// ⚙️ UI CONFIGURATION & DEBUG MODE ⚙️
+// ==========================================
+// Set to true to overlay bright hitboxes, grid centers, and the mask boundaries.
+// Tweak these variables, save the file, and watch the UI update instantly!
+const DEBUG_MODE = true; 
+
+const CANVAS_WIDTH = 1000;
+const CANVAS_HEIGHT = 700;
+
+// Grid layout variables
+const SYMBOL_SIZE = 160;
+const SPACING_X = 180;
+const SPACING_Y = 175;
+
+// The Mask defines the visual "window" of the slot.
+// Symbols above MASK_TOP or below MASK_BOTTOM will be invisible!
+const MASK_TOP = 110; 
+const MASK_BOTTOM = CANVAS_HEIGHT - 110;
+
+// ==========================================
+
+const PAYLINES = [
+    [[1,0], [1,1], [1,2]], // Line 1: Middle Horizontal
+    [[0,0], [0,1], [0,2]], // Line 2: Top Horizontal
+    [[2,0], [2,1], [2,2]], // Line 3: Bottom Horizontal
+    [[0,0], [1,1], [2,2]], // Line 4: Diagonal Down
+    [[2,0], [1,1], [0,2]]  // Line 5: Diagonal Up
+];
 
 const SYMBOL_MAP: Record<number, string> = {
   0: '/snowstorm/snowstorm_mcpepe.png',       
@@ -19,10 +44,10 @@ const SYMBOL_MAP: Record<number, string> = {
   8: '/snowstorm/snowstorm_snowflake.png'
 };
 
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 600;
-const SYMBOL_SIZE = 120;
-const SPACING = 140;
+interface PixiGridProps {
+  playData: any;
+  onAnimationComplete: () => void;
+}
 
 export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProps) {
   const pixiContainer = useRef<HTMLDivElement>(null);
@@ -51,11 +76,11 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
       appRef.current = app;
       if (pixiContainer.current) {
-        pixiContainer.current.innerHTML = ''; // Prevent React Strict Mode duplicate canvas injection
+        pixiContainer.current.innerHTML = ''; 
         pixiContainer.current.appendChild(app.canvas);
       }
 
-      // Preload and mount Background
+      // Background
       await PIXI.Assets.load('/snowstorm/snowstorm_bg.png');
       const bg = PIXI.Sprite.from('/snowstorm/snowstorm_bg.png');
       bg.width = CANVAS_WIDTH;
@@ -67,7 +92,37 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       app.stage.addChild(gridContainer);
       gridContainerRef.current = gridContainer;
       
-      // Preload symbols so they don't pop-in visually on the first spin
+      // 🛠️ CREATE VISUAL MASK
+      // Anything inside gridContainer outside this rectangle is invisible
+      const gridMask = new PIXI.Graphics();
+      gridMask.rect(0, MASK_TOP, CANVAS_WIDTH, MASK_BOTTOM - MASK_TOP);
+      gridMask.fill(0xffffff);
+      app.stage.addChild(gridMask);
+      gridContainer.mask = gridMask;
+
+      // 🛠️ DEBUG MODE OVERLAYS
+      if (DEBUG_MODE) {
+          const debugGraphics = new PIXI.Graphics();
+          
+          // Draw green mask boundaries (Spawn & Vanish lines)
+          debugGraphics.rect(0, MASK_TOP, CANVAS_WIDTH, MASK_BOTTOM - MASK_TOP);
+          debugGraphics.stroke({ color: 0x00ff00, width: 4 }); 
+          
+          // Draw red center dots and purple hitboxes
+          const startX = (CANVAS_WIDTH - (SPACING_X * 2)) / 2;
+          const startY = (CANVAS_HEIGHT - (SPACING_Y * 2)) / 2;
+          
+          for (let c = 0; c < 3; c++) {
+            for (let r = 0; r < 3; r++) {
+               const cx = startX + (c * SPACING_X);
+               const cy = startY + (r * SPACING_Y);
+               debugGraphics.circle(cx, cy, 6).fill(0xff0000);
+               debugGraphics.rect(cx - SYMBOL_SIZE/2, cy - SYMBOL_SIZE/2, SYMBOL_SIZE, SYMBOL_SIZE).stroke({ color: 0xff00ff, width: 2, alpha: 0.6 });
+            }
+          }
+          app.stage.addChild(debugGraphics);
+      }
+
       await PIXI.Assets.load(Object.values(SYMBOL_MAP));
     };
 
@@ -80,7 +135,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         appRef.current = null;
       }
     };
-  }, []); // <-- Empty array ensures we only boot up WebGL once!
+  }, []); 
 
   // 2. TRIGGER SPIN ANIMATIONS
   useEffect(() => {
@@ -92,8 +147,11 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
     // Clear previous spin results
     container.removeChildren();
 
-    const startX = (CANVAS_WIDTH - (SPACING * 2)) / 2;
-    const startY = (CANVAS_HEIGHT - (SPACING * 2)) / 2;
+    const startX = (CANVAS_WIDTH - (SPACING_X * 2)) / 2;
+    const startY = (CANVAS_HEIGHT - (SPACING_Y * 2)) / 2;
+
+    // Track sprites to pulse them later on a win
+    const spriteMatrix: PIXI.Sprite[][] = [[], [], []];
 
     for (let c = 0; c < 3; c++) {
       for (let r = 0; r < 3; r++) {
@@ -104,30 +162,57 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         sprite.width = SYMBOL_SIZE;
         sprite.height = SYMBOL_SIZE;
         
-        sprite.x = startX + (c * SPACING);
-        sprite.y = startY - 400; // Drop from top
+        sprite.x = startX + (c * SPACING_X);
+        // Start cleanly hidden just above the top mask line
+        sprite.y = MASK_TOP - SYMBOL_SIZE; 
 
         container.addChild(sprite);
+        
+        if (!spriteMatrix[r]) spriteMatrix[r] = [];
+        spriteMatrix[r][c] = sprite;
 
         gsap.to(sprite, {
-          y: startY + (r * SPACING),
-          duration: 0.4 + (c * 0.2), // Cascading delay from left to right
+          y: startY + (r * SPACING_Y),
+          duration: 0.4 + (c * 0.2), // Reels drop sequentially left-to-right
           ease: "bounce.out",
         });
       }
     }
 
-    // Wait for animation to finish, then evaluate features
+    // Evaluate features after reels land
     const timeoutId = setTimeout(() => {
+      
+      // 🏆 WINNING LINE PULSE EFFECT
+      if (playData.winningLines && playData.winningLines.length > 0) {
+        playData.winningLines.forEach((win: any) => {
+          const lineCoords = PAYLINES[win.lineIndex];
+          if (lineCoords) {
+            lineCoords.forEach(coord => {
+               const r = coord[0];
+               const c = coord[1];
+               const sprite = spriteMatrix[r][c];
+               if (sprite) {
+                   // Pop the winning symbols to the front of the layer index
+                   container.addChild(sprite); 
+                   // Pulse the scale up and down
+                   gsap.to(sprite.scale, { x: 1.35, y: 1.35, duration: 0.25, yoyo: true, repeat: 3, ease: "sine.inOut" });
+               }
+            });
+          }
+        });
+      }
+
+      // ❄️ BLIZZARD MULTIPLIER TEXT
       if (playData.multiplier > 1) {
           const multText = new PIXI.Text({
               text: `BLIZZARD MULTIPLIER: ${playData.multiplier}X!`,
               style: {
                   fontFamily: 'Arial', 
-                  fontSize: 48, 
+                  fontSize: 54, 
+                  fontWeight: '900',
                   fill: '#00ffff', 
-                  stroke: { color: '#ffffff', width: 4 }, 
-                  dropShadow: { color: '#000000', blur: 4, distance: 4, alpha: 0.8 }
+                  stroke: { color: '#ffffff', width: 6 }, 
+                  dropShadow: { color: '#000000', blur: 6, distance: 4, alpha: 0.9 }
               }
           });
           multText.anchor.set(0.5);
@@ -140,22 +225,21 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           gsap.to(multText, { 
               alpha: 0, 
               duration: 0.5, 
-              delay: 2,
+              delay: 2.5,
               onComplete: () => app.stage.removeChild(multText)
           });
       }
       onAnimationComplete();
-    }, 1500);
+    }, 1200);
 
     return () => clearTimeout(timeoutId);
-  }, [playData]); // Only re-runs when new spin data hits
+  }, [playData]); 
 
   return (
     <div 
       ref={pixiContainer} 
-      // Ensure the container has explicit dimensions to prevent collapsing while Pixi initializes
-      style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, maxWidth: '100%' }}
-      className="flex justify-center items-center rounded-xl overflow-hidden shadow-2xl shadow-blue-900/50 border-4 border-blue-300 bg-blue-950" 
+      style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}` }}
+      className="flex justify-center items-center rounded-2xl overflow-hidden shadow-2xl shadow-blue-900/50 border-[6px] border-blue-400 bg-blue-950/80 backdrop-blur-sm max-w-full h-auto" 
     />
   );
 }
