@@ -34,7 +34,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
     const app = new PIXI.Application({
       width: CANVAS_WIDTH,
       height: CANVAS_HEIGHT,
-      transparent: true,
+      backgroundAlpha: 0, // <-- Replaced 'transparent: true'
       resolution: window.devicePixelRatio || 1,
       autoDensity: true,
     });
