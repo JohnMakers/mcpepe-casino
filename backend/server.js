@@ -1669,22 +1669,21 @@ async function resolveVacationOnChain(playerPubkeyStr, gamePubkeyStr, unhashedSe
 }
 
 // ==========================================
-// ❄️ MCPEPE SNOWSTORM SLOT LOGIC ❄️
+// ❄️ MCPEPE SNOWSTORM SLOT LOGIC (V19 FINAL) ❄️
 // ==========================================
 
 const SNOWSTORM_PAYTABLE = {
-    0: 80, // snowstorm_mcpepe (Wild)
-    1: 25, // snowstorm_snowman
-    2: 15, // snowstorm_polar
-    3: 10, // snowstorm_snowmobile
-    4: 7,  // snowstorm_ski
-    5: 5,  // snowstorm_boots
-    6: 4,  // snowstorm_gloves
-    7: 3,  // snowstorm_cocoamug
-    8: 2   // snowstorm_snowflake
+    0: 80, // Wild
+    1: 25, // Snowman
+    2: 15, // Polar
+    3: 10, // Snowmobile
+    4: 7,  // Ski
+    5: 5,  // Boots
+    6: 4,  // Gloves
+    7: 3,  // Cocoa
+    8: 2   // Snowflake
 };
 
-// FIX 1: Corrected Matrix Coordinates (Horizontal rows instead of Vertical columns)
 const PAYLINES = [
     [[1,0], [1,1], [1,2]], // Line 1: Middle Horizontal
     [[0,0], [0,1], [0,2]], // Line 2: Top Horizontal
@@ -1692,19 +1691,6 @@ const PAYLINES = [
     [[0,0], [1,1], [2,2]], // Line 4: Diagonal Down
     [[2,0], [1,1], [0,2]]  // Line 5: Diagonal Up
 ];
-
-// FIX 2: True RTP & Medium Volatility Weighting (0-255 mapping)
-function getWeightedSymbol(byteVal) {
-    if (byteVal < 2) return 0;   // Wild (0.78%)
-    if (byteVal < 8) return 1;   // Snowman (~2.3%)
-    if (byteVal < 20) return 2;  // Polar (~4.7%)
-    if (byteVal < 40) return 3;  // Snowmobile (~7.8%)
-    if (byteVal < 66) return 4;  // Ski (~10.1%)
-    if (byteVal < 101) return 5; // Boots (~13.6%)
-    if (byteVal < 141) return 6; // Gloves (~15.6%)
-    if (byteVal < 191) return 7; // Cocoa (~19.5%)
-    return 8;                    // Snowflake (~25.4%)
-}
 
 function evaluateGrid(matrix) {
     let totalWinFactor = 0;
@@ -1737,6 +1723,7 @@ app.post('/api/snowstorm/play', async (req, res) => {
 
         res.json({ serverSeedHash, unhashedServerSeed: serverSeed });
     } catch (err) {
+        console.error("Snowstorm Start Error:", err);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -1745,23 +1732,51 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
     try {
         const { playerPublicKey, serverSeed, clientSeed, nonce, betAmount } = req.body;
 
+        // 1. Provably Fair V19 Final Engine
         const pfHash = crypto.createHmac('sha256', serverSeed).update(`${clientSeed}:${nonce}`).digest('hex');
-        
-        let grid = [];
-        for (let i = 0; i < 9; i++) {
-            const hexChunk = pfHash.substr(i * 2, 2);
-            grid.push(getWeightedSymbol(parseInt(hexChunk, 16))); 
-        }
-        
+
+        // 🔥 The Flawless Base Math
+        const getTile = (val) => {
+            if (val < 1) return 0;   if (val < 4) return 1;  
+            if (val < 12) return 2;  if (val < 26) return 3;  
+            if (val < 48) return 4;  if (val < 80) return 5; 
+            if (val < 124) return 6; if (val < 182) return 7; 
+            return 8;                
+        };
+
+        // Independent 3x3 Setup (Uses hash bytes 0-8)
         let matrix = [
-            [grid[0], grid[1], grid[2]],
-            [grid[3], grid[4], grid[5]],
-            [grid[6], grid[7], grid[8]]
+            [getTile(parseInt(pfHash.substr(0, 2), 16)), getTile(parseInt(pfHash.substr(2, 2), 16)), getTile(parseInt(pfHash.substr(4, 2), 16))],
+            [getTile(parseInt(pfHash.substr(6, 2), 16)), getTile(parseInt(pfHash.substr(8, 2), 16)), getTile(parseInt(pfHash.substr(10, 2), 16))],
+            [getTile(parseInt(pfHash.substr(12, 2), 16)), getTile(parseInt(pfHash.substr(14, 2), 16)), getTile(parseInt(pfHash.substr(16, 2), 16))]
         ];
+
+        // 2. Blueprint Feature Injection (Uses bytes 18-21 mapped to 10,000)
+        const featureRoll = parseInt(pfHash.substr(18, 4), 16) % 10000;
+        
+        if (featureRoll < 25) { 
+            // 0.25% Natural Wheel Teaser
+            const symArr = [8, 8, 8, 7, 7, 6, 5];
+            const sym = symArr[parseInt(pfHash.substr(22, 2), 16) % symArr.length];
+            matrix = [[sym,sym,sym], [sym,sym,sym], [sym,sym,sym]];
+        } else if (featureRoll < 775) { 
+            // 7.5% Protected Near-Miss Respin
+            const symArr = [8, 7, 6, 5];
+            const sym = symArr[parseInt(pfHash.substr(22, 2), 16) % symArr.length];
+            
+            const safe1 = (sym + 2) % 8 + 1; 
+            const safe2 = (sym + 3) % 8 + 1;
+            const safe3 = (sym + 4) % 8 + 1;
+            matrix = [
+                [sym, sym, safe1],
+                [sym, sym, safe2],
+                [sym, sym, safe3]
+            ];
+        }
 
         let { totalWinFactor, winningLines } = evaluateGrid(matrix);
 
-        // FIX 3: True "Ghost" Respin Execution
+        // 3. Snowstorm Respin Reroll Execution
         let respinData = null;
         if (totalWinFactor === 0) {
             const col0 = [matrix[0][0], matrix[1][0], matrix[2][0]];
@@ -1780,35 +1795,37 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
             else if (isMatch(col1, col2)) respinData = { held: [1, 2], spin: 0 };
             else if (isMatch(col0, col2)) respinData = { held: [0, 2], spin: 1 };
 
-            // Actually execute the respin in memory before the payout
             if (respinData) {
                 const spinCol = respinData.spin;
-                // Use bytes 22, 24, and 26 from the PF Hash to ensure deterministic random behavior
-                matrix[0][spinCol] = getWeightedSymbol(parseInt(pfHash.substr(22, 2), 16));
-                matrix[1][spinCol] = getWeightedSymbol(parseInt(pfHash.substr(24, 2), 16));
-                matrix[2][spinCol] = getWeightedSymbol(parseInt(pfHash.substr(26, 2), 16));
+                // Organic Reroll of the 3rd Column (Uses hash bytes 24-28)
+                matrix[0][spinCol] = getTile(parseInt(pfHash.substr(24, 2), 16));
+                matrix[1][spinCol] = getTile(parseInt(pfHash.substr(26, 2), 16));
+                matrix[2][spinCol] = getTile(parseInt(pfHash.substr(28, 2), 16));
                 
-                // Re-evaluate the new matrix to see if the respin hit a win
                 const respinEval = evaluateGrid(matrix);
                 totalWinFactor = respinEval.totalWinFactor;
                 winningLines = respinEval.winningLines;
             }
         }
 
-        // FIX 4: Corrected Multiplier Intervals (Added 4x)
+        // 4. Blizzard Multiplier Wheel
         let multiplier = 1;
-        let isFullGrid = matrix.flat().every(val => val === matrix[0][0] || val === 0);
+        const targetSym = matrix.flat().find(v => v !== 0) || 0;
+        let isFullGrid = matrix.flat().every(val => val === targetSym || val === 0);
+        
         if (isFullGrid) {
-            const multiRoll = parseInt(pfHash.substr(28, 4), 16) % 100;
-            multiplier = multiRoll > 90 ? 10 : multiRoll > 70 ? 5 : multiRoll > 50 ? 4 : multiRoll > 30 ? 3 : 2;
+            const multiRoll = parseInt(pfHash.substr(30, 2), 16) % 100;
+            multiplier = multiRoll >= 99 ? 10 : multiRoll >= 94 ? 5 : multiRoll >= 80 ? 4 : multiRoll >= 50 ? 3 : 2;
             totalWinFactor *= multiplier;
         }
 
-        if (totalWinFactor > 800) totalWinFactor = 800;
+        if (totalWinFactor > 800) totalWinFactor = 800; // Hard Win Cap
         
         const totalPayout = Math.floor(betAmount * totalWinFactor);
-        
-        // Blockchain Resolution CPI (Armored with Retry Loop)
+
+        // ==========================================
+        // 5. BLOCKCHAIN CPI WITH RETRY ARMOR
+        // ==========================================
         const [gameStatePDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("snowstorm"), new anchor.web3.PublicKey(playerPublicKey).toBuffer(), new anchor.BN(nonce).toArrayLike(Buffer, 'le', 8)], 
             PROGRAM_ID
@@ -1865,7 +1882,7 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
         res.json({
             success: true,
             txSig,
-            matrix,       // This matrix now correctly includes the respun symbols if a respin occurred
+            matrix,       
             winningLines,
             payout: totalPayout,
             respinData,
