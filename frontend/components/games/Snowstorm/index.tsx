@@ -5,6 +5,7 @@ import * as anchor from '@coral-xyz/anchor';
 import idl from '../../../idl.json'; 
 import PixiGrid from './PixiGrid';
 import ProvablyFairModal from '../../modals/ProvablyFairModal';
+import InfoModal from './InfoModal';
 
 const PROGRAM_ID = new PublicKey(idl.metadata.address);
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -12,6 +13,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 export default function McPepeSnowstorm() {
   const { connection } = useConnection();
   const { publicKey, signTransaction, sendTransaction } = useWallet();
+  const [isInfoOpen, setIsInfoOpen] = useState<boolean>(false)
   
   // 🔥 FIX 1: Upgraded to string-based input to handle decimals beautifully
   const [betInput, setBetInput] = useState<string>("0.1000");
@@ -94,7 +96,29 @@ export default function McPepeSnowstorm() {
 
   return (
     <div className="flex flex-col items-center justify-between bg-blue-950 min-h-screen py-4 w-full overflow-hidden">
-      
+      <InfoModal isOpen={isInfoOpen} onClose={() => setIsInfoOpen(false)} />
+
+        {/* Header with Verify and Info */}
+      <div className="w-full max-w-5xl flex justify-between items-center px-6 mb-2">
+        <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-300 drop-shadow-lg uppercase tracking-widest text-left">
+          McPepe Snowstorm
+        </h1>
+        <div className="flex gap-3">
+           <button 
+             onClick={() => setIsPFOpen(true)}
+             className="bg-blue-900/40 hover:bg-blue-800/60 border border-blue-500/30 text-blue-300 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all"
+           >
+             Fair
+           </button>
+           <button 
+             onClick={() => setIsInfoOpen(true)}
+             className="bg-blue-900/40 hover:bg-blue-800/60 border border-blue-500/30 text-blue-300 w-10 h-10 rounded-full font-black text-lg flex items-center justify-center"
+           >
+             ?
+           </button>
+        </div>
+      </div>
+
       <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-300 drop-shadow-lg mb-2 uppercase tracking-widest text-center">
         McPepe Snowstorm
       </h1>

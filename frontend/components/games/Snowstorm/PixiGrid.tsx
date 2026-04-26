@@ -194,12 +194,19 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
           const lineCoords = PAYLINES[win.lineIndex];
           if (lineCoords) {
             lineCoords.forEach(coord => {
-               const r = coord[0];
-               const c = coord[1];
-               const sprite = spriteMatrix[r][c];
-               if (sprite) {
-                   container.addChild(sprite); 
-                   gsap.to(sprite.scale, { x: 1.35, y: 1.35, duration: 0.25, yoyo: true, repeat: 3, ease: "sine.inOut" });
+              const r = coord[0];
+              const c = coord[1];
+              const sprite = spriteMatrix[r][c];
+              if (sprite) {
+                container.addChild(sprite); 
+                // 🔥 REFINED ANIMATION: Small, slight constant slow pulsate
+                gsap.to(sprite.scale, { 
+                  x: 1.1, 
+                  y: 1.1, 
+                  duration: 0.8, 
+                  yoyo: true, 
+                  repeat: -1, 
+                  ease: "sine.inOut" });
                }
             });
           }
