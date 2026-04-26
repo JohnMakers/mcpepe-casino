@@ -16,7 +16,6 @@ const MASK_TOP = 130;
 const MASK_BOTTOM = CANVAS_HEIGHT - 100;
 
 // 🎯 THE PRECISION COORDINATE GRID
-// Manually adjust the X and Y for every single tile on the board
 const TILE_POSITIONS = [
     // ROW 0 (Top Row)
     [ { x: 325.4, y: 211 },  { x: 500.3, y: 211 },  { x: 676.3, y: 211 } ],
@@ -106,25 +105,19 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
       app.stage.addChild(gridMask);
       gridContainer.mask = gridMask;
 
-      // 🛠️ DEBUG OVERLAYS (Now uses TILE_POSITIONS)
       if (DEBUG_MODE) {
           const debugGraphics = new PIXI.Graphics();
-          
-          // Spawn Line (Yellow)
           debugGraphics.moveTo(0, SPAWN_Y);
           debugGraphics.lineTo(CANVAS_WIDTH, SPAWN_Y);
           debugGraphics.stroke({ color: 0xffff00, width: 2, alpha: 0.8 });
 
-          // Mask Boundaries (Green)
           debugGraphics.rect(0, MASK_TOP, CANVAS_WIDTH, MASK_BOTTOM - MASK_TOP);
           debugGraphics.stroke({ color: 0x00ff00, width: 4 }); 
           
-          // Hitboxes and Center points
           for (let r = 0; r < 3; r++) {
             for (let c = 0; c < 3; c++) {
                const pos = TILE_POSITIONS[r][c];
-               debugGraphics.circle(pos.x, pos.y, 6).fill(0xff0000); // Center dot
-               // Bounding box
+               debugGraphics.circle(pos.x, pos.y, 6).fill(0xff0000); 
                debugGraphics.rect(pos.x - SYMBOL_SIZE/2, pos.y - SYMBOL_SIZE/2, SYMBOL_SIZE, SYMBOL_SIZE).stroke({ color: 0xff00ff, width: 2, alpha: 0.6 });
             }
           }
@@ -147,7 +140,9 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
   // 2. TRIGGER SPIN ANIMATIONS
   useEffect(() => {
-    if (!playData || !playData.matrix || !appRef.current || !gridContainerRef.current) return;
+    // Determine the starting grid. Fallback to matrix if initialMatrix doesn't exist to prevent crashes.
+    const startingGrid = playData?.initialMatrix || playData?.matrix;
+    if (!playData || !startingGrid || !appRef.current || !gridContainerRef.current) return;
 
     const app = appRef.current;
     const container = gridContainerRef.current;
@@ -158,9 +153,71 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
     // Track sprites to pulse them later on a win
     const spriteMatrix: PIXI.Sprite[][] = [[], [], []];
 
+    // Master Timeline for sequential animation mapping
+    const masterTl = gsap.timeline({
+      onComplete: () => {
+        
+        // 🏆 WINNING LINE PULSE EFFECT (Runs after all spins/respins finish)
+        if (playData.winningLines && playData.winningLines.length > 0) {
+          playData.winningLines.forEach((win: any) => {
+            const lineCoords = PAYLINES[win.lineIndex];
+            if (lineCoords) {
+              lineCoords.forEach(coord => {
+                const r = coord[0];
+                const c = coord[1];
+                const sprite = spriteMatrix[r][c];
+                if (sprite) {
+                  container.addChild(sprite); // bring to front
+                  gsap.to(sprite.scale, { 
+                    x: 0.4, 
+                    y: 0.4, 
+                    duration: 1.2, 
+                    yoyo: true, 
+                    repeat: -1, 
+                    ease: "sine.inOut" });
+                 }
+              });
+            }
+          });
+        }
+
+        // ❄️ BLIZZARD MULTIPLIER TEXT
+        if (playData.multiplier > 1) {
+            const multText = new PIXI.Text({
+                text: `BLIZZARD MULTIPLIER: ${playData.multiplier}X!`,
+                style: {
+                    fontFamily: 'Arial', 
+                    fontSize: 54, 
+                    fontWeight: '900',
+                    fill: '#00ffff', 
+                    stroke: { color: '#ffffff', width: 6 }, 
+                    dropShadow: { color: '#000000', blur: 6, distance: 4, alpha: 0.9 }
+                }
+            });
+            multText.anchor.set(0.5);
+            multText.x = CANVAS_WIDTH / 2;
+            multText.y = CANVAS_HEIGHT / 2;
+            multText.scale.set(0.1);
+            app.stage.addChild(multText);
+
+            gsap.to(multText.scale, { x: 1, y: 1, duration: 0.5, ease: "back.out(1.7)" });
+            gsap.to(multText, { 
+                alpha: 0, 
+                duration: 0.5, 
+                delay: 2.5,
+                onComplete: () => app.stage.removeChild(multText)
+            });
+        }
+        
+        // Finalize state after visual effects deploy
+        setTimeout(() => onAnimationComplete(), 1200);
+      }
+    });
+
+    // --- PHASE 1: INITIAL DROP ---
     for (let c = 0; c < 3; c++) {
       for (let r = 0; r < 3; r++) {
-        const symbolId = playData.matrix[r][c];
+        const symbolId = startingGrid[r][c];
         const sprite = PIXI.Sprite.from(SYMBOL_MAP[symbolId]);
         const targetPos = TILE_POSITIONS[r][c];
         
@@ -173,77 +230,71 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
         sprite.y = SPAWN_Y; 
 
         container.addChild(sprite);
-        
-        if (!spriteMatrix[r]) spriteMatrix[r] = [];
         spriteMatrix[r][c] = sprite;
 
-        gsap.to(sprite, {
-          y: targetPos.y, // Drop exactly to its precision coordinate
+        // Force all to start dropping at exactly time '0' on the timeline
+        masterTl.to(sprite, {
+          y: targetPos.y,
           duration: 0.4 + (c * 0.2), 
           ease: "bounce.out",
-        });
+        }, 0);
       }
     }
 
-    // Evaluate features after reels land
-    const timeoutId = setTimeout(() => {
+    // --- PHASE 2: RESPIN LOGIC ---
+    if (playData.respinData) {
+      const spinCol = playData.respinData.spin;
       
-      // 🏆 WINNING LINE PULSE EFFECT
-      if (playData.winningLines && playData.winningLines.length > 0) {
-        playData.winningLines.forEach((win: any) => {
-          const lineCoords = PAYLINES[win.lineIndex];
-          if (lineCoords) {
-            lineCoords.forEach(coord => {
-              const r = coord[0];
-              const c = coord[1];
-              const sprite = spriteMatrix[r][c];
-              if (sprite) {
-                container.addChild(sprite); 
-                // 🔥 REFINED ANIMATION: Small, slight constant slow pulsate
-                gsap.to(sprite.scale, { 
-                  x: 0.4, 
-                  y: 0.4, 
-                  duration: 1.2, 
-                  yoyo: true, 
-                  repeat: -1, 
-                  ease: "sine.inOut" });
-               }
-            });
+      // Delay before respin triggers, giving player a moment to see the "near miss"
+      const respinStartTime = 1.2; 
+
+      // Visual Cue: Dim the held reels slightly while waiting (adds good tension)
+      playData.respinData.held.forEach((heldCol: number) => {
+          for(let r=0; r<3; r++) {
+             masterTl.to(spriteMatrix[r][heldCol], { alpha: 0.8, duration: 0.2 }, respinStartTime);
+             masterTl.to(spriteMatrix[r][heldCol], { alpha: 1, duration: 0.2 }, respinStartTime + 1.0);
           }
-        });
+      });
+
+      // Animate the old column OUT (drop them past the mask)
+      for (let r = 0; r < 3; r++) {
+        const oldSprite = spriteMatrix[r][spinCol];
+        masterTl.to(oldSprite, {
+          y: MASK_BOTTOM + SYMBOL_SIZE * 2, // Drop well below the mask
+          duration: 0.3 + (r * 0.1),
+          ease: "power2.in",
+          onComplete: () => container.removeChild(oldSprite) // clean up memory
+        }, respinStartTime);
       }
 
-      // ❄️ BLIZZARD MULTIPLIER TEXT
-      if (playData.multiplier > 1) {
-          const multText = new PIXI.Text({
-              text: `BLIZZARD MULTIPLIER: ${playData.multiplier}X!`,
-              style: {
-                  fontFamily: 'Arial', 
-                  fontSize: 54, 
-                  fontWeight: '900',
-                  fill: '#00ffff', 
-                  stroke: { color: '#ffffff', width: 6 }, 
-                  dropShadow: { color: '#000000', blur: 6, distance: 4, alpha: 0.9 }
-              }
-          });
-          multText.anchor.set(0.5);
-          multText.x = CANVAS_WIDTH / 2;
-          multText.y = CANVAS_HEIGHT / 2;
-          multText.scale.set(0.1);
-          app.stage.addChild(multText);
+      // Animate the NEW column IN
+      for (let r = 0; r < 3; r++) {
+        const symbolId = playData.matrix[r][spinCol]; // NOW we use the final matrix
+        const newSprite = PIXI.Sprite.from(SYMBOL_MAP[symbolId]);
+        const targetPos = TILE_POSITIONS[r][spinCol];
 
-          gsap.to(multText.scale, { x: 1, y: 1, duration: 0.5, ease: "back.out(1.7)" });
-          gsap.to(multText, { 
-              alpha: 0, 
-              duration: 0.5, 
-              delay: 2.5,
-              onComplete: () => app.stage.removeChild(multText)
-          });
+        newSprite.anchor.set(0.5);
+        newSprite.width = SYMBOL_SIZE;
+        newSprite.height = SYMBOL_SIZE;
+        newSprite.x = targetPos.x;
+        newSprite.y = SPAWN_Y; // Spawning them back at the top
+
+        container.addChild(newSprite);
+        spriteMatrix[r][spinCol] = newSprite; // Overwrite the matrix reference
+
+        // Drop them in slightly after the old ones fall out
+        masterTl.to(newSprite, {
+          y: targetPos.y,
+          duration: 0.4 + (r * 0.1),
+          ease: "bounce.out"
+        }, respinStartTime + 0.4); 
       }
-      onAnimationComplete();
-    }, 1200);
+    }
 
-    return () => clearTimeout(timeoutId);
+    return () => {
+       // Protect from memory leaks if the user closes the modal mid-spin
+       masterTl.kill(); 
+    };
   }, [playData]); 
 
   return (
