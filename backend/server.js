@@ -1784,37 +1784,60 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
         // 🚨 SAFETY FIX: Math.floor prevents anchor.BN from crashing on floating points
         const totalPayout = Math.floor(betAmount * totalWinFactor);
 
-        // 5. Blockchain Resolution CPI
-        const program = new anchor.Program(idl, PROGRAM_ID, new anchor.AnchorProvider(connection, new anchor.Wallet(houseKeypair), {}));
-        
-        const txSig = await program.methods.resolveSnowstorm(serverSeed, new anchor.BN(totalPayout))
-            .accounts({
-                gameState: anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("snowstorm"), new anchor.web3.PublicKey(playerPublicKey).toBuffer(), new anchor.BN(nonce).toArrayLike(Buffer, 'le', 8)], PROGRAM_ID)[0],
-                house: houseKeypair.publicKey,
-                vault: vaultPDA,
-                player: new anchor.web3.PublicKey(playerPublicKey),
-                systemProgram: anchor.web3.SystemProgram.programId,
-            })
-            .signers([houseKeypair])
-            .rpc();
+        // 5. Blockchain Resolution CPI (Armored with Retry Loop)
+        const [gameStatePDA] = anchor.web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("snowstorm"), new anchor.web3.PublicKey(playerPublicKey).toBuffer(), new anchor.BN(nonce).toArrayLike(Buffer, 'le', 8)], 
+            PROGRAM_ID
+        );
+        const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("vault")], PROGRAM_ID);
 
-        res.json({
-            success: true,
-            txSig,
-            matrix,
-            winningLines,
-            payout: totalPayout,
-            respinData,
-            multiplier,
-            serverSeed
+        const sighash = crypto.createHash('sha256').update("global:resolve_snowstorm").digest().slice(0, 8);
+        const seedBuffer = Buffer.from(serverSeed, 'utf8');
+        const seedLengthBuffer = Buffer.alloc(4);
+        seedLengthBuffer.writeUInt32LE(seedBuffer.length, 0);
+        
+        const payoutBuffer = Buffer.alloc(8);
+        payoutBuffer.writeBigUInt64LE(BigInt(Math.floor(totalPayout)));
+
+        const ixData = Buffer.concat([sighash, seedLengthBuffer, seedBuffer, payoutBuffer]);
+        
+        const resolveIx = new anchor.web3.TransactionInstruction({
+            programId: PROGRAM_ID,
+            keys: [
+                { pubkey: gameStatePDA, isSigner: false, isWritable: true },
+                { pubkey: houseKeypair.publicKey, isSigner: true, isWritable: true },
+                { pubkey: vaultPDA, isSigner: false, isWritable: true },
+                { pubkey: new anchor.web3.PublicKey(playerPublicKey), isSigner: false, isWritable: true },
+                { pubkey: anchor.web3.SystemProgram.programId, isSigner: false, isWritable: false },
+            ],
+            data: ixData
         });
 
-    } catch (err) {
-        console.error("Snowstorm Resolve Error:", err);
-        res.status(500).json({ error: "Failed to resolve on-chain." });
-    }
-});
+        let txSig;
+        let retries = 5;
+        while (retries > 0) {
+            try {
+                const tx = new anchor.web3.Transaction().add(resolveIx);
+                const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+                tx.recentBlockhash = blockhash;
+                tx.feePayer = houseKeypair.publicKey;
+                tx.sign(houseKeypair);
 
+                // skipPreflight prevents Anchor from crashing on simulation if the RPC is lagging
+                txSig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+                const confirmation = await connection.confirmTransaction({ signature: txSig, blockhash, lastValidBlockHeight }, "confirmed");
+                
+                if (confirmation.value.err) {
+                    throw new Error(`On-chain rejection: ${JSON.stringify(confirmation.value.err)}`);
+                }
+                break; // Success! Break out of the loop
+            } catch (err) {
+                console.log(`⚠️ Network retry for Snowstorm Payout... (${retries} left). Error: ${err.message}`);
+                await new Promise(r => setTimeout(r, 2000));
+                retries--;
+                if (retries === 0) throw new Error("CRITICAL: Failed to resolve after 5 attempts.");
+            }
+        }
 
 // ---Info to fund remove after --
 
