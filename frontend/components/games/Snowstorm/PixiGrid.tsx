@@ -46,53 +46,65 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
     const appRef = useRef<PIXI.Application | null>(null);
     const containerRef = useRef<PIXI.Container | null>(null);
 
-    // Initialize PIXI App
+    // 🚀 PIXIJS v8 ASYNC INITIALIZATION FIX
     useEffect(() => {
         if (!canvasRef.current || appRef.current) return;
+        let isMounted = true;
 
-        const app = new PIXI.Application({
-            width: CANVAS_WIDTH,
-            height: CANVAS_HEIGHT,
-            backgroundAlpha: 0,
-            resolution: window.devicePixelRatio || 1,
-            autoDensity: true,
-        });
-
-        canvasRef.current.appendChild(app.view as any);
+        const app = new PIXI.Application();
         appRef.current = app;
 
-        const container = new PIXI.Container();
-        app.stage.addChild(container);
-        containerRef.current = container;
+        const initPixi = async () => {
+            await app.init({
+                width: CANVAS_WIDTH,
+                height: CANVAS_HEIGHT,
+                backgroundAlpha: 0,
+                resolution: window.devicePixelRatio || 1,
+                autoDensity: true,
+            });
 
-        // Visual Window Mask
-        const mask = new PIXI.Graphics();
-        mask.beginFill(0xffffff);
-        mask.drawRect(0, MASK_TOP, CANVAS_WIDTH, MASK_BOTTOM - MASK_TOP);
-        mask.endFill();
-        app.stage.addChild(mask);
-        container.mask = mask;
+            if (!isMounted) {
+                app.destroy(true, { children: true });
+                return;
+            }
 
-        // Preload Textures
-        Object.values(SYMBOL_MAP).forEach(url => {
-            if (!PIXI.Assets.cache.has(url)) PIXI.Assets.add({ alias: url, src: url });
-        });
-        PIXI.Assets.load(Object.values(SYMBOL_MAP));
+            // v8 uses app.canvas instead of app.view
+            canvasRef.current?.appendChild(app.canvas);
+
+            const container = new PIXI.Container();
+            app.stage.addChild(container);
+            containerRef.current = container;
+
+            // Visual Window Mask (Updated to v8 syntax)
+            const mask = new PIXI.Graphics().rect(0, MASK_TOP, CANVAS_WIDTH, MASK_BOTTOM - MASK_TOP).fill(0xffffff);
+            app.stage.addChild(mask);
+            container.mask = mask;
+
+            // Preload Textures
+            Object.values(SYMBOL_MAP).forEach(url => {
+                if (!PIXI.Assets.cache.has(url)) PIXI.Assets.add({ alias: url, src: url });
+            });
+            await PIXI.Assets.load(Object.values(SYMBOL_MAP));
+        };
+
+        initPixi();
 
         return () => {
-            app.destroy(true, true);
-            appRef.current = null;
+            isMounted = false;
+            if (appRef.current) {
+                appRef.current.destroy(true, { children: true });
+                appRef.current = null;
+            }
         };
     }, []);
 
-    // 🎬 MAIN SPIN TIMELINE (Synchronous GSAP Fix)
+    // 🎬 MAIN SPIN TIMELINE
     useEffect(() => {
         if (!playData || !appRef.current || !containerRef.current) return;
 
         const app = appRef.current;
         const container = containerRef.current;
 
-        // Clear previous grid and kill all active tweens to prevent overlap
         container.removeChildren();
         gsap.killTweensOf("*");
 
@@ -105,7 +117,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             [null as any, null as any, null as any]
         ];
 
-        // 🔥 THE FIX: Use a master GSAP Timeline instead of raw setTimeouts
         const tl = gsap.timeline({ 
             onComplete: () => {
                 onAnimationComplete();
@@ -132,7 +143,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                 spriteMatrix[row][col] = sprite;
                 container.addChild(sprite);
 
-                // Insert into timeline
                 tl.to(sprite, {
                     y: targetPos.y,
                     duration: 0.4,
@@ -141,14 +151,13 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
             }
         }
 
-        currentTime += 0.4 + (2 * 0.15) + (2 * 0.05) + 0.3; // Allow grid to settle
+        currentTime += 0.4 + (2 * 0.15) + (2 * 0.05) + 0.3; 
 
         // 2. THE RESPIN CUTSCENE
         if (playData.respinData) {
             const spinCol = playData.respinData.spin;
             const heldCols = playData.respinData.held;
 
-            // Dramatic Popup Text
             const respinText = new PIXI.Text({
                 text: "SNOWSTORM RESPIN!",
                 style: {
@@ -165,18 +174,16 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
             tl.to(respinText.scale, { x: 1, y: 1, duration: 0.5, ease: "back.out(1.7)" }, currentTime);
 
-            // Glow/Tint the locked columns icy blue to show they are held
             heldCols.forEach((col: number) => {
                 for (let row = 0; row < 3; row++) {
                     tl.to(spriteMatrix[row][col], { tint: 0xaaffff, duration: 0.3 }, currentTime);
                 }
             });
 
-            currentTime += 1.0; // Hold the dramatic pause
+            currentTime += 1.0; 
 
             tl.to(respinText, { alpha: 0, duration: 0.3 }, currentTime);
 
-            // Animate the old 3rd column falling out the bottom
             for (let row = 0; row < 3; row++) {
                 const oldSprite = spriteMatrix[row][spinCol];
                 tl.to(oldSprite, {
@@ -188,7 +195,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
             currentTime += 0.5;
 
-            // Drop the NEW final symbols into the 3rd column
             for (let row = 0; row < 3; row++) {
                 const newSymVal = finalMatrix[row][spinCol];
                 const texture = PIXI.Texture.from(SYMBOL_MAP[newSymVal]);
@@ -214,7 +220,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
             currentTime += 0.8;
 
-            // Remove the ice tint from the held columns
             heldCols.forEach((col: number) => {
                 for (let row = 0; row < 3; row++) {
                     tl.to(spriteMatrix[row][col], { tint: 0xffffff, duration: 0.3 }, currentTime);
@@ -226,7 +231,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
         // 3. WINNING LINES & MULTIPLIER POPUP
         tl.add(() => {
-            // Subtle Win Line Pulsate
             if (playData.winningLines && playData.winningLines.length > 0) {
                 playData.winningLines.forEach((win: any) => {
                     const lineCoords = PAYLINES[win.lineIndex];
@@ -236,7 +240,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                             const c = coord[1];
                             const sprite = spriteMatrix[r][c];
                             if (sprite) {
-                                container.addChild(sprite); // Bring to front
+                                container.addChild(sprite); 
                                 gsap.to(sprite.scale, { 
                                     x: 0.4, 
                                     y: 0.4, 
@@ -251,7 +255,6 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                 });
             }
 
-            // Blizzard Multiplier Popup
             if (playData.multiplier > 1) {
                 const multText = new PIXI.Text({
                     text: `BLIZZARD MULTIPLIER: ${playData.multiplier}X!`,
