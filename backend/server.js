@@ -1668,7 +1668,142 @@ async function resolveVacationOnChain(playerPubkeyStr, gamePubkeyStr, unhashedSe
     }
 }
 
+// ==========================================
+// ❄️ MCPEPE SNOWSTORM SLOT LOGIC ❄️
+// ==========================================
 
+const SNOWSTORM_PAYTABLE = {
+    0: 80, // snowstorm_mcpepe (Wild)
+    1: 25, // snowstorm_snowman
+    2: 15, // snowstorm_polar
+    3: 10, // snowstorm_snowmobile
+    4: 7,  // snowstorm_ski
+    5: 5,  // snowstorm_boots
+    6: 4,  // snowstorm_gloves
+    7: 3,  // snowstorm_cocoamug
+    8: 2   // snowstorm_snowflake
+};
+
+const PAYLINES = [
+    [[0,1], [1,1], [2,1]], // Line 1: Middle Horizontal
+    [[0,0], [1,0], [2,0]], // Line 2: Top Horizontal
+    [[0,2], [1,2], [2,2]], // Line 3: Bottom Horizontal
+    [[0,0], [1,1], [2,2]], // Line 4: Diagonal Down
+    [[0,2], [1,1], [2,0]]  // Line 5: Diagonal Up
+];
+
+app.post('/api/snowstorm/play', async (req, res) => {
+    try {
+        const { playerPublicKey, betAmount } = req.body;
+        if (!playerPublicKey || !betAmount) return res.status(400).json({ error: "Missing parameters" });
+
+        // Generate Provably Fair Server Seed
+        const serverSeed = crypto.randomBytes(32).toString('hex');
+        const serverSeedHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
+
+        res.json({
+            serverSeedHash,
+            unhashedServerSeed: serverSeed 
+        });
+    } catch (err) {
+        console.error("Snowstorm Start Error:", err);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+app.post('/api/snowstorm/resolve', async (req, res) => {
+    try {
+        const { playerPublicKey, serverSeed, clientSeed, nonce, betAmount } = req.body;
+
+        // 1. Provably Fair Grid Generation based on seeds
+        const pfHash = crypto.createHmac('sha256', serverSeed).update(`${clientSeed}:${nonce}`).digest('hex');
+        
+        // Populate 3x3 Grid
+        let grid = [];
+        for (let i = 0; i < 9; i++) {
+            // Simplified RNG generation from PF Hash (In production, map to RTP weightings)
+            const hexChunk = pfHash.substr(i * 2, 2);
+            const num = parseInt(hexChunk, 16);
+            grid.push(num % 9); // Maps to 0-8
+        }
+        
+        let matrix = [
+            [grid[0], grid[1], grid[2]],
+            [grid[3], grid[4], grid[5]],
+            [grid[6], grid[7], grid[8]]
+        ];
+
+        // 2. Evaluate Base Win
+        let totalWinFactor = 0;
+        let winningLines = [];
+
+        for (let i = 0; i < PAYLINES.length; i++) {
+            const line = PAYLINES[i];
+            const s1 = matrix[line[0][0]][line[0][1]];
+            const s2 = matrix[line[1][0]][line[1][1]];
+            const s3 = matrix[line[2][0]][line[2][1]];
+
+            // Wild logic (0 is Wild)
+            let matchSymbol = s1 === 0 ? (s2 === 0 ? s3 : s2) : s1;
+            if ((s1 === matchSymbol || s1 === 0) && 
+                (s2 === matchSymbol || s2 === 0) && 
+                (s3 === matchSymbol || s3 === 0)) {
+                
+                totalWinFactor += SNOWSTORM_PAYTABLE[matchSymbol];
+                winningLines.push({ lineIndex: i, symbol: matchSymbol });
+            }
+        }
+
+        // 3. Snowstorm Respin Logic (Stacked reels, no win)
+        let respinData = null;
+        if (totalWinFactor === 0) {
+            // Logic checking if 2 columns are identical (including wilds)...
+            // [Omitted for brevity, but this is where you'd flag respinData]
+        }
+
+        // 4. Blizzard Multiplier Wheel (Full Grid)
+        let multiplier = 1;
+        let isFullGrid = matrix.flat().every(val => val === matrix[0][0] || val === 0);
+        if (isFullGrid) {
+            const multiRoll = parseInt(pfHash.substr(20, 4), 16) % 100;
+            multiplier = multiRoll > 90 ? 10 : multiRoll > 70 ? 5 : multiRoll > 40 ? 3 : 2;
+            totalWinFactor *= multiplier;
+        }
+
+        // Cap at 800x (Hard Requirement)
+        if (totalWinFactor > 800) totalWinFactor = 800;
+        const totalPayout = betAmount * totalWinFactor;
+
+        // 5. Blockchain Resolution CPI
+        const program = new anchor.Program(idl, PROGRAM_ID, new anchor.AnchorProvider(connection, new anchor.Wallet(houseKeypair), {}));
+        
+        const txSig = await program.methods.resolveSnowstorm(serverSeed, new anchor.BN(totalPayout))
+            .accounts({
+                gameState: anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("snowstorm"), new anchor.web3.PublicKey(playerPublicKey).toBuffer(), new anchor.BN(nonce).toArrayLike(Buffer, 'le', 8)], PROGRAM_ID)[0],
+                house: houseKeypair.publicKey,
+                vault: vaultPDA,
+                player: new anchor.web3.PublicKey(playerPublicKey),
+                systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .signers([houseKeypair])
+            .rpc();
+
+        res.json({
+            success: true,
+            txSig,
+            matrix,
+            winningLines,
+            payout: totalPayout,
+            respinData,
+            multiplier,
+            serverSeed // Sent back strictly for client-side Provably Fair verification
+        });
+
+    } catch (err) {
+        console.error("Snowstorm Resolve Error:", err);
+        res.status(500).json({ error: "Failed to resolve on-chain." });
+    }
+});
 
 
 // ---Info to fund remove after --

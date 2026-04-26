@@ -9,6 +9,7 @@ pub mod pumpit;
 pub mod blackjack;
 pub mod patriots;
 pub mod vacation;
+pub mod snowstorm;
 
 use coinflip::*;
 use whackd::*;  
@@ -18,7 +19,7 @@ use pumpit::*;
 use blackjack::*;
 use patriots::*; 
 use vacation::*;
-
+use snowstorm::*;
 
 declare_id!("7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw");
 
@@ -179,6 +180,25 @@ pub mod mcpepe_casino {
         payout: u64,
     ) -> Result<()> {
         vacation::resolve_vacation(ctx, unhashed_server_seed, payout)
+    }
+
+    // --- SNOWSTORM ROUTES ---
+    pub fn start_snowstorm(
+        ctx: Context<StartSnowstorm>,
+        bet_amount: u64,
+        server_seed_hash: [u8; 32],
+        client_seed: String,
+        nonce: u64,
+    ) -> Result<()> {
+        snowstorm::start_snowstorm(ctx, bet_amount, server_seed_hash, client_seed, nonce)
+    }
+
+    pub fn resolve_snowstorm(
+        ctx: Context<ResolveSnowstorm>,
+        unhashed_server_seed: String,
+        payout: u64,
+    ) -> Result<()> {
+        snowstorm::resolve_snowstorm(ctx, unhashed_server_seed, payout)
     }
 
 }
