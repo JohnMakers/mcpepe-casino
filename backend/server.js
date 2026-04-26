@@ -1781,10 +1781,7 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
 
         if (totalWinFactor > 800) totalWinFactor = 800;
         
-        // 🚨 SAFETY FIX: Math.floor prevents anchor.BN from crashing on floating points
-        const totalPayout = Math.floor(betAmount * totalWinFactor);
-
-        // 5. Blockchain Resolution CPI (Armored with Retry Loop)
+    // 5. Blockchain Resolution CPI (Armored with Retry Loop)
         const [gameStatePDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("snowstorm"), new anchor.web3.PublicKey(playerPublicKey).toBuffer(), new anchor.BN(nonce).toArrayLike(Buffer, 'le', 8)], 
             PROGRAM_ID
@@ -1838,13 +1835,6 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
                 if (retries === 0) throw new Error("CRITICAL: Failed to resolve after 5 attempts.");
             }
         }
-
-// ---Info to fund remove after --
-
-const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("vault")], PROGRAM_ID);
-console.log(`🏦 BANKROLL VAULT ADDRESS: ${vaultPDA.toBase58()}`);
-console.log(`🏠 HOUSE GAS WALLET: ${houseKeypair.publicKey.toBase58()}`);
-setInterval(() => {}, 1000 * 60 * 60);
 
 // ==========================================
 
