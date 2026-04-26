@@ -1776,6 +1776,13 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
 
         let { totalWinFactor, winningLines } = evaluateGrid(matrix);
 
+        // 🔥 SNAPSHOT THE INITIAL GRID BEFORE THE RESPIN
+        const initialMatrix = [
+            [...matrix[0]],
+            [...matrix[1]],
+            [...matrix[2]]
+        ];
+
         // 3. Snowstorm Respin Reroll Execution
         let respinData = null;
         if (totalWinFactor === 0) {
@@ -1882,7 +1889,8 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
         res.json({
             success: true,
             txSig,
-            matrix,       
+            initialMatrix,  // <--- ADDED: Tells frontend what to show first
+            matrix,         // This is now the final matrix
             winningLines,
             payout: totalPayout,
             respinData,
