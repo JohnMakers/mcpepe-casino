@@ -1684,29 +1684,59 @@ const SNOWSTORM_PAYTABLE = {
     8: 2   // snowstorm_snowflake
 };
 
+// FIX 1: Corrected Matrix Coordinates (Horizontal rows instead of Vertical columns)
 const PAYLINES = [
-    [[0,1], [1,1], [2,1]], // Line 1: Middle Horizontal
-    [[0,0], [1,0], [2,0]], // Line 2: Top Horizontal
-    [[0,2], [1,2], [2,2]], // Line 3: Bottom Horizontal
+    [[1,0], [1,1], [1,2]], // Line 1: Middle Horizontal
+    [[0,0], [0,1], [0,2]], // Line 2: Top Horizontal
+    [[2,0], [2,1], [2,2]], // Line 3: Bottom Horizontal
     [[0,0], [1,1], [2,2]], // Line 4: Diagonal Down
-    [[0,2], [1,1], [2,0]]  // Line 5: Diagonal Up
+    [[2,0], [1,1], [0,2]]  // Line 5: Diagonal Up
 ];
+
+// FIX 2: True RTP & Medium Volatility Weighting (0-255 mapping)
+function getWeightedSymbol(byteVal) {
+    if (byteVal < 2) return 0;   // Wild (0.78%)
+    if (byteVal < 8) return 1;   // Snowman (~2.3%)
+    if (byteVal < 20) return 2;  // Polar (~4.7%)
+    if (byteVal < 40) return 3;  // Snowmobile (~7.8%)
+    if (byteVal < 66) return 4;  // Ski (~10.1%)
+    if (byteVal < 101) return 5; // Boots (~13.6%)
+    if (byteVal < 141) return 6; // Gloves (~15.6%)
+    if (byteVal < 191) return 7; // Cocoa (~19.5%)
+    return 8;                    // Snowflake (~25.4%)
+}
+
+function evaluateGrid(matrix) {
+    let totalWinFactor = 0;
+    let winningLines = [];
+    for (let i = 0; i < PAYLINES.length; i++) {
+        const line = PAYLINES[i];
+        const s1 = matrix[line[0][0]][line[0][1]];
+        const s2 = matrix[line[1][0]][line[1][1]];
+        const s3 = matrix[line[2][0]][line[2][1]];
+
+        let matchSymbol = s1 === 0 ? (s2 === 0 ? s3 : s2) : s1;
+        if ((s1 === matchSymbol || s1 === 0) && 
+            (s2 === matchSymbol || s2 === 0) && 
+            (s3 === matchSymbol || s3 === 0)) {
+            
+            totalWinFactor += SNOWSTORM_PAYTABLE[matchSymbol];
+            winningLines.push({ lineIndex: i, symbol: matchSymbol });
+        }
+    }
+    return { totalWinFactor, winningLines };
+}
 
 app.post('/api/snowstorm/play', async (req, res) => {
     try {
         const { playerPublicKey, betAmount } = req.body;
         if (!playerPublicKey || !betAmount) return res.status(400).json({ error: "Missing parameters" });
 
-        // Generate Provably Fair Server Seed
         const serverSeed = crypto.randomBytes(32).toString('hex');
         const serverSeedHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
 
-        res.json({
-            serverSeedHash,
-            unhashedServerSeed: serverSeed 
-        });
+        res.json({ serverSeedHash, unhashedServerSeed: serverSeed });
     } catch (err) {
-        console.error("Snowstorm Start Error:", err);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -1715,13 +1745,12 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
     try {
         const { playerPublicKey, serverSeed, clientSeed, nonce, betAmount } = req.body;
 
-        // 1. Provably Fair Grid Generation
         const pfHash = crypto.createHmac('sha256', serverSeed).update(`${clientSeed}:${nonce}`).digest('hex');
         
         let grid = [];
         for (let i = 0; i < 9; i++) {
             const hexChunk = pfHash.substr(i * 2, 2);
-            grid.push(parseInt(hexChunk, 16) % 9); 
+            grid.push(getWeightedSymbol(parseInt(hexChunk, 16))); 
         }
         
         let matrix = [
@@ -1730,27 +1759,9 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
             [grid[6], grid[7], grid[8]]
         ];
 
-        // 2. Evaluate Base Win
-        let totalWinFactor = 0;
-        let winningLines = [];
+        let { totalWinFactor, winningLines } = evaluateGrid(matrix);
 
-        for (let i = 0; i < PAYLINES.length; i++) {
-            const line = PAYLINES[i];
-            const s1 = matrix[line[0][0]][line[0][1]];
-            const s2 = matrix[line[1][0]][line[1][1]];
-            const s3 = matrix[line[2][0]][line[2][1]];
-
-            let matchSymbol = s1 === 0 ? (s2 === 0 ? s3 : s2) : s1;
-            if ((s1 === matchSymbol || s1 === 0) && 
-                (s2 === matchSymbol || s2 === 0) && 
-                (s3 === matchSymbol || s3 === 0)) {
-                
-                totalWinFactor += SNOWSTORM_PAYTABLE[matchSymbol];
-                winningLines.push({ lineIndex: i, symbol: matchSymbol });
-            }
-        }
-
-        // 3. Snowstorm Respin Logic
+        // FIX 3: True "Ghost" Respin Execution
         let respinData = null;
         if (totalWinFactor === 0) {
             const col0 = [matrix[0][0], matrix[1][0], matrix[2][0]];
@@ -1768,23 +1779,36 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
             if (isMatch(col0, col1)) respinData = { held: [0, 1], spin: 2 };
             else if (isMatch(col1, col2)) respinData = { held: [1, 2], spin: 0 };
             else if (isMatch(col0, col2)) respinData = { held: [0, 2], spin: 1 };
+
+            // Actually execute the respin in memory before the payout
+            if (respinData) {
+                const spinCol = respinData.spin;
+                // Use bytes 22, 24, and 26 from the PF Hash to ensure deterministic random behavior
+                matrix[0][spinCol] = getWeightedSymbol(parseInt(pfHash.substr(22, 2), 16));
+                matrix[1][spinCol] = getWeightedSymbol(parseInt(pfHash.substr(24, 2), 16));
+                matrix[2][spinCol] = getWeightedSymbol(parseInt(pfHash.substr(26, 2), 16));
+                
+                // Re-evaluate the new matrix to see if the respin hit a win
+                const respinEval = evaluateGrid(matrix);
+                totalWinFactor = respinEval.totalWinFactor;
+                winningLines = respinEval.winningLines;
+            }
         }
 
-        // 4. Blizzard Multiplier Wheel
+        // FIX 4: Corrected Multiplier Intervals (Added 4x)
         let multiplier = 1;
         let isFullGrid = matrix.flat().every(val => val === matrix[0][0] || val === 0);
         if (isFullGrid) {
-            const multiRoll = parseInt(pfHash.substr(20, 4), 16) % 100;
-            multiplier = multiRoll > 90 ? 10 : multiRoll > 70 ? 5 : multiRoll > 40 ? 3 : 2;
+            const multiRoll = parseInt(pfHash.substr(28, 4), 16) % 100;
+            multiplier = multiRoll > 90 ? 10 : multiRoll > 70 ? 5 : multiRoll > 50 ? 4 : multiRoll > 30 ? 3 : 2;
             totalWinFactor *= multiplier;
         }
 
         if (totalWinFactor > 800) totalWinFactor = 800;
         
-        // 🔥 CRITICAL FIX: The missing payout calculation that was crashing the server
         const totalPayout = Math.floor(betAmount * totalWinFactor);
         
-        // 5. Blockchain Resolution CPI (Armored with Retry Loop)
+        // Blockchain Resolution CPI (Armored with Retry Loop)
         const [gameStatePDA] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("snowstorm"), new anchor.web3.PublicKey(playerPublicKey).toBuffer(), new anchor.BN(nonce).toArrayLike(Buffer, 'le', 8)], 
             PROGRAM_ID
@@ -1841,7 +1865,7 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
         res.json({
             success: true,
             txSig,
-            matrix,
+            matrix,       // This matrix now correctly includes the respun symbols if a respin occurred
             winningLines,
             payout: totalPayout,
             respinData,
@@ -1851,7 +1875,6 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
 
     } catch (err) {
         console.error("Snowstorm Resolve Error:", err);
-        // Added the raw error message to the response so if anything else fails, it prints to your console instead of a generic 500
         res.status(500).json({ error: err.message || "Failed to resolve on-chain." });
     }
 });
