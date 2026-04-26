@@ -244,11 +244,50 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
     // --- PHASE 2: RESPIN LOGIC ---
     if (playData.respinData) {
       const spinCol = playData.respinData.spin;
-      
-      // Delay before respin triggers, giving player a moment to see the "near miss"
       const respinStartTime = 1.2; 
 
-      // Visual Cue: Dim the held reels slightly while waiting (adds good tension)
+      // 🚨 NEW UX VISUAL: RE-SPIN TEXT
+      const respinText = new PIXI.Text({
+        text: "FREE RESPIN!",
+        style: {
+            fontFamily: 'Arial',
+            fontSize: 72,
+            fontWeight: '900',
+            fill: '#ffffff',
+            stroke: { color: '#00bfff', width: 8 }, // Icy blue outline
+            dropShadow: { color: '#000000', blur: 10, distance: 5, alpha: 0.8 }
+        }
+      });
+      respinText.anchor.set(0.5);
+      respinText.x = CANVAS_WIDTH / 2;
+      respinText.y = CANVAS_HEIGHT / 2;
+      respinText.scale.set(0); // Start tiny/hidden
+      app.stage.addChild(respinText);
+
+      // Pop the text in slightly BEFORE the reels drop
+      masterTl.to(respinText.scale, { 
+        x: 1, 
+        y: 1, 
+        duration: 0.4, 
+        ease: "back.out(1.5)" 
+      }, respinStartTime - 0.4);
+
+      // Add a quick flashing effect to draw the eye as the dimming happens
+      masterTl.to(respinText, { 
+        alpha: 0, 
+        duration: 0.1, 
+        yoyo: true, 
+        repeat: 5 
+      }, respinStartTime);
+
+      // Fade out completely and remove from stage right as the new reels land
+      masterTl.to(respinText, {
+        alpha: 0,
+        duration: 0.2,
+        onComplete: () => app.stage.removeChild(respinText)
+      }, respinStartTime + 0.6);
+
+      // Visual Cue: Dim the held reels slightly while waiting
       playData.respinData.held.forEach((heldCol: number) => {
           for(let r=0; r<3; r++) {
              masterTl.to(spriteMatrix[r][heldCol], { alpha: 0.8, duration: 0.2 }, respinStartTime);
