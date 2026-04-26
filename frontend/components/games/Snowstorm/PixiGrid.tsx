@@ -13,14 +13,14 @@ const CANVAS_WIDTH = 1000;
 const CANVAS_HEIGHT = 700;
 
 // Grid layout variables
-const SYMBOL_SIZE = 160;
+const SYMBOL_SIZE = 140;
 const SPACING_X = 180;
 const SPACING_Y = 175;
 
 // The Mask defines the visual "window" of the slot.
 // Symbols above MASK_TOP or below MASK_BOTTOM will be invisible!
 const MASK_TOP = 110; 
-const MASK_BOTTOM = CANVAS_HEIGHT - 110;
+const MASK_BOTTOM = CANVAS_HEIGHT - 100;
 
 // ==========================================
 
