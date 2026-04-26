@@ -21,26 +21,42 @@ process.on('unhandledRejection', (err) => console.error('FATAL CRASH (Rejection)
 
 const app = express();
 
-// 🔒 B-H2 FIX: lock CORS to an explicit allowlist when running in production.
-// Set ALLOWED_ORIGINS in .env as a comma-separated list, e.g.
-//   ALLOWED_ORIGINS=https://mcpepe.casino,https://app.mcpepe.casino
-// In non-production the previous wildcard behaviour is preserved for local dev.
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+// 🔒 B-H2 FIX: lock CORS to an explicit allowlist.
+// Default allowlist covers the known production + preview frontends; can be
+// extended at deploy time via ALLOWED_ORIGINS=comma,separated,list in .env.
+const DEFAULT_ALLOWED_ORIGINS = [
+    'https://mcpepe-casino.vercel.app',
+    'https://mcpepe.casino',
+    'https://www.mcpepe.casino',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
+];
+const ENV_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
     .map(s => s.trim())
     .filter(Boolean);
-const isProd = process.env.NODE_ENV === 'production';
+const ALLOWED_ORIGINS = [...new Set([...DEFAULT_ALLOWED_ORIGINS, ...ENV_ORIGINS])];
+
+// Match any Vercel preview deployment for this project (mcpepe-casino-*.vercel.app)
+const VERCEL_PREVIEW_RE = /^https:\/\/mcpepe-casino-[a-z0-9-]+\.vercel\.app$/i;
+
+console.log("🛡️  CORS allowlist:", ALLOWED_ORIGINS);
 
 app.use(cors({
     origin: (origin, cb) => {
-        // No Origin header (curl, server-to-server) → allow only in non-prod.
-        if (!origin) return cb(null, !isProd);
-        if (!isProd && ALLOWED_ORIGINS.length === 0) return cb(null, true);
+        // Same-origin / server-to-server requests omit the Origin header.
+        if (!origin) return cb(null, true);
         if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+        if (VERCEL_PREVIEW_RE.test(origin)) return cb(null, true);
+        console.warn(`⛔ CORS blocked origin: ${origin}`);
         return cb(new Error(`CORS blocked: ${origin}`));
     },
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: false,
+    maxAge: 600,
 }));
 
 app.use(express.json({ limit: '64kb' }));
