@@ -1715,16 +1715,13 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
     try {
         const { playerPublicKey, serverSeed, clientSeed, nonce, betAmount } = req.body;
 
-        // 1. Provably Fair Grid Generation based on seeds
+        // 1. Provably Fair Grid Generation
         const pfHash = crypto.createHmac('sha256', serverSeed).update(`${clientSeed}:${nonce}`).digest('hex');
         
-        // Populate 3x3 Grid
         let grid = [];
         for (let i = 0; i < 9; i++) {
-            // Simplified RNG generation from PF Hash (In production, map to RTP weightings)
             const hexChunk = pfHash.substr(i * 2, 2);
-            const num = parseInt(hexChunk, 16);
-            grid.push(num % 9); // Maps to 0-8
+            grid.push(parseInt(hexChunk, 16) % 9); 
         }
         
         let matrix = [
@@ -1743,7 +1740,6 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
             const s2 = matrix[line[1][0]][line[1][1]];
             const s3 = matrix[line[2][0]][line[2][1]];
 
-            // Wild logic (0 is Wild)
             let matchSymbol = s1 === 0 ? (s2 === 0 ? s3 : s2) : s1;
             if ((s1 === matchSymbol || s1 === 0) && 
                 (s2 === matchSymbol || s2 === 0) && 
@@ -1757,11 +1753,24 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
         // 3. Snowstorm Respin Logic (Stacked reels, no win)
         let respinData = null;
         if (totalWinFactor === 0) {
-            // Logic checking if 2 columns are identical (including wilds)...
-            // [Omitted for brevity, but this is where you'd flag respinData]
+            const col0 = [matrix[0][0], matrix[1][0], matrix[2][0]];
+            const col1 = [matrix[0][1], matrix[1][1], matrix[2][1]];
+            const col2 = [matrix[0][2], matrix[1][2], matrix[2][2]];
+
+            const isMatch = (c1, c2) => {
+                const sym1 = c1.find(v => v !== 0) || 0; 
+                const sym2 = c2.find(v => v !== 0) || 0;
+                if (sym1 !== sym2 && sym1 !== 0 && sym2 !== 0) return false;
+                const target = sym1 || sym2;
+                return c1.every(v => v === target || v === 0) && c2.every(v => v === target || v === 0);
+            };
+
+            if (isMatch(col0, col1)) respinData = { held: [0, 1], spin: 2 };
+            else if (isMatch(col1, col2)) respinData = { held: [1, 2], spin: 0 };
+            else if (isMatch(col0, col2)) respinData = { held: [0, 2], spin: 1 };
         }
 
-        // 4. Blizzard Multiplier Wheel (Full Grid)
+        // 4. Blizzard Multiplier Wheel
         let multiplier = 1;
         let isFullGrid = matrix.flat().every(val => val === matrix[0][0] || val === 0);
         if (isFullGrid) {
@@ -1770,9 +1779,10 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
             totalWinFactor *= multiplier;
         }
 
-        // Cap at 800x (Hard Requirement)
         if (totalWinFactor > 800) totalWinFactor = 800;
-        const totalPayout = betAmount * totalWinFactor;
+        
+        // 🚨 SAFETY FIX: Math.floor prevents anchor.BN from crashing on floating points
+        const totalPayout = Math.floor(betAmount * totalWinFactor);
 
         // 5. Blockchain Resolution CPI
         const program = new anchor.Program(idl, PROGRAM_ID, new anchor.AnchorProvider(connection, new anchor.Wallet(houseKeypair), {}));
@@ -1796,7 +1806,7 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
             payout: totalPayout,
             respinData,
             multiplier,
-            serverSeed // Sent back strictly for client-side Provably Fair verification
+            serverSeed
         });
 
     } catch (err) {
