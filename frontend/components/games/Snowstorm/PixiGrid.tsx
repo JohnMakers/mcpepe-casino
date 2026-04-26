@@ -95,8 +95,15 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
     setTimeout(() => {
       // 1. Blizzard Multiplier Wheel Effect
       if (data.multiplier > 1) {
-          const multText = new PIXI.Text(`BLIZZARD MULTIPLIER: ${data.multiplier}X!`, {
-              fontFamily: 'Arial', fontSize: 48, fill: '#00ffff', stroke: '#ffffff', strokeThickness: 4, dropShadow: true
+          const multText = new PIXI.Text({
+              text: `BLIZZARD MULTIPLIER: ${data.multiplier}X!`,
+              style: {
+                  fontFamily: 'Arial', 
+                  fontSize: 48, 
+                  fill: '#00ffff', 
+                  stroke: { color: '#ffffff', width: 4 }, 
+                  dropShadow: { color: '#000000', blur: 4, distance: 4, alpha: 0.8 }
+              }
           });
           multText.anchor.set(0.5);
           multText.x = CANVAS_WIDTH / 2;
