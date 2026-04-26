@@ -46,7 +46,7 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
     const appRef = useRef<PIXI.Application | null>(null);
     const containerRef = useRef<PIXI.Container | null>(null);
 
-    // 🚀 PIXIJS v8 ASYNC INITIALIZATION FIX
+    // 🚀 PIXIJS v8 ASYNC INITIALIZATION
     useEffect(() => {
         if (!canvasRef.current || appRef.current) return;
         let isMounted = true;
@@ -68,23 +68,63 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                 return;
             }
 
-            // v8 uses app.canvas instead of app.view
+            // 🔥 FIX 1: Enforce Canvas CSS Dimensions
+            const style = app.canvas.style as CSSStyleDeclaration;
+            style.width = '100%';
+            style.height = '100%';
+            style.position = 'absolute';
             canvasRef.current?.appendChild(app.canvas);
 
+            const mainContainer = new PIXI.Container();
+            app.stage.addChild(mainContainer);
+
+            // 🔥 FIX 2: Load the Background Image directly into Pixi
+            try {
+                await PIXI.Assets.load('/snowstorm/snowstorm_bg.png');
+                const bg = PIXI.Sprite.from('/snowstorm/snowstorm_bg.png');
+                bg.width = CANVAS_WIDTH;
+                bg.height = CANVAS_HEIGHT;
+                mainContainer.addChild(bg);
+            } catch (e) {
+                console.warn("Background asset failed to load");
+            }
+
             const container = new PIXI.Container();
-            app.stage.addChild(container);
+            mainContainer.addChild(container);
             containerRef.current = container;
 
-            // Visual Window Mask (Updated to v8 syntax)
+            // Visual Window Mask
             const mask = new PIXI.Graphics().rect(0, MASK_TOP, CANVAS_WIDTH, MASK_BOTTOM - MASK_TOP).fill(0xffffff);
-            app.stage.addChild(mask);
+            mainContainer.addChild(mask);
             container.mask = mask;
 
-            // Preload Textures
+            // Preload Symbol Textures
             Object.values(SYMBOL_MAP).forEach(url => {
                 if (!PIXI.Assets.cache.has(url)) PIXI.Assets.add({ alias: url, src: url });
             });
             await PIXI.Assets.load(Object.values(SYMBOL_MAP));
+
+            // 🔥 FIX 3: Draw a default static grid if no spin data exists yet
+            if (!playData) {
+                const defaultMatrix = [
+                    [8, 5, 2],
+                    [7, 4, 1],
+                    [6, 3, 8]
+                ];
+                for (let col = 0; col < 3; col++) {
+                    for (let row = 0; row < 3; row++) {
+                        const symVal = defaultMatrix[row][col];
+                        const texture = PIXI.Texture.from(SYMBOL_MAP[symVal]);
+                        const sprite = new PIXI.Sprite(texture);
+                        sprite.width = SYMBOL_SIZE;
+                        sprite.height = SYMBOL_SIZE;
+                        sprite.anchor.set(0.5);
+                        sprite.x = TILE_POSITIONS[row][col].x;
+                        sprite.y = TILE_POSITIONS[row][col].y;
+                        container.addChild(sprite);
+                    }
+                }
+            }
         };
 
         initPixi();
@@ -241,9 +281,10 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
                             const sprite = spriteMatrix[r][c];
                             if (sprite) {
                                 container.addChild(sprite); 
+                                // Clean subtle 1.04 pulsate
                                 gsap.to(sprite.scale, { 
-                                    x: 0.4, 
-                                    y: 0.4, 
+                                    x: 1.04, 
+                                    y: 1.04, 
                                     duration: 1.2, 
                                     yoyo: true, 
                                     repeat: -1, 
