@@ -1836,8 +1836,27 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
             }
         }
 
-// ==========================================
+        // Return the final result to the frontend
+        res.json({
+            success: true,
+            txSig,
+            matrix,
+            winningLines,
+            payout: totalPayout,
+            respinData,
+            multiplier,
+            serverSeed
+        });
 
+    } catch (err) {
+        console.error("Snowstorm Resolve Error:", err);
+        res.status(500).json({ error: "Failed to resolve on-chain." });
+    }
+});
+
+// ==========================================
+// SERVER INITIALIZATION
+// ==========================================
 
 const PORT = process.env.PORT || 3005;
 app.listen(PORT, '0.0.0.0', () => {
