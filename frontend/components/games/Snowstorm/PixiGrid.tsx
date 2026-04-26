@@ -12,18 +12,18 @@ const CANVAS_HEIGHT = 700;
 const SYMBOL_SIZE = 137;
 
 // The Mask defines the visual "window" of the slot.
-const MASK_TOP = 120; 
+const MASK_TOP = 130; 
 const MASK_BOTTOM = CANVAS_HEIGHT - 100;
 
 // 🎯 THE PRECISION COORDINATE GRID
 // Manually adjust the X and Y for every single tile on the board
 const TILE_POSITIONS = [
     // ROW 0 (Top Row)
-    [ { x: 324, y: 208 },  { x: 500.3, y: 208 },  { x: 676.7, y: 208 } ],
+    [ { x: 325.4, y: 211 },  { x: 500.3, y: 211 },  { x: 676.3, y: 211 } ],
     // ROW 1 (Middle Row)
-    [ { x: 324, y: 363 },  { x: 500.3, y: 363 },  { x: 676.7, y: 363 } ],
+    [ { x: 325.4, y: 367 },  { x: 500.3, y: 367 },  { x: 676.3, y: 367 } ],
     // ROW 2 (Bottom Row)
-    [ { x: 324, y: 522 },  { x: 500.3, y: 522 },  { x: 676.7, y: 522 } ]
+    [ { x: 325.4, y: 522 },  { x: 500.3, y: 522 },  { x: 676.3, y: 522 } ]
 ];
 
 // The exact Y pixel coordinate where symbols spawn before dropping
