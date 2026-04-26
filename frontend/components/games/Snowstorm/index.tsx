@@ -118,10 +118,6 @@ export default function McPepeSnowstorm() {
            </button>
         </div>
       </div>
-
-      <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-300 drop-shadow-lg mb-2 uppercase tracking-widest text-center">
-        McPepe Snowstorm
-      </h1>
       
       {/* Slot Wrapper */}
       <div className="w-full max-w-5xl flex flex-col justify-center items-center px-4 relative z-0 shrink">
