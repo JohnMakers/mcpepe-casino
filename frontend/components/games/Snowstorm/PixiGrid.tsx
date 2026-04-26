@@ -31,29 +31,51 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
   useEffect(() => {
     if (!pixiContainer.current) return;
 
-    const app = new PIXI.Application({
-      width: CANVAS_WIDTH,
-      height: CANVAS_HEIGHT,
-      backgroundAlpha: 0, // <-- Replaced 'transparent: true'
-      resolution: window.devicePixelRatio || 1,
-      autoDensity: true,
-    });
-    
-    pixiContainer.current.appendChild(app.view as any);
-    appRef.current = app;
+    let isCancelled = false;
+    const app = new PIXI.Application();
 
-    // Background
-    const bg = PIXI.Sprite.from('/snowstorm/snowstorm_bg.png');
-    bg.width = CANVAS_WIDTH;
-    bg.height = CANVAS_HEIGHT;
-    app.stage.addChild(bg);
+    const setupPixi = async () => {
+      // PixiJS v8 requires async initialization
+      await app.init({
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT,
+        backgroundAlpha: 0,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true,
+      });
 
-    if (playData && playData.matrix) {
-      animateSpin(app, playData.matrix, playData);
-    }
+      // Prevent race conditions if the component unmounts before init finishes
+      if (isCancelled) {
+        app.destroy(true, true);
+        return;
+      }
+
+      // 'app.view' is now 'app.canvas' in v8
+      if (pixiContainer.current) {
+        pixiContainer.current.appendChild(app.canvas);
+      }
+      appRef.current = app;
+
+      // Background
+      const bg = PIXI.Sprite.from('/snowstorm/snowstorm_bg.png');
+      bg.width = CANVAS_WIDTH;
+      bg.height = CANVAS_HEIGHT;
+      app.stage.addChild(bg);
+
+      // Trigger spin if we have data
+      if (playData && playData.matrix) {
+        animateSpin(app, playData.matrix, playData);
+      }
+    };
+
+    setupPixi();
 
     return () => {
-      app.destroy(true, true);
+      isCancelled = true;
+      if (appRef.current) {
+        appRef.current.destroy(true, true);
+        appRef.current = null;
+      }
     };
   }, [playData]);
 
