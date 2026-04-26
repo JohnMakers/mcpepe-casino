@@ -4,6 +4,7 @@ import { PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import idl from '../../../idl.json'; 
 import PixiGrid from './PixiGrid';
+import ProvablyFairModal from '../../modals/ProvablyFairModal';
 
 const PROGRAM_ID = new PublicKey(idl.metadata.address);
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -12,9 +13,16 @@ export default function McPepeSnowstorm() {
   const { connection } = useConnection();
   const { publicKey, signTransaction, sendTransaction } = useWallet();
   
-  const [betAmount, setBetAmount] = useState<number>(0.1);
+  // 🔥 FIX 1: Upgraded to string-based input to handle decimals beautifully
+  const [betInput, setBetInput] = useState<string>("0.1000");
+  const betAmount = Number(betInput) || 0; 
+
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
   const [playData, setPlayData] = useState<any>(null);
+
+  // 🔥 FIX 2: Provably Fair State Logic
+  const [isPFOpen, setIsPFOpen] = useState<boolean>(false);
+  const [pfData, setPfData] = useState({ hash: '', seed: '' });
 
   const handleSpin = async () => {
     if (!publicKey || !signTransaction) return alert("Connect Wallet!");
@@ -73,6 +81,9 @@ export default function McPepeSnowstorm() {
       
       const result = await resolveRes.json();
       setPlayData(result);
+      
+      // 🔥 FIX 3: Store the exact seeds so the player can verify them
+      setPfData({ hash: serverSeedHash, seed: unhashedServerSeed });
 
     } catch (err) {
       console.error(err);
@@ -82,26 +93,21 @@ export default function McPepeSnowstorm() {
   };
 
   return (
-    // 🔥 FIX 1: Changed from py-10 to py-4, and used justify-between to manage vertical space gracefully
     <div className="flex flex-col items-center justify-between bg-blue-950 min-h-screen py-4 w-full overflow-hidden">
       
-      {/* 🔥 FIX 2: Reduced the bottom margin (mb-2) on the title to pull the slot up */}
       <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-300 drop-shadow-lg mb-2 uppercase tracking-widest text-center">
         McPepe Snowstorm
       </h1>
       
       {/* Slot Wrapper */}
       <div className="w-full max-w-5xl flex flex-col justify-center items-center px-4 relative z-0 shrink">
-        
-        {/* Relative container wrapping the canvas to anchor the absolute Win Text */}
         <div className="relative flex justify-center">
           <PixiGrid 
             playData={playData} 
             onAnimationComplete={() => setIsSpinning(false)} 
           />
 
-          {/* 🔥 FIX 3: THE WINNER OVERLAY. Absolute positioned over the bottom edge of the canvas. 
-              It no longer takes up any layout height, meaning the controls underneath are permanently pulled up! */}
+          {/* THE WINNER OVERLAY */}
           <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-full pointer-events-none flex justify-center z-20">
             {playData && playData.payout > 0 && !isSpinning && (
               <div className="text-4xl md:text-5xl text-green-400 font-black animate-pulse drop-shadow-[0_0_25px_rgba(74,222,128,1)] bg-black/70 px-10 py-2 rounded-full border-2 border-green-500 backdrop-blur-md whitespace-nowrap">
@@ -112,32 +118,93 @@ export default function McPepeSnowstorm() {
         </div>
       </div>
 
-      {/* 🔥 FIX 4: Controls. Tighter padding, and safely locked above the bottom of the screen */}
-      <div className="flex gap-4 items-center bg-blue-900/90 p-3 md:p-4 rounded-xl border-2 border-blue-500 mt-8 mb-2 z-10 shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-md">
-        <span className="text-white font-bold text-xl">BET:</span>
-        <input 
-          type="number" 
-          value={betAmount}
-          onChange={(e) => setBetAmount(Number(e.target.value))}
-          className="w-24 bg-blue-950 text-white rounded p-2 text-center font-bold outline-none border border-blue-700 focus:border-cyan-400 transition-colors"
-          disabled={isSpinning}
-          step="0.05"
-          min="0.05"
-        />
-        <span className="text-white font-bold">SOL</span>
+      {/* 🔥 FIX 4: Upgraded Multi-Component Action Bar */}
+      <div className="flex flex-wrap md:flex-nowrap gap-4 items-center bg-blue-900/90 p-3 md:p-4 rounded-xl border-2 border-blue-500 mt-8 mb-2 z-10 shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-md justify-center">
+        
+        {/* Patriots-Style Bet Input Component (Theme-Matched) */}
+        <div className="flex gap-4 items-center bg-blue-950 border border-blue-400/40 p-3 rounded-xl shrink-0">
+          <div className="flex flex-col">
+            <label className="text-xs text-blue-300 font-bold uppercase tracking-widest mb-1">Bet</label>
+            <div className="flex items-center gap-2">
+              
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400 font-bold text-sm">◎</span>
+                <input 
+                  type="number" 
+                  step="0.0001"
+                  min="0.0001"
+                  value={betInput}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/-/g, ''); 
+                    setBetInput(val);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === '-' || e.key === 'e') {
+                      e.preventDefault();
+                    }
+                  }}
+                  onBlur={() => {
+                    let val = Number(betInput);
+                    if (isNaN(val) || val < 0.0001) val = 0.0001;
+                    setBetInput(val.toFixed(4));
+                  }}
+                  className="bg-blue-900/50 border-2 border-blue-500/50 rounded-lg py-2 pl-7 pr-2 text-white font-black w-32 focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(34,211,238,0.3)] focus:outline-none transition-all"
+                  disabled={isSpinning}
+                />
+              </div>
 
+              <button 
+                onClick={() => setBetInput(prev => Math.max(0.0001, Number((Number(prev) / 2).toFixed(4))).toString())}
+                disabled={isSpinning}
+                className="bg-blue-800/50 hover:bg-blue-700 border border-blue-600/50 text-cyan-300 font-bold py-2 px-3 rounded-lg text-sm transition-all disabled:opacity-50"
+              >
+                1/2
+              </button>
+              <button 
+                onClick={() => setBetInput(prev => (Number(prev) * 2).toFixed(4).toString())}
+                disabled={isSpinning}
+                className="bg-blue-800/50 hover:bg-blue-700 border border-blue-600/50 text-cyan-300 font-bold py-2 px-3 rounded-lg text-sm transition-all disabled:opacity-50"
+              >
+                2x
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* The Spin Button */}
         <button 
           onClick={handleSpin}
           disabled={isSpinning}
-          className={`ml-2 md:ml-4 px-8 md:px-12 py-3 md:py-4 rounded-lg font-black text-xl uppercase tracking-widest transition-all ${
+          className={`px-8 md:px-12 py-5 rounded-xl font-black text-2xl uppercase tracking-widest transition-all ${
             isSpinning 
               ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-              : 'bg-gradient-to-r from-blue-400 to-cyan-300 hover:from-blue-300 hover:to-cyan-200 text-blue-900 shadow-[0_0_20px_rgba(103,232,249,0.5)] hover:scale-105 active:scale-95'
+              : 'bg-gradient-to-r from-blue-400 to-cyan-300 hover:from-blue-300 hover:to-cyan-200 text-blue-950 shadow-[0_0_20px_rgba(103,232,249,0.5)] hover:scale-105 active:scale-95'
           }`}
         >
           {isSpinning ? 'SPINNING...' : 'SPIN'}
         </button>
+
+        {/* Provably Fair Trigger Button */}
+        <button 
+          onClick={() => setIsPFOpen(true)}
+          className="flex flex-col items-center justify-center gap-1 text-blue-300 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest bg-blue-950/50 h-[72px] px-4 rounded-xl border border-blue-500/30 hover:border-blue-400"
+        >
+          <svg className="w-6 h-6 text-cyan-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <span className="hidden md:inline">Verify</span>
+        </button>
+
       </div>
+
+      {/* Render the Modal outside the normal flow */}
+      <ProvablyFairModal 
+        isOpen={isPFOpen} 
+        onClose={() => setIsPFOpen(false)} 
+        serverSeedHash={pfData.hash} 
+        serverSeed={pfData.seed} 
+      />
+
     </div>
   );
 }
