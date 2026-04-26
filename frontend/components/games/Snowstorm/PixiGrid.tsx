@@ -5,7 +5,7 @@ import gsap from 'gsap';
 // ==========================================
 // ⚙️ UI CONFIGURATION & DEBUG MODE ⚙️
 // ==========================================
-const DEBUG_MODE = true; 
+const DEBUG_MODE = false; 
 
 const CANVAS_WIDTH = 1000;
 const CANVAS_HEIGHT = 700;

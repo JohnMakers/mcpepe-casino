@@ -29,7 +29,6 @@ export default function McPepeSnowstorm() {
         body: JSON.stringify({ playerPublicKey: publicKey.toBase58(), betAmount })
       });
       
-      // 🚨 CRITICAL FIX: Extract the unhashedServerSeed alongside the hash!
       const { serverSeedHash, unhashedServerSeed } = await initRes.json();
 
       // 2. Generate Client Seed & Nonce
@@ -65,7 +64,7 @@ export default function McPepeSnowstorm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerPublicKey: publicKey.toBase58(),
-          serverSeed: unhashedServerSeed, // 🚨 CRITICAL FIX: Send the unhashed seed back!
+          serverSeed: unhashedServerSeed, 
           clientSeed,
           nonce,
           betAmount: lamports
@@ -83,49 +82,60 @@ export default function McPepeSnowstorm() {
   };
 
   return (
-    <div className="flex flex-col items-center bg-blue-950 min-h-screen py-10 w-full">
-      <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-300 drop-shadow-lg mb-8 uppercase tracking-widest text-center">
+    // 🔥 FIX 1: Changed from py-10 to py-4, and used justify-between to manage vertical space gracefully
+    <div className="flex flex-col items-center justify-between bg-blue-950 min-h-screen py-4 w-full overflow-hidden">
+      
+      {/* 🔥 FIX 2: Reduced the bottom margin (mb-2) on the title to pull the slot up */}
+      <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-300 drop-shadow-lg mb-2 uppercase tracking-widest text-center">
         McPepe Snowstorm
       </h1>
       
-      {/* 🛠️ UPDATED: Added a responsive max-width wrapper so the larger canvas scales beautifully */}
-      <div className="mb-6 w-full max-w-5xl flex justify-center px-4">
-        <PixiGrid 
-          playData={playData} 
-          onAnimationComplete={() => setIsSpinning(false)} 
-        />
-      </div>
+      {/* Slot Wrapper */}
+      <div className="w-full max-w-5xl flex flex-col justify-center items-center px-4 relative z-0 shrink">
+        
+        {/* Relative container wrapping the canvas to anchor the absolute Win Text */}
+        <div className="relative flex justify-center">
+          <PixiGrid 
+            playData={playData} 
+            onAnimationComplete={() => setIsSpinning(false)} 
+          />
 
-      <div className="h-16 flex items-center justify-center">
-        {playData && playData.payout > 0 && !isSpinning && (
-          <div className="text-4xl text-green-400 font-black animate-pulse drop-shadow-[0_0_15px_rgba(74,222,128,0.8)]">
-            WINNER: {(playData.payout / 1e9).toFixed(4)} SOL!
+          {/* 🔥 FIX 3: THE WINNER OVERLAY. Absolute positioned over the bottom edge of the canvas. 
+              It no longer takes up any layout height, meaning the controls underneath are permanently pulled up! */}
+          <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-full pointer-events-none flex justify-center z-20">
+            {playData && playData.payout > 0 && !isSpinning && (
+              <div className="text-4xl md:text-5xl text-green-400 font-black animate-pulse drop-shadow-[0_0_25px_rgba(74,222,128,1)] bg-black/70 px-10 py-2 rounded-full border-2 border-green-500 backdrop-blur-md whitespace-nowrap">
+                WINNER: {(playData.payout / 1e9).toFixed(4)} SOL!
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
-      <div className="flex gap-4 items-center bg-blue-900/50 p-4 rounded-xl border-2 border-blue-500 mt-4">
+      {/* 🔥 FIX 4: Controls. Tighter padding, and safely locked above the bottom of the screen */}
+      <div className="flex gap-4 items-center bg-blue-900/90 p-3 md:p-4 rounded-xl border-2 border-blue-500 mt-8 mb-2 z-10 shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-md">
         <span className="text-white font-bold text-xl">BET:</span>
         <input 
           type="number" 
           value={betAmount}
           onChange={(e) => setBetAmount(Number(e.target.value))}
-          className="w-24 bg-blue-950 text-white rounded p-2 text-center font-bold"
+          className="w-24 bg-blue-950 text-white rounded p-2 text-center font-bold outline-none border border-blue-700 focus:border-cyan-400 transition-colors"
           disabled={isSpinning}
           step="0.05"
+          min="0.05"
         />
         <span className="text-white font-bold">SOL</span>
 
         <button 
           onClick={handleSpin}
           disabled={isSpinning}
-          className={`ml-4 px-12 py-4 rounded-lg font-black text-xl uppercase tracking-widest transition-all ${
+          className={`ml-2 md:ml-4 px-8 md:px-12 py-3 md:py-4 rounded-lg font-black text-xl uppercase tracking-widest transition-all ${
             isSpinning 
               ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-              : 'bg-gradient-to-r from-blue-400 to-cyan-300 hover:from-blue-300 hover:to-cyan-200 text-blue-900 shadow-[0_0_20px_rgba(103,232,249,0.5)] hover:scale-105'
+              : 'bg-gradient-to-r from-blue-400 to-cyan-300 hover:from-blue-300 hover:to-cyan-200 text-blue-900 shadow-[0_0_20px_rgba(103,232,249,0.5)] hover:scale-105 active:scale-95'
           }`}
         >
-          {isSpinning ? 'BLIZZARD INCOMING...' : 'SPIN'}
+          {isSpinning ? 'SPINNING...' : 'SPIN'}
         </button>
       </div>
     </div>
