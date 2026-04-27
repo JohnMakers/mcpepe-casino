@@ -33,7 +33,21 @@ export default function Dashboard() {
   
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
-  const [activeGame, setActiveGame] = useState<string | null>(null);
+  const [activeGame, setActiveGameState] = useState<string | null>(null);
+
+  // Auto-close sidebars on mobile when navigating into a game
+  const setActiveGame = (game: string | null) => {
+    setActiveGameState(game);
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsLeftSidebarOpen(false);
+      setIsRightSidebarOpen(false);
+    }
+  };
+
+  const closeMobileSidebars = () => {
+    setIsLeftSidebarOpen(false);
+    setIsRightSidebarOpen(false);
+  };
 
   const [showProvablyFair, setShowProvablyFair] = useState(false);
   const [selectedBetInfo, setSelectedBetInfo] = useState<any>(null);
@@ -84,10 +98,19 @@ export default function Dashboard() {
       />
 
       <div className="flex flex-1 h-[calc(100vh-4rem)] relative">
-        <LeftSidebar 
-          isOpen={isLeftSidebarOpen} 
-          activeGame={activeGame} 
-          setActiveGame={setActiveGame} 
+        {/* Mobile-only backdrop: tap anywhere outside the sidebar to close it */}
+        {(isLeftSidebarOpen || isRightSidebarOpen) && (
+          <div
+            onClick={closeMobileSidebars}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
+            aria-hidden="true"
+          />
+        )}
+
+        <LeftSidebar
+          isOpen={isLeftSidebarOpen}
+          activeGame={activeGame}
+          setActiveGame={setActiveGame}
         />
 
         <main className="flex-1 overflow-y-auto bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0d1410] via-[#050806] to-black p-4 sm:p-8 flex flex-col relative custom-scrollbar">

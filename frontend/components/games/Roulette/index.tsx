@@ -290,32 +290,32 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
     );
 
     return (
-        <div className="flex flex-col xl:flex-row gap-4 w-full max-w-7xl mx-auto p-2 md:p-4 animate-fade-in relative">
-            
+        <div className="flex flex-col xl:flex-row gap-3 sm:gap-4 w-full max-w-7xl mx-auto p-1.5 sm:p-2 md:p-4 animate-fade-in relative">
+
             {/* LEFT PANEL: COMPACT CLEAN BET SLIP */}
-            <div className="flex flex-col w-full xl:w-[320px] bg-[#0a0f0c] p-4 rounded-2xl border border-green-500/20 shadow-[0_0_50px_rgba(0,0,0,0.8)] relative z-10 h-fit shrink-0">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Bet Slip</h2>
+            <div className="flex flex-col w-full xl:w-[320px] bg-[#0a0f0c] p-3 sm:p-4 rounded-2xl border border-green-500/20 shadow-[0_0_50px_rgba(0,0,0,0.8)] relative z-10 h-fit shrink-0">
+                <div className="flex justify-between items-center mb-3 sm:mb-4">
+                    <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tighter">Bet Slip</h2>
                     <button onClick={() => setShowProvablyFair(true)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-green-500/50 hover:text-green-400 bg-green-900/20 px-3 py-1.5 rounded-full border border-green-900/50 transition-colors">
                         🛡️ Fair
                     </button>
                 </div>
                 
-                <div className="space-y-4">
-                    <div className="bg-[#050806] border-2 border-gray-800 p-4 rounded-2xl flex justify-between items-center shadow-[inset_0_5px_20px_rgba(0,0,0,1)]">
+                <div className="space-y-3 sm:space-y-4">
+                    <div className="bg-[#050806] border-2 border-gray-800 p-3 sm:p-4 rounded-2xl flex justify-between items-center shadow-[inset_0_5px_20px_rgba(0,0,0,1)]">
                         <span className="text-gray-500 font-bold uppercase text-xs tracking-wider">Total Wager</span>
-                        <span className="text-2xl font-mono font-black text-yellow-400">{totalWager.toFixed(2)}</span>
+                        <span className="text-xl sm:text-2xl font-mono font-black text-yellow-400">{totalWager.toFixed(2)}</span>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 justify-center w-full bg-[#111] p-4 rounded-2xl border-2 border-gray-900">
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center w-full bg-[#111] p-3 sm:p-4 rounded-2xl border-2 border-gray-900">
                         {[0.01, 0.05, 0.1, 0.5, 1, 5, 10].map((chipValue) => {
                             const style = getChipStyles(chipValue);
                             return (
                                 <button
                                     key={chipValue} onClick={() => setSelectedChipValue(chipValue)} disabled={isSpinning}
-                                    className={`w-10 h-10 rounded-full font-black flex items-center justify-center border-[3px] border-dashed transition-all shadow-xl font-mono text-[9px] disabled:opacity-50 ${
-                                        selectedChipValue === chipValue 
-                                        ? `scale-110 shadow-[0_0_20px_rgba(255,255,255,0.4)] ring-2 ring-yellow-400 ${style}` 
+                                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full font-black flex items-center justify-center border-[3px] border-dashed transition-all shadow-xl font-mono text-[9px] disabled:opacity-50 ${
+                                        selectedChipValue === chipValue
+                                        ? `scale-110 shadow-[0_0_20px_rgba(255,255,255,0.4)] ring-2 ring-yellow-400 ${style}`
                                         : `opacity-80 hover:opacity-100 hover:scale-105 ${style}`
                                     }`}
                                 >
@@ -328,9 +328,9 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                         </button>
                     </div>
 
-                    <button 
+                    <button
                         onClick={handleSpin} disabled={isSpinning || currentBets.length === 0}
-                        className="w-full bg-gradient-to-t from-[#1b5e20] to-[#22c55e] hover:brightness-125 text-black font-black text-xl uppercase tracking-widest py-4 rounded-2xl transition-all disabled:opacity-50 disabled:grayscale shadow-[0_10px_30px_rgba(34,197,94,0.3)] active:translate-y-2 border-b-4 border-[#144718]"
+                        className="w-full bg-gradient-to-t from-[#1b5e20] to-[#22c55e] hover:brightness-125 text-black font-black text-lg sm:text-xl uppercase tracking-widest py-3 sm:py-4 rounded-2xl transition-all disabled:opacity-50 disabled:grayscale shadow-[0_10px_30px_rgba(34,197,94,0.3)] active:translate-y-2 border-b-4 border-[#144718]"
                     >
                         {isSpinning ? 'SPINNING...' : 'PLACE BET'}
                     </button>
@@ -338,15 +338,15 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
             </div>
 
             {/* RIGHT PANEL: COMPACT BOARD */}
-            <div className="flex flex-col items-center gap-6 w-full xl:flex-1 mt-0">
-                
+            <div className="flex flex-col items-center gap-4 sm:gap-6 w-full xl:flex-1 mt-0 min-w-0">
+
                 {/* Recent Outcomes Bar */}
-                <div className="flex gap-2 bg-[#111] p-2 rounded-xl border-2 border-gray-800 w-full max-w-2xl overflow-x-auto shadow-inner">
-                    <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px] flex items-center px-4 border-r border-gray-800">History</span>
+                <div className="flex gap-1.5 sm:gap-2 bg-[#111] p-1.5 sm:p-2 rounded-xl border-2 border-gray-800 w-full max-w-2xl overflow-x-auto shadow-inner custom-scrollbar">
+                    <span className="text-gray-500 font-bold uppercase tracking-widest text-[10px] flex items-center px-2 sm:px-4 border-r border-gray-800 shrink-0">History</span>
                     {recentOutcomes.map((num, idx) => {
                         const isRed = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(num);
                         return (
-                            <div key={idx} className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs text-white shrink-0 shadow-lg ${num === 0 ? 'bg-green-500' : isRed ? 'bg-[#c22020]' : 'bg-[#222]'}`}>
+                            <div key={idx} className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center font-black text-[10px] sm:text-xs text-white shrink-0 shadow-lg ${num === 0 ? 'bg-green-500' : isRed ? 'bg-[#c22020]' : 'bg-[#222]'}`}>
                                 {num}
                             </div>
                         )
@@ -356,7 +356,7 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                 <div className="relative flex justify-center w-full">
                     
                     <div style={{ perspective: '1200px' }} className="flex justify-center w-full">
-                        <div className="relative w-[300px] h-[300px] md:w-[340px] md:h-[340px] rounded-full flex items-center justify-center"
+                        <div className="relative w-[240px] h-[240px] sm:w-[300px] sm:h-[300px] md:w-[340px] md:h-[340px] rounded-full flex items-center justify-center"
                              style={{ transform: 'rotateX(35deg) translateY(-10px)', transformStyle: 'preserve-3d' }}>
                             
                             <img 
@@ -389,14 +389,14 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
                     {showOverlay && winningNumber !== null && !isSpinning && (
                         <div 
                             onClick={() => setShowOverlay(false)}
-                            className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-56 h-56 bg-[#050806]/90 backdrop-blur-md rounded-full flex flex-col items-center justify-center border-4 animate-bounce-short z-[200] cursor-pointer ${localPayout! > 0 ? 'border-green-400 shadow-[0_0_100px_rgba(34,197,94,0.8)]' : 'border-red-500/80 shadow-[0_0_100px_rgba(239,68,68,0.6)]'}`}
+                            className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-44 h-44 sm:w-56 sm:h-56 bg-[#050806]/90 backdrop-blur-md rounded-full flex flex-col items-center justify-center border-4 animate-bounce-short z-[200] cursor-pointer ${localPayout! > 0 ? 'border-green-400 shadow-[0_0_100px_rgba(34,197,94,0.8)]' : 'border-red-500/80 shadow-[0_0_100px_rgba(239,68,68,0.6)]'}`}
                         >
                             <span className="text-gray-300 text-[10px] font-black uppercase tracking-widest mb-1">Outcome</span>
-                            <span className="text-7xl font-black text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">{winningNumber}</span>
+                            <span className="text-5xl sm:text-7xl font-black text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">{winningNumber}</span>
                             {localPayout! > 0 ? (
-                                <span className="text-green-400 font-black mt-2 text-xl drop-shadow-md">+{localPayout!.toFixed(2)} SOL</span>
+                                <span className="text-green-400 font-black mt-2 text-base sm:text-xl drop-shadow-md">+{localPayout!.toFixed(2)} SOL</span>
                             ) : (
-                                <span className="text-red-400 font-black mt-2 text-sm uppercase tracking-widest">Bust</span>
+                                <span className="text-red-400 font-black mt-2 text-xs sm:text-sm uppercase tracking-widest">Bust</span>
                             )}
                             <span className="text-gray-500 text-[8px] absolute bottom-4 uppercase tracking-widest opacity-50">Tap to close</span>
                         </div>
@@ -404,8 +404,9 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
 
                 </div>
 
-                <div className={`w-full max-w-5xl overflow-x-auto pb-4 transition-opacity duration-500 ${isSpinning ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-                    <div className="min-w-[800px] bg-[#0c4a25] border-[12px] border-[#072411] text-white flex flex-col cursor-pointer select-none shadow-[0_20px_50px_rgba(0,0,0,0.8)] rounded-3xl p-3 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] relative">
+                <div className={`w-full max-w-5xl overflow-x-auto pb-4 custom-scrollbar transition-opacity duration-500 ${isSpinning ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+                    <p className="sm:hidden text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2 text-center">Swipe sideways to view full board →</p>
+                    <div className="min-w-[800px] bg-[#0c4a25] border-[8px] sm:border-[12px] border-[#072411] text-white flex flex-col cursor-pointer select-none shadow-[0_20px_50px_rgba(0,0,0,0.8)] rounded-2xl sm:rounded-3xl p-2 sm:p-3 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] relative">
                         
                         <div className="flex border-[3px] border-white/20 rounded-xl overflow-hidden relative z-10 shadow-xl bg-[#09381c]">
                             <div onClick={() => handlePlaceChip(BetType.StraightUp, [0, 0, 0, 0])} className={`relative flex-none w-[4.3rem] border-r-[3px] border-white/20 flex items-center justify-center transition-all text-4xl font-black ${winningNumber === 0 ? 'bg-yellow-400 text-black shadow-[inset_0_0_40px_rgba(0,0,0,0.7)]' : 'bg-[#156e34] hover:bg-[#1a853f]'}`}>

@@ -320,7 +320,7 @@ export default function PumpIt() {
     }
 
     return (
-      <div className="relative w-full h-64 bg-[#050806] border border-gray-800 rounded-lg overflow-hidden flex items-center justify-center shadow-[inset_0_0_50px_rgba(0,0,0,0.8)]">
+      <div className="relative w-full h-56 sm:h-64 bg-[#050806] border border-gray-800 rounded-lg overflow-hidden flex items-center justify-center shadow-[inset_0_0_50px_rgba(0,0,0,0.8)]">
         
         <style>{`
           @keyframes popUpBlast {
@@ -412,22 +412,22 @@ export default function PumpIt() {
         </svg>
 
         {gameState === 'RUGGED' && (
-          <div className="absolute inset-0 bg-[#0a0000]/80 flex flex-col items-center justify-center backdrop-blur-sm z-30 shadow-[inset_0_0_100px_rgba(255,0,0,0.5)]">
-            <h2 className="text-7xl font-black text-red-600 uppercase tracking-tighter animate-glitch mix-blend-screen drop-shadow-[0_0_20px_rgba(239,68,68,1)]">LIQUIDATED</h2>
-            <div className="mt-4 bg-red-900/40 border border-red-600/50 px-6 py-2 rounded-full">
-               <p className="text-red-400 font-bold tracking-widest text-sm uppercase">The devs dumped on you</p>
+          <div className="absolute inset-0 bg-[#0a0000]/80 flex flex-col items-center justify-center backdrop-blur-sm z-30 shadow-[inset_0_0_100px_rgba(255,0,0,0.5)] px-4 text-center">
+            <h2 className="text-4xl sm:text-7xl font-black text-red-600 uppercase tracking-tighter animate-glitch mix-blend-screen drop-shadow-[0_0_20px_rgba(239,68,68,1)]">LIQUIDATED</h2>
+            <div className="mt-3 sm:mt-4 bg-red-900/40 border border-red-600/50 px-4 sm:px-6 py-2 rounded-full">
+               <p className="text-red-400 font-bold tracking-widest text-xs sm:text-sm uppercase">The devs dumped on you</p>
             </div>
           </div>
         )}
 
         {gameState === 'CASHED_OUT' && (
-          <div className="absolute inset-0 bg-[#001a00]/80 flex flex-col items-center justify-center backdrop-blur-sm z-30 shadow-[inset_0_0_100px_rgba(0,255,0,0.3)]">
-            <div className="animate-win-float flex flex-col items-center">
-              <h2 className="text-6xl font-black text-green-400 uppercase tracking-tighter drop-shadow-[0_0_30px_rgba(34,197,94,0.8)] mb-2">BAG SECURED</h2>
-              <div className="bg-green-900/40 border border-green-500/50 px-8 py-4 rounded-2xl shadow-[0_0_40px_rgba(34,197,94,0.2)]">
-                <p className="text-green-200 text-sm font-bold uppercase tracking-widest text-center mb-1">Total Payout</p>
-                <p className="text-white font-mono text-4xl font-black text-center drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
-                  {(parsedWager * currentMultiplier).toFixed(4)} <span className="text-green-500 text-2xl">SOL</span>
+          <div className="absolute inset-0 bg-[#001a00]/80 flex flex-col items-center justify-center backdrop-blur-sm z-30 shadow-[inset_0_0_100px_rgba(0,255,0,0.3)] px-4">
+            <div className="animate-win-float flex flex-col items-center w-full max-w-xs sm:max-w-md">
+              <h2 className="text-3xl sm:text-6xl font-black text-green-400 uppercase tracking-tighter drop-shadow-[0_0_30px_rgba(34,197,94,0.8)] mb-2 text-center">BAG SECURED</h2>
+              <div className="bg-green-900/40 border border-green-500/50 px-4 sm:px-8 py-3 sm:py-4 rounded-2xl shadow-[0_0_40px_rgba(34,197,94,0.2)] w-full">
+                <p className="text-green-200 text-xs sm:text-sm font-bold uppercase tracking-widest text-center mb-1">Total Payout</p>
+                <p className="text-white font-mono text-2xl sm:text-4xl font-black text-center drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
+                  {(parsedWager * currentMultiplier).toFixed(4)} <span className="text-green-500 text-lg sm:text-2xl">SOL</span>
                 </p>
               </div>
             </div>
@@ -435,8 +435,8 @@ export default function PumpIt() {
         )}
 
         {gameState === 'PLAYING' && (
-          <div className="absolute top-6 left-6 z-10">
-            <span className="text-6xl font-black text-white/10 tracking-tighter mix-blend-overlay">
+          <div className="absolute top-3 left-3 sm:top-6 sm:left-6 z-10">
+            <span className="text-4xl sm:text-6xl font-black text-white/10 tracking-tighter mix-blend-overlay">
               {currentMultiplier.toFixed(2)}x
             </span>
           </div>
@@ -446,9 +446,9 @@ export default function PumpIt() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 p-6 w-full max-w-6xl mx-auto">
-      
-      <div className="w-full md:w-80 flex flex-col gap-4 shrink-0 bg-[#0a0f0c] p-6 rounded-xl border border-gray-800 shadow-2xl">
+    <div className="flex flex-col md:flex-row gap-4 md:gap-6 p-3 sm:p-4 md:p-6 w-full max-w-6xl mx-auto">
+
+      <div className="w-full md:w-80 flex flex-col gap-3 sm:gap-4 shrink-0 bg-[#0a0f0c] p-4 sm:p-6 rounded-xl border border-gray-800 shadow-2xl">
         
         <div className="space-y-2">
           <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Difficulty</label>
@@ -477,16 +477,16 @@ export default function PumpIt() {
                <span className="text-gray-600 text-xs font-black uppercase tracking-widest">Wager</span>
                <span className="text-green-500 font-bold text-xs">SOL</span>
             </div>
-            <div className="flex items-center gap-3">
-               <button 
+            <div className="flex items-center gap-2 sm:gap-3">
+               <button
                  onClick={() => addBet(-0.1)} disabled={gameState === 'PLAYING'}
-                 className="w-12 h-12 bg-gray-900 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white font-black text-xl disabled:opacity-50 transition-colors flex items-center justify-center shadow-md"
+                 className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-gray-900 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white font-black text-xl disabled:opacity-50 transition-colors flex items-center justify-center shadow-md"
                >
                  -
                </button>
-               <input 
-                 type="number" min="0" step="0.1" 
-                 value={betAmount} 
+               <input
+                 type="number" min="0" step="0.1"
+                 value={betAmount}
                  onChange={(e) => {
                     const val = e.target.value;
                     if (val === "") {
@@ -499,13 +499,13 @@ export default function PumpIt() {
                     } else {
                       setBetAmount(val); // Store EXACTLY what was typed so decimals work
                     }
-                 }} 
+                 }}
                  disabled={gameState === 'PLAYING'}
-                 className="flex-1 bg-transparent text-center text-white font-mono text-2xl font-black outline-none disabled:opacity-50 w-full"
+                 className="flex-1 min-w-0 bg-transparent text-center text-white font-mono text-xl sm:text-2xl font-black outline-none disabled:opacity-50 w-full"
                />
-               <button 
+               <button
                  onClick={() => addBet(0.1)} disabled={gameState === 'PLAYING'}
-                 className="w-12 h-12 bg-gray-900 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white font-black text-xl disabled:opacity-50 transition-colors flex items-center justify-center shadow-md"
+                 className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-gray-900 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white font-black text-xl disabled:opacity-50 transition-colors flex items-center justify-center shadow-md"
                >
                  +
                </button>
@@ -519,20 +519,20 @@ export default function PumpIt() {
 
         <div className="mt-6 space-y-3">
           {gameState === 'IDLE' || gameState === 'RUGGED' || gameState === 'CASHED_OUT' ? (
-             <button 
+             <button
                onClick={handleStartGame}
-               className="w-full py-5 bg-green-500 hover:bg-green-400 text-black font-black text-xl uppercase tracking-widest rounded-lg transition-all shadow-[0_0_20px_rgba(34,197,94,0.2)] hover:shadow-[0_0_30px_rgba(34,197,94,0.5)] hover:-translate-y-1"
+               className="w-full py-4 sm:py-5 bg-green-500 hover:bg-green-400 text-black font-black text-lg sm:text-xl uppercase tracking-widest rounded-lg transition-all shadow-[0_0_20px_rgba(34,197,94,0.2)] hover:shadow-[0_0_30px_rgba(34,197,94,0.5)] hover:-translate-y-1"
              >
                Start Game
              </button>
           ) : (
             <>
-              <div 
+              <div
                 className="relative" onMouseEnter={() => setIsHoveringPump(true)} onMouseLeave={() => setIsHoveringPump(false)}
               >
-                <button 
+                <button
                   onClick={handlePump}
-                  className="w-full py-5 bg-green-600 hover:bg-green-500 text-black font-black text-xl uppercase tracking-widest rounded-lg transition-all shadow-[0_0_15px_rgba(34,197,94,0.4)]"
+                  className="w-full py-4 sm:py-5 bg-green-600 hover:bg-green-500 text-black font-black text-lg sm:text-xl uppercase tracking-widest rounded-lg transition-all shadow-[0_0_15px_rgba(34,197,94,0.4)]"
                 >
                   Keep Holding 📈
                 </button>
@@ -570,15 +570,15 @@ export default function PumpIt() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col gap-4">
-        <div className="flex justify-between items-center bg-[#0a0f0c] border border-gray-800 p-5 rounded-xl shadow-xl">
-          <div>
-            <div className="text-xs text-gray-500 font-black uppercase tracking-widest">Current Multiplier</div>
-            <div className="text-2xl text-white font-mono font-black">{currentMultiplier.toFixed(2)}x</div>
+      <div className="flex-1 flex flex-col gap-3 sm:gap-4 min-w-0">
+        <div className="flex justify-between items-center bg-[#0a0f0c] border border-gray-800 p-3 sm:p-5 rounded-xl shadow-xl gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] sm:text-xs text-gray-500 font-black uppercase tracking-widest">Current Multiplier</div>
+            <div className="text-xl sm:text-2xl text-white font-mono font-black">{currentMultiplier.toFixed(2)}x</div>
           </div>
-          <div className="text-right">
-            <div className="text-xs text-gray-500 font-black uppercase tracking-widest">Potential Payout</div>
-            <div className="text-2xl text-green-400 font-mono font-black drop-shadow-[0_0_8px_rgba(34,197,94,0.4)]">
+          <div className="text-right min-w-0">
+            <div className="text-[10px] sm:text-xs text-gray-500 font-black uppercase tracking-widest">Potential Payout</div>
+            <div className="text-base sm:text-2xl text-green-400 font-mono font-black drop-shadow-[0_0_8px_rgba(34,197,94,0.4)] truncate">
                {(parsedWager * currentMultiplier).toFixed(4)} SOL
             </div>
           </div>
