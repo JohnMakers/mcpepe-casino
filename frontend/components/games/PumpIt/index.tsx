@@ -184,9 +184,16 @@ export default function PumpIt() {
           throw new Error(data.error || "Backend failed to process pump.");
       }
 
-      if (data.isActive) {
-        // currentStep returned by backend reflects the on-chain post-state.
-        const nextStep = data.currentStep ?? (currentStep + 1);
+      // 🔒 PUMPIT FIX: read the post-state via Anchor (proper deserialisation)
+      // rather than trusting raw booleans from the backend. Manual byte
+      // reading on the backend was returning isActive=false because the
+      // account is over-allocated, causing instant RUGGED on every pump.
+      const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
+      const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
+      const state: any = await program.account.pumpGameState.fetch(gameStateKeypair.publicKey);
+
+      if (state.isActive) {
+        const nextStep = state.currentStep;
         setCurrentStep(nextStep);
         const newMult = currentLevelData.multipliers[nextStep - 1];
         setChartPoints(prev => [...prev, { step: nextStep, multiplier: newMult }]);

@@ -2167,26 +2167,11 @@ app.post('/api/pumpit/process', async (req, res) => {
 
         const sig = await houseSignAndSend(ix, "Pumpit process");
 
-        // Read post-state to tell the client whether the player advanced or rugged.
-        const acc = await connection.getAccountInfo(new anchor.web3.PublicKey(gamePubkey), "confirmed");
-        // PumpGameState layout offsets (Anchor borsh):
-        // [0..8] disc, [8..40] player, [40..72] authority, [72..80] bet_amount,
-        // [80] difficulty, [81] current_step, [82..114] server_seed_hash,
-        // [114..118] client_seed length prefix + bytes ... (length-prefixed)
-        // We only need current_step + is_active. is_active is after the seed_hash + client_seed + nonce.
-        // Easiest: read difficulty (offset 80) and current_step (81). is_active is the next-to-last bool.
-        const data = acc?.data;
-        let currentStep = 0;
-        let isActive = true;
-        if (data && data.length > 81) {
-            currentStep = data.readUInt8(81);
-            // is_active is 2nd to last byte (cashed_out is last). Both are bool (1 byte).
-            if (data.length >= 2) {
-                isActive = data.readUInt8(data.length - 2) !== 0;
-            }
-        }
-
-        res.json({ success: true, txSignature: sig, currentStep, isActive });
+        // 🔒 PUMPIT FIX: don't try to manually parse account data here. The
+        // account is over-allocated by `+ 64` so trailing bytes are zero, which
+        // made isActive always read as false ⇒ instant rug on every pump.
+        // Frontend will deserialize the post-state via Anchor's IDL instead.
+        res.json({ success: true, txSignature: sig });
     } catch (error) {
         console.error("❌ Pumpit Process Error:", error);
         res.status(500).json({ success: false, error: error.message || String(error) });
