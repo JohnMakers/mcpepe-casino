@@ -102,7 +102,10 @@ export default function PumpIt() {
       const diffIndex = difficulty === 'easy' ? 0 : difficulty === 'medium' ? 1 : 2;
 
       // 🔒 C-4 FIX: authority MUST be HOUSE_PUBKEY (not the player).
-      const tx = await program.methods.startPump(
+      // 🔒 PUMPIT UX FIX: build the tx manually so we can use a finalized
+      // blockhash + skipPreflight (avoids the misleading "already processed"
+      // simulator error caused by the RPC blockhash cache).
+      const startIx = await program.methods.startPump(
           betAmountLamports,
           diffIndex,
           serverSeedHash,
@@ -114,7 +117,44 @@ export default function PumpIt() {
           vault: vaultPDA,
           authority: HOUSE_PUBKEY,
           systemProgram: SystemProgram.programId,
-      }).signers([newGameStateKeypair]).rpc();
+      }).instruction();
+
+      const startTx = new anchor.web3.Transaction().add(startIx);
+      const latestBlockhash = await connection.getLatestBlockhash("finalized");
+      startTx.recentBlockhash = latestBlockhash.blockhash;
+      startTx.feePayer = wallet.publicKey;
+
+      // The new game-state account must sign for its own init.
+      startTx.partialSign(newGameStateKeypair);
+      const signedTx = await wallet.signTransaction(startTx);
+
+      let signature: string = '';
+      try {
+          signature = await connection.sendRawTransaction(signedTx.serialize(), {
+              skipPreflight: true,
+              preflightCommitment: 'confirmed',
+              maxRetries: 3,
+          });
+      } catch (sendErr: any) {
+          const msg = String(sendErr?.message || sendErr);
+          if (msg.includes("already been processed")) {
+              console.warn("⚠️ Pumpit start tx already processed, treating as success.");
+          } else {
+              throw sendErr;
+          }
+      }
+
+      if (signature) {
+          try {
+              await connection.confirmTransaction({
+                  signature,
+                  blockhash: latestBlockhash.blockhash,
+                  lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+              }, "confirmed");
+          } catch (confirmErr: any) {
+              console.warn("⚠️ Pumpit confirm warning:", confirmErr?.message || confirmErr);
+          }
+      }
       
       setGameState('PLAYING');
       setCurrentStep(0);

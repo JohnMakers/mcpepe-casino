@@ -93,18 +93,45 @@ export default function Dashboard() {
         <main className="flex-1 overflow-y-auto bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0d1410] via-[#050806] to-black p-4 sm:p-8 flex flex-col relative custom-scrollbar">
           
           {!activeGame && (
-            <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto text-center animate-fade-in">
-              <div className="text-7xl mb-8 animate-bounce-short">🎰</div>
-              <h2 className="text-5xl font-black uppercase tracking-tighter text-white mb-6">Enter the <span className="text-green-500">Free Market</span></h2>
-              <div className="flex flex-wrap gap-4 justify-center">
-                  <button onClick={() => setActiveGame('coinflip')} className="bg-transparent border border-green-500 text-green-500 hover:bg-green-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Coinflip</button>
-                  <button onClick={() => setActiveGame('whackd')} className="bg-green-500 hover:bg-green-400 text-black px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4 shadow-[0_0_15px_rgba(34,197,94,0.2)]">Play Whackd!</button>
-                  <button onClick={() => setActiveGame('rps')} className="bg-transparent border border-yellow-500 text-yellow-500 hover:bg-yellow-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Play RPS</button>
-                  <button onClick={() => setActiveGame('roulette')} className="bg-transparent border border-blue-500 text-blue-500 hover:bg-blue-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Pepe Roulette</button>
-                  <button onClick={() => setActiveGame('pumpit')} className="bg-transparent border border-purple-500 text-purple-500 hover:bg-purple-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">Pump It!</button>
-                  <button onClick={() => setActiveGame('patriots')} className="bg-transparent border border-orange-500 text-orange-500 hover:bg-orange-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">McPepe's Patriots</button>
-                  <button onClick={() => setActiveGame('vacation')} className="bg-transparent border border-purple-500 text-purple-500 hover:bg-purple-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">McPepe's Vacation</button>
-                  <button onClick={() => setActiveGame('snowstorm')} className="bg-transparent border border-cyan-500 text-cyan-500 hover:bg-cyan-900/30 px-8 py-3 rounded-lg font-black uppercase tracking-widest mt-4">McPepe's Snowstorm</button>
+            <div className="flex-1 flex flex-col items-center justify-start max-w-6xl mx-auto w-full pt-8 pb-12 animate-fade-in">
+              
+              <div className="text-center mb-12">
+                <div className="text-6xl mb-4 animate-bounce-short drop-shadow-[0_0_15px_rgba(34,197,94,0.4)]">🎰</div>
+                <h2 className="text-4xl sm:text-6xl font-black uppercase tracking-tighter text-white mb-4">
+                  Enter the <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600">Free Market</span>
+                </h2>
+                <p className="text-gray-400 font-mono text-sm sm:text-base">Provably Fair. Chainless. Unapologetic.</p>
+              </div>
+
+              {/* Game Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full px-4">
+                
+                {/* Featured Game */}
+                <div onClick={() => setActiveGame('whackd')} className="col-span-1 sm:col-span-2 lg:col-span-2 relative group cursor-pointer rounded-xl overflow-hidden border-2 border-green-500/50 bg-black/40 hover:border-green-400 transition-all duration-300 shadow-[0_0_30px_rgba(34,197,94,0.1)] hover:shadow-[0_0_40px_rgba(34,197,94,0.25)] flex flex-col justify-end min-h-[220px] p-6">
+                  <div className="absolute inset-0 bg-gradient-to-t from-green-900/80 to-transparent z-0"></div>
+                  <div className="relative z-10">
+                    <span className="bg-green-500 text-black text-xs font-black px-2 py-1 uppercase tracking-widest rounded mb-3 inline-block">Featured</span>
+                    <h3 className="text-3xl font-black text-white uppercase tracking-wider mb-1">Whackd! <span className="text-2xl">💣</span></h3>
+                    <p className="text-green-300/80 font-mono text-sm">Don't get caught holding the bag.</p>
+                  </div>
+                </div>
+
+                {/* Standard Games */}
+                <GameCard onClick={() => setActiveGame('coinflip')} icon="🪙" title="Coinflip" desc="50/50 double or nothing." color="border-green-500/30 hover:border-green-400" />
+                <GameCard onClick={() => setActiveGame('roulette')} icon="🐸" title="Roulette" desc="Spin the Pepe wheel." color="border-blue-500/30 hover:border-blue-400" />
+                <GameCard onClick={() => setActiveGame('rps')} icon="✂️" title="RPS" desc="Rock, Paper, Scissors." color="border-yellow-500/30 hover:border-yellow-400" />
+                <GameCard onClick={() => setActiveGame('pumpit')} icon="📈" title="Pump It" desc="Ride the green candles." color="border-green-500/30 hover:border-green-400" />
+                <GameCard onClick={() => setActiveGame('blackjack')} icon="🃏" title="Blackjack" desc="Beat the dealer to 21." color="border-red-500/30 hover:border-red-400" />
+                
+                {/* Slots Section Header visually breaking the grid slightly */}
+                <div className="col-span-full mt-6 mb-2">
+                  <h3 className="text-xl text-purple-500 font-black uppercase tracking-widest border-b border-purple-900/30 pb-2">McPepe Slots</h3>
+                </div>
+
+                <GameCard onClick={() => setActiveGame('patriots')} icon="🎰" title="Patriots" desc="Hold the line." color="border-purple-500/30 hover:border-purple-400" />
+                <GameCard onClick={() => setActiveGame('vacation')} icon="🍹" title="Vacation" desc="Tax haven slots." color="border-purple-500/30 hover:border-purple-400" />
+                <GameCard onClick={() => setActiveGame('snowstorm')} icon="❄️" title="Snowstorm" desc="Cold storage spins." color="border-purple-500/30 hover:border-purple-400" />
+
               </div>
             </div>
           )}
@@ -127,7 +154,6 @@ export default function Dashboard() {
              <RockPaperScissorsGame logWager={logWager} />
           )}
 
-          {/* ADDED ROULETTE COMPONENT RENDER BLOCK */}
           {activeGame === 'roulette' && (
              <RouletteGame 
                balance={balance} setBalance={setBalance} logWager={logWager} 
@@ -135,12 +161,10 @@ export default function Dashboard() {
              />
           )}
 
-          {/* ADDED PUMP IT COMPONENT RENDER BLOCK */}
           {activeGame === 'pumpit' && (
              <PumpIt />
           )}
 
-          {/* ADDED BLACKJACK COMPONENT RENDER BLOCK */}
           {activeGame === 'blackjack' && (
              <BlackjackGame 
                balance={balance} setBalance={setBalance} logWager={logWager} 
@@ -148,17 +172,14 @@ export default function Dashboard() {
              />
           )}
                   
-          {/* ADDED PATRIOTS COMPONENT RENDER BLOCK */}
           {activeGame === 'patriots' && (
              <Patriots />
           )}
 
-          {/* ADDED VACATION COMPONENT RENDER BLOCK */}
           {activeGame === 'vacation' && (
              <Vacation />
           )}
 
-          {/* ADDED SNOWSTORM COMPONENT RENDER BLOCK */}
           {activeGame === 'snowstorm' && (
              <Snowstorm />
           )}
@@ -170,6 +191,23 @@ export default function Dashboard() {
           recentBets={recentBets} 
           setSelectedBetInfo={setSelectedBetInfo} 
         />
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------
+// HELPER COMPONENTS
+// Placed outside the main Dashboard component to prevent re-rendering issues
+// ----------------------------------------------------------------------
+
+function GameCard({ onClick, icon, title, desc, color }: { onClick: () => void, icon: string, title: string, desc: string, color: string }) {
+  return (
+    <div onClick={onClick} className={`group cursor-pointer rounded-xl border-2 bg-[#0a0f0c]/80 backdrop-blur-sm p-5 transition-all duration-300 hover:-translate-y-1 hover:bg-[#111a14] flex flex-col items-start justify-between min-h-[160px] ${color}`}>
+      <div className="text-4xl mb-3 opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-transform duration-300">{icon}</div>
+      <div>
+        <h3 className="text-xl font-bold text-white uppercase tracking-wider mb-1 group-hover:text-gray-100">{title}</h3>
+        <p className="text-gray-500 font-mono text-xs">{desc}</p>
       </div>
     </div>
   );

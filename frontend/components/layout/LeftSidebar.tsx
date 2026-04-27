@@ -8,47 +8,53 @@ interface Props {
 
 export default function LeftSidebar({ isOpen, activeGame, setActiveGame }: Props) {
   return (
-    <aside className={`${isOpen ? 'w-64' : 'w-0'} absolute md:relative z-40 h-full left-0 transition-all duration-300 border-r border-green-900/30 bg-[#0a0f0c] overflow-hidden flex flex-col shrink-0`}>          
+    <aside className={`${isOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0 md:w-0'} absolute md:relative z-40 h-full left-0 transition-all duration-300 ease-in-out border-r border-green-900/30 bg-[#050806]/95 backdrop-blur-md md:bg-[#0a0f0c] overflow-y-auto custom-scrollbar flex flex-col shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.5)]`}>          
       <div className="p-4 w-64">
-        <h2 className="text-xs text-gray-500 font-black uppercase tracking-widest mb-4">Arcade Selection</h2>
-        <div className="space-y-3">
-          <button onClick={() => setActiveGame('coinflip')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'coinflip' ? 'bg-green-900/20 border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.15)]' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
-            <span className="flex items-center gap-2"><span className="text-xl">🪙</span> Coinflip</span>
-          </button>
+        <h2 className="text-xs text-green-600/70 font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-green-600/70"></span> Arcade
+        </h2>
+        
+        <div className="space-y-2">
+          {/* Main Games */}
+          <SidebarButton active={activeGame === 'coinflip'} onClick={() => setActiveGame('coinflip')} icon="🪙" label="Coinflip" color="green" />
+          <SidebarButton active={activeGame === 'whackd'} onClick={() => setActiveGame('whackd')} icon="💣" label="Whackd!" color="green" />
+          <SidebarButton active={activeGame === 'rps'} onClick={() => setActiveGame('rps')} icon="✂️" label="RPS" color="green" />
+          <SidebarButton active={activeGame === 'roulette'} onClick={() => setActiveGame('roulette')} icon="🐸" label="Roulette" color="green" />
+          <SidebarButton active={activeGame === 'pumpit'} onClick={() => setActiveGame('pumpit')} icon="📈" label="Pump It" color="green" />
+          <SidebarButton active={activeGame === 'blackjack'} onClick={() => setActiveGame('blackjack')} icon="🃏" label="Blackjack" color="red" />
           
-          <button onClick={() => setActiveGame('whackd')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'whackd' ? 'bg-green-900/20 border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.15)]' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
-            <span className="flex items-center gap-2"><span className="text-xl">💣</span> Whackd!</span>
-          </button>
-
-          <button onClick={() => setActiveGame('rps')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'rps' ? 'bg-green-900/20 border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.15)]' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
-            <span className="flex items-center gap-2"><span className="text-xl">✂️</span> RPS</span>
-          </button>
-
-          <button onClick={() => setActiveGame('roulette')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'roulette' ? 'bg-green-900/20 border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.15)]' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
-            <span className="flex items-center gap-2"><span className="text-xl">🐸</span> Roulette</span>
-          </button>
-          
-          <button onClick={() => setActiveGame('pumpit')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'pumpit' ? 'bg-green-900/20 border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.15)]' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
-            <span className="flex items-center gap-2"><span className="text-xl">📈</span> Pump It</span>
-          </button>
-
-          <button onClick={() => setActiveGame('blackjack')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'blackjack' ? 'bg-red-900/20 border-red-500 text-red-400 shadow-[0_0_15px_rgba(220,38,38,0.15)]' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
-            <span className="flex items-center gap-2"><span className="text-xl">🃏</span> Blackjack</span>
-          </button>
+          <div className="my-4 border-t border-green-900/20 pt-4">
+            <h2 className="text-xs text-purple-600/70 font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-purple-600/70"></span> Slots
+            </h2>
+            <SidebarButton active={activeGame === 'patriots'} onClick={() => setActiveGame('patriots')} icon="🎰" label="Patriots" color="purple" />
+            <SidebarButton active={activeGame === 'vacation'} onClick={() => setActiveGame('vacation')} icon="🍹" label="Vacation" color="purple" />
+            <SidebarButton active={activeGame === 'snowstorm'} onClick={() => setActiveGame('snowstorm')} icon="❄️" label="Snowstorm" color="purple" />
+          </div>
         </div>
-
-          <button onClick={() => setActiveGame('patriots (Slots)')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'patriots' ? 'bg-purple-900/20 border-purple-500 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.15)]' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
-            <span className="flex items-center gap-2"><span className="text-xl">🎰</span> Patriots</span>
-          </button>
-
-          <button onClick={() => setActiveGame('Vacation (Slots)')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'vacation' ? 'bg-purple-900/20 border-purple-500 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.15)]' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
-            <span className="flex items-center gap-2"><span className="text-xl">🎰</span> Vacation</span>
-          </button>
-
-          <button onClick={() => setActiveGame('Snowstorm (Slots)')} className={`w-full text-left p-4 font-black uppercase tracking-wide rounded-lg transition-all border-2 group ${activeGame === 'snowstorm' ? 'bg-purple-900/20 border-purple-500 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.15)]' : 'bg-black border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white'}`}>
-            <span className="flex items-center gap-2"><span className="text-xl">🎰</span> Snowstorm</span>
-          </button>
       </div>
     </aside>
+  );
+}
+
+// Helper component to keep the sidebar code clean
+function SidebarButton({ active, onClick, icon, label, color }: { active: boolean, onClick: () => void, icon: string, label: string, color: 'green' | 'red' | 'purple' }) {
+  const colorMap = {
+    green: { bg: 'bg-green-900/20', border: 'border-green-500', text: 'text-green-400', shadow: 'shadow-[0_0_15px_rgba(34,197,94,0.15)]' },
+    red: { bg: 'bg-red-900/20', border: 'border-red-500', text: 'text-red-400', shadow: 'shadow-[0_0_15px_rgba(220,38,38,0.15)]' },
+    purple: { bg: 'bg-purple-900/20', border: 'border-purple-500', text: 'text-purple-400', shadow: 'shadow-[0_0_15px_rgba(168,85,247,0.15)]' },
+  };
+
+  const activeClasses = colorMap[color];
+  const inactiveClasses = 'bg-black/50 border-gray-800/50 text-gray-400 hover:border-gray-600 hover:text-gray-200 hover:bg-[#111a14]';
+
+  return (
+    <button 
+      onClick={onClick} 
+      className={`w-full text-left p-3.5 font-bold uppercase tracking-wider text-sm rounded-lg transition-all duration-200 border-2 group flex items-center gap-3 ${active ? `${activeClasses.bg} ${activeClasses.border} ${activeClasses.text} ${activeClasses.shadow}` : inactiveClasses}`}
+    >
+      <span className="text-lg grayscale group-hover:grayscale-0 transition-all duration-300">{icon}</span> 
+      {label}
+    </button>
   );
 }
