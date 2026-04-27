@@ -157,12 +157,12 @@ export default function Dashboard() {
               <section className="relative max-w-6xl mx-auto px-4 sm:px-8 mb-8 sm:mb-12">
                 <SectionHeader emoji="🎯" title="Casino" subtitle="Fast & furious bets" accent="from-green-500 via-emerald-500 to-cyan-500" />
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-                  <GameCard onClick={() => setActiveGame('coinflip')} icon="🪙" title="Coinflip" desc="50/50 double-up" tone="green" badge="FEATURED" />
-                  <GameCard onClick={() => setActiveGame('whackd')} icon="💣" title="Whackd!" desc="Dodge the bombs" tone="emerald" />
-                  <GameCard onClick={() => setActiveGame('roulette')} icon="🐸" title="Roulette" desc="Spin the wheel" tone="red" />
-                  <GameCard onClick={() => setActiveGame('rps')} icon="✂️" title="RPS" desc="Let it ride" tone="amber" />
-                  <GameCard onClick={() => setActiveGame('pumpit')} icon="📈" title="Pump It" desc="Don't get rugged" tone="emerald" />
-                  <GameCard onClick={() => setActiveGame('blackjack')} icon="🃏" title="Blackjack" desc="Beat the dealer" tone="rose" />
+                  <GameCard onClick={() => setActiveGame('coinflip')} icon="/icons/coinflip_icon.png" title="Coinflip" desc="50/50 double-up" tone="green" badge="FEATURED" />
+                  <GameCard onClick={() => setActiveGame('whackd')} icon="/icons/whackd_icon.png" title="Whackd!" desc="Dodge the bombs" tone="emerald" />
+                  <GameCard onClick={() => setActiveGame('roulette')} icon="/icons/roulette_icon.png" title="Roulette" desc="Spin the wheel" tone="red" />
+                  <GameCard onClick={() => setActiveGame('rps')} icon="/icons/rps_icon.png" title="RPS" desc="Let it ride" tone="amber" />
+                  <GameCard onClick={() => setActiveGame('pumpit')} icon="/icons/pumpit_icon.png" title="Pump It" desc="Don't get rugged" tone="emerald" />
+                  <GameCard onClick={() => setActiveGame('blackjack')} icon="/icons/blackjack_icon.png" title="Blackjack" desc="Beat the dealer" tone="rose" />
                 </div>
               </section>
 
@@ -170,16 +170,19 @@ export default function Dashboard() {
               <section className="relative max-w-6xl mx-auto px-4 sm:px-8 mb-10 sm:mb-16">
                 <SectionHeader emoji="🎰" title="Slots" subtitle="High volatility, max degen" accent="from-purple-500 via-fuchsia-500 to-pink-500" />
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-                  <GameCard onClick={() => setActiveGame('patriots')} icon="🎰" title="Patriots" desc="Serve the nation" tone="patriot" />
-                  <GameCard onClick={() => setActiveGame('vacation')} icon="🍹" title="Vacation" desc="Collect luggage" tone="cyan" />
-                  <GameCard onClick={() => setActiveGame('snowstorm')} icon="❄️" title="Snowstorm" desc="Survive the storm" tone="blue" />
+                  <GameCard onClick={() => setActiveGame('patriots')} icon="/icons/patriots_icon.png" title="Patriots" desc="Serve the nation" tone="patriot" />
+                  <GameCard onClick={() => setActiveGame('vacation')} icon="/icons/vacations_icon.png" title="Vacation" desc="Collect luggage" tone="cyan" />
+                  <GameCard onClick={() => setActiveGame('snowstorm')} icon="/icons/snowstorm_icon.png" title="Snowstorm" desc="Survive the storm" tone="blue" />
                 </div>
               </section>
 
               {/* Footer info strip */}
               <footer className="relative max-w-6xl mx-auto px-4 sm:px-8 pb-6 sm:pb-10">
                 <div className="border-t border-green-900/30 pt-4 sm:pt-6 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3 text-gray-600 font-mono text-[10px] sm:text-xs uppercase tracking-widest">
-                  <p className="flex items-center gap-2">🐸 <span className="text-gray-500">McPepe Casino</span> — On-chain · Provably Fair</p>
+                  <p className="flex items-center gap-2">
+                    <img src="/icons/mcpepe_icon.png" alt="" className="w-4 h-4 object-contain opacity-80" draggable={false} />
+                    <span className="text-gray-500">McPepe Casino</span> — On-chain · Provably Fair
+                  </p>
                   <p>v1.0 · Solana Mainnet</p>
                 </div>
               </footer>
@@ -305,7 +308,7 @@ function GameCard({ onClick, icon, title, desc, tone, badge }: { onClick: () => 
   return (
     <div
       onClick={onClick}
-      className={`group relative cursor-pointer rounded-xl sm:rounded-2xl overflow-hidden border-2 ${t.border} ${t.hoverBorder} bg-gradient-to-br ${t.bg} transition-all duration-300 hover:-translate-y-1 ${t.glow} aspect-[4/5] sm:aspect-[3/4] flex flex-col`}
+      className={`group relative cursor-pointer rounded-xl sm:rounded-2xl overflow-hidden border-2 ${t.border} ${t.hoverBorder} bg-gradient-to-br ${t.bg} transition-all duration-300 hover:-translate-y-1 ${t.glow} aspect-[5/4] sm:aspect-square flex flex-col`}
     >
       {badge && (
         <span className={`absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 ${badgeStyles} text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 sm:px-2 sm:py-1 uppercase tracking-widest rounded-full shadow-lg whitespace-nowrap`}>
@@ -317,19 +320,25 @@ function GameCard({ onClick, icon, title, desc, tone, badge }: { onClick: () => 
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.06),_transparent_60%)] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
 
       {/* Icon */}
-      <div className="flex-1 flex items-center justify-center p-3 sm:p-4 relative">
-        <span className={`text-5xl sm:text-7xl ${t.iconShadow} grayscale-[0.6] group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500 select-none`}>
-          {icon}
-        </span>
+      <div className="flex-1 flex items-center justify-center p-2 sm:p-3 relative min-h-0">
+        {icon.startsWith('/') ? (
+          <img
+            src={icon}
+            alt={title}
+            className={`w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 object-contain ${t.iconShadow} group-hover:scale-110 transition-transform duration-500 select-none pointer-events-none`}
+            draggable={false}
+          />
+        ) : (
+          <span className={`text-4xl sm:text-5xl md:text-6xl ${t.iconShadow} grayscale-[0.6] group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500 select-none`}>
+            {icon}
+          </span>
+        )}
       </div>
 
       {/* Footer */}
-      <div className="relative z-10 p-3 sm:p-4 bg-gradient-to-t from-black/85 via-black/50 to-transparent">
-        <h3 className="text-sm sm:text-lg font-black text-white uppercase tracking-wider mb-0.5 truncate">{title}</h3>
-        <p className="text-gray-500 font-mono text-[10px] sm:text-xs truncate">{desc}</p>
-        <span className={`mt-1.5 sm:mt-2 inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest ${t.accent} opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity`}>
-          Play <span className="group-hover:translate-x-1 transition-transform">→</span>
-        </span>
+      <div className="relative z-10 px-2.5 sm:px-3 py-2 sm:py-2.5 bg-gradient-to-t from-black/85 via-black/50 to-transparent">
+        <h3 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider truncate leading-tight">{title}</h3>
+        <p className="text-gray-500 font-mono text-[9px] sm:text-[10px] truncate mt-0.5">{desc}</p>
       </div>
     </div>
   );

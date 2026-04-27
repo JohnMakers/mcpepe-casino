@@ -23,8 +23,13 @@ export default function Header({ balance, publicKey, isLeftSidebarOpen, setIsLef
         <button onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)} className="text-green-500 hover:text-green-400 p-2 bg-green-900/20 rounded border border-green-900/50">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
         </button>
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveGame(null)}>
-          <span className="text-2xl">🐸</span>
+        <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setActiveGame(null)}>
+          <img
+            src="/icons/mcpepe_icon.png"
+            alt="McPepe"
+            className="w-8 h-8 sm:w-9 sm:h-9 object-contain drop-shadow-[0_0_10px_rgba(34,197,94,0.4)] group-hover:scale-110 transition-transform"
+            draggable={false}
+          />
           <h1 className="text-xl font-black tracking-widest text-white uppercase italic hidden sm:block">
             McPepe <span className="text-green-500">Casino</span>
           </h1>
