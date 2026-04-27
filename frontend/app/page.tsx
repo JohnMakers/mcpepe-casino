@@ -132,7 +132,7 @@ export default function Dashboard() {
                     <span className="absolute inset-0 animate-ping rounded-full bg-green-400 opacity-75"></span>
                     <span className="relative w-2 h-2 rounded-full bg-green-400"></span>
                   </span>
-                  Live · Solana Mainnet
+                  Live · Solana Devnet
                 </div>
 
                 <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-[5.5rem] font-black uppercase tracking-tighter text-white mb-3 sm:mb-4 leading-[0.9]">
@@ -148,56 +148,29 @@ export default function Dashboard() {
                 {/* Stats strip */}
                 <div className="grid grid-cols-3 gap-2 sm:gap-4 max-w-2xl mx-auto">
                   <StatCard icon="🛡️" label="Provably Fair" value="100%" tone="green" />
-                  <StatCard icon="⚡" label="Settlement" value="<2s" tone="emerald" />
+                  <StatCard icon="🌐" label="On-Chain" value="Decentralized" tone="emerald" />
                   <StatCard icon="🎰" label="Games" value="9" tone="purple" />
                 </div>
               </section>
 
-              {/* Featured */}
+              {/* Casino */}
               <section className="relative max-w-6xl mx-auto px-4 sm:px-8 mb-8 sm:mb-12">
-                <SectionHeader emoji="🔥" title="Featured" subtitle="Hand-picked degenerate banger" accent="from-orange-500 via-yellow-500 to-red-500" />
-
-                <div onClick={() => setActiveGame('whackd')} className="group relative cursor-pointer rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-green-500/40 hover:border-green-400 bg-gradient-to-br from-green-900/40 via-emerald-900/20 to-black transition-all duration-500 hover:shadow-[0_0_60px_rgba(34,197,94,0.3)] min-h-[200px] sm:min-h-[280px] md:min-h-[320px] flex flex-col justify-end">
-                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(34,197,94,0.25),_transparent_60%)] pointer-events-none"></div>
-                  {/* Animated grid texture */}
-                  <div className="absolute inset-0 opacity-[0.07] pointer-events-none" style={{
-                    backgroundImage: 'linear-gradient(rgba(34,197,94,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(34,197,94,0.5) 1px, transparent 1px)',
-                    backgroundSize: '40px 40px',
-                  }}></div>
-
-                  <div className="absolute top-4 left-4 sm:top-6 sm:left-6 flex gap-2 z-10">
-                    <span className="bg-yellow-400 text-black text-[9px] sm:text-[10px] font-black px-2 sm:px-3 py-1 uppercase tracking-widest rounded shadow-lg">⭐ Featured</span>
-                    <span className="bg-red-500/90 text-white text-[9px] sm:text-[10px] font-black px-2 sm:px-3 py-1 uppercase tracking-widest rounded animate-pulse shadow-lg">🔥 Hot</span>
-                  </div>
-                  <div className="absolute top-1/2 right-2 sm:right-8 -translate-y-1/2 text-7xl sm:text-9xl md:text-[11rem] opacity-30 group-hover:opacity-50 group-hover:scale-110 group-hover:rotate-6 transition-all duration-700 select-none pointer-events-none">💣</div>
-
-                  <div className="relative z-10 p-4 sm:p-8 max-w-md">
-                    <h3 className="text-3xl sm:text-5xl md:text-6xl font-black text-white uppercase tracking-tighter mb-1 sm:mb-2 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]">Whackd!</h3>
-                    <p className="text-green-300/90 font-mono text-xs sm:text-sm md:text-base mb-3 sm:mb-5">Crack tiles, dodge bombs. Cash out before you blow up.</p>
-                    <div className="inline-flex items-center gap-2 bg-green-500 text-black font-black uppercase tracking-widest text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-3 rounded-lg group-hover:gap-4 transition-all shadow-[0_0_25px_rgba(34,197,94,0.5)]">
-                      Play Now <span className="group-hover:translate-x-1 transition-transform">→</span>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Quick Play */}
-              <section className="relative max-w-6xl mx-auto px-4 sm:px-8 mb-8 sm:mb-12">
-                <SectionHeader emoji="🎯" title="Quick Play" subtitle="Fast & furious bets" accent="from-green-500 via-emerald-500 to-cyan-500" count={5} />
-                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
-                  <GameCard onClick={() => setActiveGame('coinflip')} icon="🪙" title="Coinflip" desc="50/50 double-up" tone="green" />
+                <SectionHeader emoji="🎯" title="Casino" subtitle="Fast & furious bets" accent="from-green-500 via-emerald-500 to-cyan-500" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                  <GameCard onClick={() => setActiveGame('coinflip')} icon="🪙" title="Coinflip" desc="50/50 double-up" tone="green" badge="FEATURED" />
+                  <GameCard onClick={() => setActiveGame('whackd')} icon="💣" title="Whackd!" desc="Dodge the bombs" tone="emerald" />
                   <GameCard onClick={() => setActiveGame('roulette')} icon="🐸" title="Roulette" desc="Spin the wheel" tone="red" />
                   <GameCard onClick={() => setActiveGame('rps')} icon="✂️" title="RPS" desc="Let it ride" tone="amber" />
-                  <GameCard onClick={() => setActiveGame('pumpit')} icon="📈" title="Pump It" desc="Don't get rugged" tone="emerald" badge="HOT" />
+                  <GameCard onClick={() => setActiveGame('pumpit')} icon="📈" title="Pump It" desc="Don't get rugged" tone="emerald" />
                   <GameCard onClick={() => setActiveGame('blackjack')} icon="🃏" title="Blackjack" desc="Beat the dealer" tone="rose" />
                 </div>
               </section>
 
               {/* Slots */}
               <section className="relative max-w-6xl mx-auto px-4 sm:px-8 mb-10 sm:mb-16">
-                <SectionHeader emoji="🎰" title="McPepe Slots" subtitle="High volatility, max degen" accent="from-purple-500 via-fuchsia-500 to-pink-500" count={3} />
+                <SectionHeader emoji="🎰" title="Slots" subtitle="High volatility, max degen" accent="from-purple-500 via-fuchsia-500 to-pink-500" />
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-                  <GameCard onClick={() => setActiveGame('patriots')} icon="🎰" title="Patriots" desc="Serve the nation" tone="patriot" badge="NEW" />
+                  <GameCard onClick={() => setActiveGame('patriots')} icon="🎰" title="Patriots" desc="Serve the nation" tone="patriot" />
                   <GameCard onClick={() => setActiveGame('vacation')} icon="🍹" title="Vacation" desc="Collect luggage" tone="cyan" />
                   <GameCard onClick={() => setActiveGame('snowstorm')} icon="❄️" title="Snowstorm" desc="Survive the storm" tone="blue" />
                 </div>
@@ -294,40 +267,39 @@ const TONE_MAP: Record<Tone, { bg: string, border: string, hoverBorder: string, 
 
 function StatCard({ icon, label, value, tone }: { icon: string, label: string, value: string, tone: 'green' | 'emerald' | 'purple' }) {
   const t = TONE_MAP[tone];
+  // Scale value font down for longer strings so cards stay symmetrical
+  const valueClass = value.length > 4
+    ? 'text-xs sm:text-sm md:text-base'
+    : 'text-base sm:text-xl md:text-2xl';
   return (
-    <div className={`relative flex flex-col items-center p-2.5 sm:p-4 rounded-xl border ${t.border} bg-gradient-to-b ${t.bg} backdrop-blur-sm overflow-hidden`}>
+    <div className={`relative flex flex-col items-center justify-center p-2.5 sm:p-4 rounded-xl border ${t.border} bg-gradient-to-b ${t.bg} backdrop-blur-sm overflow-hidden min-h-[80px] sm:min-h-[110px]`}>
       <span className="text-lg sm:text-2xl mb-1">{icon}</span>
-      <span className={`text-base sm:text-2xl font-black font-mono ${t.accent}`}>{value}</span>
-      <span className="text-[8px] sm:text-[10px] uppercase tracking-widest text-gray-500 font-bold mt-0.5 text-center leading-tight">{label}</span>
+      <span className={`${valueClass} font-black font-mono ${t.accent} text-center max-w-full truncate`}>{value}</span>
+      <span className="text-[8px] sm:text-[10px] uppercase tracking-widest text-gray-500 font-bold mt-1 text-center leading-tight">{label}</span>
     </div>
   );
 }
 
-function SectionHeader({ emoji, title, subtitle, accent, count }: { emoji: string, title: string, subtitle?: string, accent: string, count?: number }) {
+function SectionHeader({ emoji, title, subtitle, accent }: { emoji: string, title: string, subtitle?: string, accent: string }) {
   return (
-    <div className="flex items-center justify-between mb-4 sm:mb-6 gap-3">
-      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-        <div className={`shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${accent} flex items-center justify-center text-xl sm:text-2xl shadow-[0_4px_20px_rgba(0,0,0,0.5)] border border-white/10`}>
-          {emoji}
-        </div>
-        <div className="min-w-0">
-          <h2 className="text-xl sm:text-3xl font-black text-white uppercase tracking-tight leading-none truncate">{title}</h2>
-          {subtitle && <p className="text-gray-500 text-[10px] sm:text-xs font-mono mt-1 truncate">{subtitle}</p>}
-        </div>
+    <div className="flex items-center mb-4 sm:mb-6 gap-3 sm:gap-4">
+      <div className={`shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${accent} flex items-center justify-center text-xl sm:text-2xl shadow-[0_4px_20px_rgba(0,0,0,0.5)] border border-white/10`}>
+        {emoji}
       </div>
-      {count !== undefined && (
-        <span className="shrink-0 text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest border border-gray-800 bg-black/40 px-2.5 sm:px-3 py-1 rounded-full">
-          {count} <span className="hidden sm:inline">Games</span>
-        </span>
-      )}
+      <div className="min-w-0 flex-1">
+        <h2 className="text-xl sm:text-3xl font-black text-white uppercase tracking-tight leading-none truncate">{title}</h2>
+        {subtitle && <p className="text-gray-500 text-[10px] sm:text-xs font-mono mt-1 truncate">{subtitle}</p>}
+      </div>
+      <div className={`hidden sm:block flex-1 h-px bg-gradient-to-r ${accent} opacity-30 max-w-[200px] ml-2`} />
     </div>
   );
 }
 
-function GameCard({ onClick, icon, title, desc, tone, badge }: { onClick: () => void, icon: string, title: string, desc: string, tone: Tone, badge?: 'HOT' | 'NEW' }) {
+function GameCard({ onClick, icon, title, desc, tone, badge }: { onClick: () => void, icon: string, title: string, desc: string, tone: Tone, badge?: 'FEATURED' | 'NEW' }) {
   const t = TONE_MAP[tone];
-  const badgeStyles = badge === 'HOT'
-    ? 'bg-red-500 text-white animate-pulse'
+  const badgeContent = badge === 'FEATURED' ? '⭐ Featured' : badge;
+  const badgeStyles = badge === 'FEATURED'
+    ? 'bg-gradient-to-r from-yellow-300 to-amber-500 text-black border border-yellow-200/40 shadow-[0_0_12px_rgba(250,204,21,0.5)]'
     : 'bg-yellow-400 text-black';
 
   return (
@@ -336,8 +308,8 @@ function GameCard({ onClick, icon, title, desc, tone, badge }: { onClick: () => 
       className={`group relative cursor-pointer rounded-xl sm:rounded-2xl overflow-hidden border-2 ${t.border} ${t.hoverBorder} bg-gradient-to-br ${t.bg} transition-all duration-300 hover:-translate-y-1 ${t.glow} aspect-[4/5] sm:aspect-[3/4] flex flex-col`}
     >
       {badge && (
-        <span className={`absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 ${badgeStyles} text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 sm:px-2 sm:py-1 uppercase tracking-widest rounded-full shadow-lg`}>
-          {badge}
+        <span className={`absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 ${badgeStyles} text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 sm:px-2 sm:py-1 uppercase tracking-widest rounded-full shadow-lg whitespace-nowrap`}>
+          {badgeContent}
         </span>
       )}
 
