@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 use crate::snowstorm::state::SnowstormState;
+use crate::constants::HOUSE_AUTHORITY;
+use crate::errors::CustomError;
 
 #[error_code]
 pub enum SnowstormError {
@@ -66,7 +68,9 @@ pub struct ResolveSnowstorm<'info> {
         close = house // Close PDA and refund rent to the house
     )]
     pub game_state: Account<'info, SnowstormState>,
-    #[account(mut)]
+    // 🔒 CR-3 FIX: only the canonical House key may resolve a snowstorm spin
+    // and receive the rent refund via `close = house`.
+    #[account(mut, address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
     pub house: Signer<'info>,
     /// CHECK: Safe
     #[account(mut, seeds = [b"vault"], bump)]
@@ -75,6 +79,53 @@ pub struct ResolveSnowstorm<'info> {
     #[account(mut, address = game_state.player)]
     pub player: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
+}
+
+/// 🔒 RECOVERY: lets a player reclaim a stuck Snowstorm round when the House
+/// fails to resolve. Refunds the escrowed bet and closes the PDA back to the
+/// player. Safe because Snowstorm is an atomic spin — the player has zero
+/// outcome information when calling this.
+#[derive(Accounts)]
+pub struct CancelStuckSnowstorm<'info> {
+    #[account(
+        mut,
+        close = player,
+        seeds = [b"snowstorm", game_state.player.as_ref(), &game_state.nonce.to_le_bytes()],
+        bump = game_state.bump,
+        has_one = player,
+    )]
+    pub game_state: Account<'info, SnowstormState>,
+    #[account(mut)]
+    pub player: Signer<'info>,
+    /// CHECK: vault PDA, source of the refund
+    #[account(mut, seeds = [b"vault"], bump)]
+    pub vault: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn cancel_stuck_snowstorm(ctx: Context<CancelStuckSnowstorm>) -> Result<()> {
+    let refund = ctx.accounts.game_state.bet_amount;
+    if refund > 0 {
+        let bump = ctx.bumps.vault;
+        let seeds = &[b"vault".as_ref(), &[bump]];
+        let signer = &[&seeds[..]];
+
+        require!(
+            ctx.accounts.vault.lamports() >= refund,
+            SnowstormError::InsufficientVaultFunds
+        );
+
+        let cpi_context = CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.vault.to_account_info(),
+                to: ctx.accounts.player.to_account_info(),
+            },
+            signer,
+        );
+        system_program::transfer(cpi_context, refund)?;
+    }
+    Ok(())
 }
 
 pub fn resolve_snowstorm(
@@ -91,6 +142,14 @@ pub fn resolve_snowstorm(
         hash.to_bytes() == game_state.server_seed_hash,
         SnowstormError::InvalidServerSeed
     );
+
+    // 🔒 CR-3 FIX: enforce documented 800x max-win cap on chain. Even if the
+    // house key is compromised, payouts above the cap are rejected.
+    const MAX_WIN_MULTIPLIER: u128 = 800;
+    let max_payout = (game_state.bet_amount as u128)
+        .checked_mul(MAX_WIN_MULTIPLIER)
+        .ok_or(CustomError::MathOverflow)?;
+    require!((payout as u128) <= max_payout, CustomError::PayoutTooLarge);
 
     // 2. Transfer Winnings if > 0
     if payout > 0 {

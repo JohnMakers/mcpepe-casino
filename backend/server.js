@@ -81,6 +81,7 @@ const wagerLimiter = rateLimit({
 app.use(globalLimiter);
 // Apply the stricter limit to every game-mutating route.
 app.use([
+    '/api/coinflip/seed',
     '/api/play-coinflip',
     '/api/whackd/init',
     '/api/whackd/click',
@@ -133,17 +134,68 @@ async function readOnChainBetAmount(gameStatePubkeyStr) {
     return acc.data.readBigUInt64LE(40);
 }
 
+// 🔒 CR-7 helper: read both bet_amount AND is_bonus_buy from a VacationState
+// account, since the bonus flag drives the payout cap base. Layout (Anchor):
+//   [0..8]   disc
+//   [8..40]  player Pubkey
+//   [40..48] bet_amount u64 LE
+//   [48..80] server_seed_hash [u8;32]
+//   [80..84] client_seed length u32 LE
+//   [84..84+len] client_seed bytes
+//   [84+len..92+len] nonce u64 LE
+//   [92+len]    is_bonus_buy bool
+//   [93+len]    bump u8
+async function readVacationOnChainState(gameStatePubkeyStr) {
+    const acc = await connection.getAccountInfo(new anchor.web3.PublicKey(gameStatePubkeyStr), "confirmed");
+    if (!acc || acc.data.length < 84) {
+        throw new Error("Vacation state account not found or malformed.");
+    }
+    const data = acc.data;
+    const betAmount = data.readBigUInt64LE(40);
+    const clientSeedLen = data.readUInt32LE(80);
+    const bonusOffset = 84 + clientSeedLen + 8;
+    if (data.length < bonusOffset + 1) {
+        throw new Error("Vacation state truncated before is_bonus_buy.");
+    }
+    const isBonusBuy = data.readUInt8(bonusOffset) !== 0;
+    return { betAmount, isBonusBuy };
+}
+
 
 // ==========================================
-// COINFLIP ENDPOINT
+// COINFLIP ENDPOINTS
 // ==========================================
+// 🔒 CR-1 FIX: backend now owns Coinflip server-seed generation. Returning the
+// hash only at /api/coinflip/seed prevents the previous "client-picks-seed →
+// 100 % win rate" exploit.
+const activeCoinflipSeeds = new Map();
+
+app.post('/api/coinflip/seed', (req, res) => {
+    try {
+        const { playerPubkey } = req.body || {};
+        if (!playerPubkey) {
+            return res.status(400).json({ success: false, error: "Missing playerPubkey." });
+        }
+        const serverSeed = crypto.randomBytes(32).toString('hex');
+        const serverSeedHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
+        activeCoinflipSeeds.set(playerPubkey, { serverSeed, serverSeedHash, createdAt: Date.now() });
+        res.json({ success: true, serverSeedHash });
+    } catch (error) {
+        console.error("❌ Coinflip Seed Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 app.post('/api/play-coinflip', async (req, res) => {
     try {
-        const { transactionBuffer, unhashedServerSeed, gameStatePubkey, playerPubkey } = req.body;
-        
-        if (!unhashedServerSeed) {
-            return res.status(400).json({ success: false, error: "Missing server seed." });
+        const { transactionBuffer, gameStatePubkey, playerPubkey } = req.body;
+
+        // 🔒 CR-1 FIX: look up the seed server-side instead of trusting the body.
+        const seedRec = playerPubkey ? activeCoinflipSeeds.get(playerPubkey) : null;
+        if (!seedRec) {
+            return res.status(400).json({ success: false, error: "No active coinflip seed. Call /api/coinflip/seed first." });
         }
+        const unhashedServerSeed = seedRec.serverSeed;
 
         const tx = anchor.web3.Transaction.from(Buffer.from(transactionBuffer, 'base64'));
         
@@ -236,8 +288,10 @@ app.post('/api/play-coinflip', async (req, res) => {
             }
         }
 
-        // 🔥 THE FIX: Coinflip specific success response
-        res.json({ success: true, resolveSignature });
+        // 🔒 CR-1 FIX: evict the seed only AFTER on-chain resolve confirmed.
+        if (playerPubkey) activeCoinflipSeeds.delete(playerPubkey);
+        // Reveal the seed so the player can verify the outcome client-side.
+        res.json({ success: true, resolveSignature, serverSeed: unhashedServerSeed });
 
     } catch (error) {
         console.error("❌ Coinflip Resolve Error:", error);
@@ -1077,37 +1131,6 @@ function getBombMultiplier(randomFloat) {
 }
 
 
-function generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins, forceScatters = false) {
-    let grid = [];
-    let scatterPositions = [];
-
-    // If Buy Bonus is triggered, guarantee exactly 4 Scatters randomly placed
-    if (forceScatters) {
-        while (scatterPositions.length < 4) {
-            let posFloat = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
-            let pos = Math.floor(posFloat * 30);
-            if (!scatterPositions.includes(pos)) scatterPositions.push(pos);
-        }
-    }
-
-    for (let col = 0; col < 6; col++) {
-        let column = [];
-        for (let row = 0; row < 5; row++) {
-            let tileIndex = col * 5 + row;
-            // Place the guaranteed scatters
-            if (forceScatters && scatterPositions.includes(tileIndex)) {
-                column.push(PATRIOTS_SYMBOLS.SCATTER);
-            } else {
-                const floatStr = getDeterministicFloat(serverSeed, clientSeed, nonce, counterRef.val++);
-                column.push(generateSymbol(floatStr, isFreeSpins));
-            }
-        }
-        grid.push(column);
-    }
-    return grid;
-}
-
-
 // 🔒 PATRIOTS FIX: renamed from `evaluateGrid` to avoid colliding with the
 // Snowstorm `evaluateGrid` declared later in this file. Function declarations
 // are hoisted and the *last* definition wins — that meant Patriots was silently
@@ -1694,15 +1717,32 @@ function processNearMiss(initialGrid, initialStops, serverSeed, clientSeed, nonc
 // THE PLAY ENDPOINT (Final Big Bass Integration)
 app.post('/api/vacation/play', async (req, res) => {
     try {
-        const { playerPubkey, gamePubkey, clientSeed, nonce, betAmount, isBonusBuy } = req.body;
+        const { playerPubkey, gamePubkey, clientSeed, nonce, betAmount, isBonusBuy: bodyBonusBuy } = req.body;
 
         const game = activeVacationGames.get(playerPubkey);
         if (!game || game.status !== "waiting_for_tx") {
             return res.status(400).json({ error: "No active session. Fetch seed first." });
         }
-        
-        const actualBetLamports = Number(betAmount);
 
+        // 🔒 CR-5 + CR-7 FIX: read bet AND bonus_buy from on-chain account so the
+        // payout math cannot be desynced from the actual escrow / start flag.
+        let onChainBet, onChainIsBonusBuy;
+        try {
+            const s = await readVacationOnChainState(gamePubkey);
+            onChainBet = s.betAmount;
+            onChainIsBonusBuy = s.isBonusBuy;
+        } catch (e) {
+            return res.status(400).json({ error: `Could not verify on-chain Vacation bet: ${e.message}` });
+        }
+        if (onChainBet !== BigInt(betAmount)) {
+            return res.status(400).json({ error: `Bet mismatch: body=${betAmount} on-chain=${onChainBet.toString()}` });
+        }
+        if (Boolean(bodyBonusBuy) !== onChainIsBonusBuy) {
+            return res.status(400).json({ error: `Bonus-buy mismatch: body=${!!bodyBonusBuy} on-chain=${onChainIsBonusBuy}` });
+        }
+        const isBonusBuy = onChainIsBonusBuy;
+
+        const actualBetLamports = Number(betAmount);
         const totalWager = Number(actualBetLamports);
         const actualBaseBet = isBonusBuy ? totalWager / 100 : totalWager;
         const lineBet = actualBaseBet / 10; 
@@ -1940,6 +1980,12 @@ function evaluateGrid(matrix) {
     return { totalWinFactor, winningLines };
 }
 
+// 🔒 CR-2 + CR-6 FIX: backend now owns the Snowstorm seed; never returns the
+// unhashed value before resolve. The seed + clientSeed + nonce are stashed
+// keyed by player so /api/snowstorm/resolve can look them up instead of
+// trusting client-supplied versions.
+const activeSnowstormGames = new Map();
+
 app.post('/api/snowstorm/play', async (req, res) => {
     try {
         const { playerPublicKey, betAmount } = req.body;
@@ -1948,7 +1994,13 @@ app.post('/api/snowstorm/play', async (req, res) => {
         const serverSeed = crypto.randomBytes(32).toString('hex');
         const serverSeedHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
 
-        res.json({ serverSeedHash, unhashedServerSeed: serverSeed });
+        // Hash leaves the server, the unhashed seed never does pre-resolve.
+        activeSnowstormGames.set(playerPublicKey, {
+            serverSeed,
+            serverSeedHash,
+            createdAt: Date.now(),
+        });
+        res.json({ success: true, serverSeedHash });
     } catch (err) {
         console.error("Snowstorm Start Error:", err);
         res.status(500).json({ error: "Internal Server Error" });
@@ -1957,7 +2009,37 @@ app.post('/api/snowstorm/play', async (req, res) => {
 
 app.post('/api/snowstorm/resolve', async (req, res) => {
     try {
-        const { playerPublicKey, serverSeed, clientSeed, nonce, betAmount } = req.body;
+        const { playerPublicKey, clientSeed, nonce, betAmount } = req.body;
+        if (!playerPublicKey || !clientSeed || nonce === undefined || betAmount === undefined) {
+            return res.status(400).json({ success: false, error: "Missing required parameters." });
+        }
+
+        // 🔒 CR-2 / CR-6 FIX: pull the seed from server-side state, not the body.
+        const session = activeSnowstormGames.get(playerPublicKey);
+        if (!session || !session.serverSeed) {
+            return res.status(400).json({ success: false, error: "No active Snowstorm session. Call /api/snowstorm/play first." });
+        }
+        const serverSeed = session.serverSeed;
+
+        // 🔒 CR-5 FIX: verify on-chain bet matches body before trusting the
+        // payout calculation that uses betAmount as a multiplier. The PDA seed
+        // depends on the player's nonce — derive it the same way the client did
+        // and read the actual escrowed amount.
+        const [gameStatePDAforCheck] = anchor.web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("snowstorm"), new anchor.web3.PublicKey(playerPublicKey).toBuffer(), new anchor.BN(nonce).toArrayLike(Buffer, 'le', 8)],
+            PROGRAM_ID
+        );
+        try {
+            const onChainBet = await readOnChainBetAmount(gameStatePDAforCheck.toBase58());
+            if (onChainBet !== BigInt(betAmount)) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Bet mismatch: body=${betAmount} on-chain=${onChainBet.toString()}`
+                });
+            }
+        } catch (e) {
+            return res.status(400).json({ success: false, error: `Could not verify on-chain Snowstorm bet: ${e.message}` });
+        }
 
         // 1. Provably Fair V19 Final Engine
         const pfHash = crypto.createHmac('sha256', serverSeed).update(`${clientSeed}:${nonce}`).digest('hex');
@@ -2113,11 +2195,14 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
             }
         }
 
+        // 🔒 CR-2 / CR-6 FIX: evict the seed AFTER on-chain resolve confirmed.
+        activeSnowstormGames.delete(playerPublicKey);
+
         res.json({
             success: true,
             txSig,
-            initialMatrix,  // <--- ADDED: Tells frontend what to show first
-            matrix,         // This is now the final matrix
+            initialMatrix,
+            matrix,
             winningLines,
             payout: totalPayout,
             respinData,

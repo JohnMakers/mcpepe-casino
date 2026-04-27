@@ -32,14 +32,18 @@ export default function McPepeSnowstorm() {
     setPlayData(null); // Clear previous grid
 
     try {
-      // 1. Get PF Seeds from Server
+      // 1. Get PF commitment from server (hash only — backend now holds the seed)
       const initRes = await fetch(`${BACKEND_URL}/api/snowstorm/play`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ playerPublicKey: publicKey.toBase58(), betAmount })
       });
-      
-      const { serverSeedHash, unhashedServerSeed } = await initRes.json();
+
+      const initData = await initRes.json();
+      if (!initData.success || !initData.serverSeedHash) {
+        throw new Error(initData.error || "Failed to fetch Snowstorm seed.");
+      }
+      const serverSeedHash: string = initData.serverSeedHash;
 
       // 2. Generate Client Seed & Nonce
       const clientSeed = Math.random().toString(36).substring(2, 15);
@@ -68,24 +72,24 @@ export default function McPepeSnowstorm() {
       const txSig = await sendTransaction(tx, connection);
       await connection.confirmTransaction(txSig, 'confirmed');
 
-      // 4. Resolve on Server
+      // 4. Resolve on server (no longer sends serverSeed — backend holds it)
       const resolveRes = await fetch(`${BACKEND_URL}/api/snowstorm/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerPublicKey: publicKey.toBase58(),
-          serverSeed: unhashedServerSeed, 
           clientSeed,
           nonce,
           betAmount: lamports
         })
       });
-      
+
       const result = await resolveRes.json();
+      if (!result.success) throw new Error(result.error || "Snowstorm resolve failed.");
       setPlayData(result);
-      
-      // 🔥 FIX 3: Store the exact seeds so the player can verify them
-      setPfData({ hash: serverSeedHash, seed: unhashedServerSeed });
+
+      // Backend reveals seed AFTER on-chain resolve so player can verify.
+      setPfData({ hash: serverSeedHash, seed: result.serverSeed });
 
     } catch (err) {
       console.error(err);

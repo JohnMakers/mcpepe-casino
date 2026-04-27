@@ -637,6 +637,36 @@
       ]
     },
     {
+      "name": "cancelStuckPump",
+      "docs": [
+        "🔒 RECOVERY: player escape hatch when the House never processes/cashes",
+        "out a Pumpit round. Refunds the escrowed bet and closes the PDA."
+      ],
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "startBlackjack",
       "accounts": [
         {
@@ -860,6 +890,36 @@
       ]
     },
     {
+      "name": "cancelStuckPatriots",
+      "docs": [
+        "🔒 RECOVERY: player escape hatch when the House never resolves a",
+        "Patriots round. Refunds the escrowed bet and closes the PDA."
+      ],
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "startVacation",
       "accounts": [
         {
@@ -952,6 +1012,36 @@
       ]
     },
     {
+      "name": "cancelStuckVacation",
+      "docs": [
+        "🔒 RECOVERY: player escape hatch when the House never resolves a",
+        "Vacation round. Refunds the escrowed bet and closes the PDA."
+      ],
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "startSnowstorm",
       "accounts": [
         {
@@ -1038,6 +1128,36 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "cancelStuckSnowstorm",
+      "docs": [
+        "🔒 RECOVERY: player escape hatch when the House never resolves a",
+        "Snowstorm round. Refunds the escrowed bet and closes the PDA."
+      ],
+      "accounts": [
+        {
+          "name": "gameState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [

@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 use crate::vacation::state::VacationState;
+use crate::constants::HOUSE_AUTHORITY;
+use crate::errors::CustomError;
 
 #[error_code]
 pub enum VacationError {
@@ -68,7 +70,9 @@ pub struct ResolveVacation<'info> {
         bump = game_state.bump
     )]
     pub game_state: Account<'info, VacationState>,
-    #[account(mut)]
+    // 🔒 CR-4 FIX: only the canonical House key may resolve a vacation spin
+    // and receive the rent refund via `close = house`.
+    #[account(mut, address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
     pub house: Signer<'info>,
     /// CHECK: Safe
     #[account(mut, seeds = [b"vault"], bump)]
@@ -77,6 +81,53 @@ pub struct ResolveVacation<'info> {
     #[account(mut, address = game_state.player)]
     pub player: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
+}
+
+/// 🔒 RECOVERY: lets a player reclaim a stuck Vacation round when the House
+/// fails to resolve. Refunds the escrowed bet and closes the PDA back to the
+/// player. Safe because Vacation is an atomic spin — the player has zero
+/// outcome information when calling this.
+#[derive(Accounts)]
+pub struct CancelStuckVacation<'info> {
+    #[account(
+        mut,
+        close = player,
+        seeds = [b"vacation", player.key().as_ref(), &game_state.nonce.to_le_bytes()],
+        bump = game_state.bump,
+        has_one = player,
+    )]
+    pub game_state: Account<'info, VacationState>,
+    #[account(mut)]
+    pub player: Signer<'info>,
+    /// CHECK: vault PDA, source of the refund
+    #[account(mut, seeds = [b"vault"], bump)]
+    pub vault: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn cancel_stuck_vacation(ctx: Context<CancelStuckVacation>) -> Result<()> {
+    let refund = ctx.accounts.game_state.bet_amount;
+    if refund > 0 {
+        let bump = ctx.bumps.vault;
+        let seeds = &[b"vault".as_ref(), &[bump]];
+        let signer = &[&seeds[..]];
+
+        require!(
+            ctx.accounts.vault.lamports() >= refund,
+            VacationError::InsufficientVaultFunds
+        );
+
+        let cpi_context = CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.vault.to_account_info(),
+                to: ctx.accounts.player.to_account_info(),
+            },
+            signer,
+        );
+        system_program::transfer(cpi_context, refund)?;
+    }
+    Ok(())
 }
 
 pub fn resolve_vacation(
@@ -93,6 +144,22 @@ pub fn resolve_vacation(
         hash.to_bytes() == game_state.server_seed_hash,
         VacationError::InvalidServerSeed
     );
+
+    // 🔒 CR-4 FIX: enforce documented 5,000x max-win cap on chain. The cap is
+    // expressed against the BASE bet, which depends on whether this round was
+    // a Bonus Buy (escrowed bet = 100 × base) or a normal spin.
+    // CR-7 FIX: derive base_bet from the on-chain `is_bonus_buy` flag (recorded
+    // at start_vacation) instead of trusting any off-chain assertion.
+    const MAX_WIN_MULTIPLIER: u128 = 5_000;
+    let base_bet: u128 = if game_state.is_bonus_buy {
+        (game_state.bet_amount as u128) / 100
+    } else {
+        game_state.bet_amount as u128
+    };
+    let max_payout = base_bet
+        .checked_mul(MAX_WIN_MULTIPLIER)
+        .ok_or(CustomError::MathOverflow)?;
+    require!((payout as u128) <= max_payout, CustomError::PayoutTooLarge);
 
     // 2. Transfer Winnings if > 0
     if payout > 0 {

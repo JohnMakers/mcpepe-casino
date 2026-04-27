@@ -134,6 +134,52 @@ pub fn cash_out(ctx: Context<CashOutPump>, final_multiplier_bps: u64) -> Result<
     Ok(())
 }
 
+/// 🔒 RECOVERY: lets a player abandon a stuck pumpit round (e.g. backend
+/// memory was lost so it can never be processed/cashed-out). Refunds the
+/// escrowed bet and closes the game-state account back to the player. Cannot
+/// be exploited because the seed is house-held — the player has zero
+/// information about future outcomes when calling this; cancelling forfeits
+/// any potential future winning multiplier in exchange for the 1× refund.
+pub fn cancel_stuck_pump(ctx: Context<CancelStuckPump>) -> Result<()> {
+    let game_state = &ctx.accounts.game_state;
+    require!(game_state.is_active, CustomError::GameNotActive);
+
+    let refund = game_state.bet_amount;
+    if refund > 0 {
+        let bump = ctx.bumps.vault;
+        let seeds = &[b"vault".as_ref(), &[bump]];
+        let signer = &[&seeds[..]];
+
+        let cpi_context = CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: ctx.accounts.vault.to_account_info(),
+                to: ctx.accounts.player.to_account_info(),
+            },
+            signer,
+        );
+        anchor_lang::system_program::transfer(cpi_context, refund)?;
+    }
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct CancelStuckPump<'info> {
+    // close = player refunds rent to the player; has_one ties the account to
+    // the canonical fields written at start_pump.
+    #[account(
+        mut,
+        has_one = player,
+        close = player,
+    )]
+    pub game_state: Account<'info, PumpGameState>,
+    #[account(mut)]
+    pub player: Signer<'info>,
+    #[account(mut, seeds = [b"vault"], bump)]
+    pub vault: SystemAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 /// Returns the *fair* maximum multiplier (basis-points, 10_000 = 1.00x) for a
 /// given difficulty / step combination. Uses the same probability table as
 /// `process_pump`, so:  multiplier = product over each survived step of

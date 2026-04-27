@@ -125,6 +125,12 @@ pub mod mcpepe_casino {
         pumpit::cash_out(ctx, final_multiplier_bps)
     }
 
+    /// 🔒 RECOVERY: player escape hatch when the House never processes/cashes
+    /// out a Pumpit round. Refunds the escrowed bet and closes the PDA.
+    pub fn cancel_stuck_pump(ctx: Context<CancelStuckPump>) -> Result<()> {
+        pumpit::cancel_stuck_pump(ctx)
+    }
+
     // --- BLACKJACK ROUTES ---
     pub fn start_blackjack(
         ctx: Context<StartBlackjack>,
@@ -174,6 +180,12 @@ pub mod mcpepe_casino {
         patriots::resolve_patriots(ctx, unhashed_server_seed, payout)
     }
 
+    /// 🔒 RECOVERY: player escape hatch when the House never resolves a
+    /// Patriots round. Refunds the escrowed bet and closes the PDA.
+    pub fn cancel_stuck_patriots(ctx: Context<CancelStuckPatriots>) -> Result<()> {
+        patriots::cancel_stuck_patriots(ctx)
+    }
+
     // --- VACATION ROUTES ---
     pub fn start_vacation(
         ctx: Context<StartVacation>,
@@ -194,6 +206,12 @@ pub mod mcpepe_casino {
         vacation::resolve_vacation(ctx, unhashed_server_seed, payout)
     }
 
+    /// 🔒 RECOVERY: player escape hatch when the House never resolves a
+    /// Vacation round. Refunds the escrowed bet and closes the PDA.
+    pub fn cancel_stuck_vacation(ctx: Context<CancelStuckVacation>) -> Result<()> {
+        vacation::cancel_stuck_vacation(ctx)
+    }
+
     // --- SNOWSTORM ROUTES ---
     pub fn start_snowstorm(
         ctx: Context<StartSnowstorm>,
@@ -211,6 +229,12 @@ pub mod mcpepe_casino {
         payout: u64,
     ) -> Result<()> {
         snowstorm::resolve_snowstorm(ctx, unhashed_server_seed, payout)
+    }
+
+    /// 🔒 RECOVERY: player escape hatch when the House never resolves a
+    /// Snowstorm round. Refunds the escrowed bet and closes the PDA.
+    pub fn cancel_stuck_snowstorm(ctx: Context<CancelStuckSnowstorm>) -> Result<()> {
+        snowstorm::cancel_stuck_snowstorm(ctx)
     }
 
 }

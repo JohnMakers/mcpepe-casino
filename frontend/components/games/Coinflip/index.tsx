@@ -47,23 +47,24 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
 
       const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("vault")], program.programId);
       const gameStateKeypair = anchor.web3.Keypair.generate();
-      
-      const unhashedServerSeed = "mcafee_server_seed_" + Date.now().toString();
+
+      // 🔒 CR-1 FIX: backend now owns server-seed generation. We only ever see
+      // the hash before the tx confirms; the unhashed seed is revealed AFTER
+      // the on-chain resolve so the player can verify the outcome.
+      const seedRes = await fetch(`${BACKEND_URL}/api/coinflip/seed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerPubkey: publicKey.toBase58() })
+      });
+      const seedData = await seedRes.json();
+      if (!seedData.success || !seedData.serverSeedHash) {
+          throw new Error(`Failed to fetch coinflip seed: ${seedData.error || 'unknown'}`);
+      }
+      const serverSeedHash = Array.from(Buffer.from(seedData.serverSeedHash, 'hex'));
+
       const clientSeed = "degen_client_seed_" + Math.random().toString(36).substring(7);
       const guessNum = guess === "heads" ? 0 : 1;
       const wagerLamports = new anchor.BN(wager * LAMPORTS_PER_SOL);
-
-      const encoder = new TextEncoder();
-      const serverSeedData = encoder.encode(unhashedServerSeed);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', serverSeedData as any);
-      const serverSeedHash = Array.from(new Uint8Array(hashBuffer));
-
-      const combinedData = encoder.encode(unhashedServerSeed + clientSeed);
-      const outcomeBuffer = await crypto.subtle.digest('SHA-256', combinedData as any);
-      const outcomeHash = new Uint8Array(outcomeBuffer);
-      const winningResult = outcomeHash[0] % 2; 
-      const isWin = winningResult === guessNum;
-      const winningSide = winningResult === 0 ? "heads" : "tails";
 
       // 🛡️ THE FIX: Build the instructions and properly sign the Wager
       const initIx = await program.methods.initializeGame(serverSeedHash).accounts({
@@ -95,14 +96,13 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
       const serializedTx = signedTx.serialize({ requireAllSignatures: false });
       const base64Tx = Buffer.from(serializedTx).toString('base64');
       
-      // Blast it to the Armored Backend
+      // Blast it to the Armored Backend (no longer sends unhashedServerSeed).
       const backendResponse = await fetch(`${BACKEND_URL}/api/play-coinflip`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
               transactionBuffer: base64Tx,
               clientSeed: clientSeed,
-              unhashedServerSeed: unhashedServerSeed,
               gameStatePubkey: gameStateKeypair.publicKey.toBase58(),
               playerPubkey: publicKey.toBase58()
           })
@@ -110,18 +110,32 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
 
       const backendData = await backendResponse.json();
       if (!backendData.success) throw new Error(backendData.error);
-      
-      const baseSpins = 1800; 
-      const extraTurn = winningSide === "tails" ? 180 : 0; 
+
+      // 🔒 CR-1 FIX: derive the outcome from the seed REVEALED by the backend
+      // after on-chain resolve. The player can independently verify by hashing
+      // backendData.serverSeed and confirming it matches the hash that was
+      // committed on-chain at initialize_game.
+      const revealedServerSeed: string = backendData.serverSeed;
+      if (!revealedServerSeed) throw new Error("Backend did not reveal server seed.");
+      const encoder = new TextEncoder();
+      const combinedData = encoder.encode(revealedServerSeed + clientSeed);
+      const outcomeBuffer = await crypto.subtle.digest('SHA-256', combinedData as any);
+      const outcomeHash = new Uint8Array(outcomeBuffer);
+      const winningResult = outcomeHash[0] % 2;
+      const isWin = winningResult === guessNum;
+      const winningSide: "heads" | "tails" = winningResult === 0 ? "heads" : "tails";
+
+      const baseSpins = 1800;
+      const extraTurn = winningSide === "tails" ? 180 : 0;
       setCoinDegrees(prev => prev + baseSpins + extraTurn + (prev % 360 !== 0 ? 180 : 0));
 
       setTimeout(async () => {
         setFlipState("resolved");
-        const payout = isWin ? wager * 1.98 : 0; 
-        const profit = isWin ? payout - wager : wager; 
-        
+        const payout = isWin ? wager * 1.98 : 0;
+        const profit = isWin ? payout - wager : wager;
+
         setResult({ win: isWin, amount: profit.toFixed(4), side: winningSide });
-        
+
         // 🛡️ THE FIX: Fetch the authoritative on-chain balance to account for Tx Fees exactly.
         try {
             const exactBalance = await connection.getBalance(publicKey);
@@ -130,7 +144,7 @@ export default function CoinflipGame({ balance, setBalance, logWager, setShowPro
             // Fallback to optimistic math only if the RPC randomly fails
             if (isWin) setBalance(prev => prev + payout);
         }
-        
+
         logWager("Coinflip", wager, isWin, payout, backendData.resolveSignature, clientSeed);
       }, 3000);
 

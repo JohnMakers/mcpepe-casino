@@ -207,6 +207,44 @@ export default function PumpIt() {
     }
   };
 
+  // 🔒 RECOVERY: lets the player abandon a stuck Pumpit round (e.g. backend
+  // memory was wiped and process/cashout always errors). Refunds the bet and
+  // closes the on-chain game state account.
+  const handleCancelStuck = async () => {
+    if (!gameStateKeypair || !wallet.publicKey || !wallet.signTransaction) return;
+    if (!confirm("Cancel this stuck round and refund your bet? Your current step / multiplier will be lost.")) return;
+
+    try {
+      const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
+      const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
+      const [vaultPDA] = PublicKey.findProgramAddressSync([Buffer.from("vault")], program.programId);
+
+      const cancelIx = await program.methods.cancelStuckPump().accounts({
+        gameState: gameStateKeypair.publicKey,
+        player: wallet.publicKey,
+        vault: vaultPDA,
+        systemProgram: SystemProgram.programId,
+      }).instruction();
+
+      const tx = new anchor.web3.Transaction().add(cancelIx);
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("finalized");
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = wallet.publicKey;
+
+      const signedTx = await wallet.signTransaction(tx);
+      const sig = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true });
+      await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+
+      setGameState('IDLE');
+      setCurrentStep(0);
+      setChartPoints([{ step: 0, multiplier: 1.0 }]);
+      setGameStateKeypair(null);
+    } catch (err: any) {
+      console.error("Cancel stuck pump failed:", err);
+      alert(`Cancel failed: ${err.message || err}`);
+    }
+  };
+
   const handleCashOut = async () => {
     if (gameState !== 'PLAYING' || currentStep === 0 || !gameStateKeypair || !wallet.publicKey) return;
 
@@ -513,11 +551,19 @@ export default function PumpIt() {
                 )}
               </div>
 
-              <button 
+              <button
                 onClick={handleCashOut} disabled={currentStep === 0}
                 className="w-full py-4 bg-[#0a0f0c] hover:bg-gray-900 text-white font-black text-lg uppercase tracking-widest rounded-lg transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:border-gray-400"
               >
                 Cash Out ({currentMultiplier.toFixed(2)}x)
+              </button>
+
+              {/* 🔒 RECOVERY: emergency cancel if the House never processes/cashes out */}
+              <button
+                onClick={handleCancelStuck}
+                className="w-full mt-2 py-2 bg-transparent hover:bg-red-900/40 text-red-400 hover:text-red-300 text-xs font-bold uppercase tracking-widest rounded-lg border border-red-900/50 transition-all"
+              >
+                🛟 Cancel &amp; Refund (if stuck)
               </button>
             </>
           )}

@@ -81,6 +81,53 @@ pub struct ResolvePatriots<'info> {
     pub system_program: Program<'info, System>,
 }
 
+/// 🔒 RECOVERY: lets a player reclaim a stuck Patriots round when the House
+/// fails to resolve. Refunds the escrowed bet and closes the PDA back to the
+/// player. Safe because the player has not seen any spin outcome — Patriots
+/// is an atomic spin where ALL randomness is revealed only at resolve time.
+#[derive(Accounts)]
+pub struct CancelStuckPatriots<'info> {
+    #[account(
+        mut,
+        close = player,
+        seeds = [b"patriots", player.key().as_ref(), &game_state.nonce.to_le_bytes()],
+        bump = game_state.bump,
+        has_one = player,
+    )]
+    pub game_state: Account<'info, PatriotsState>,
+    #[account(mut)]
+    pub player: Signer<'info>,
+    /// CHECK: vault PDA, source of the refund
+    #[account(mut, seeds = [b"vault"], bump)]
+    pub vault: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn cancel_stuck_patriots(ctx: Context<CancelStuckPatriots>) -> Result<()> {
+    let refund = ctx.accounts.game_state.bet_amount;
+    if refund > 0 {
+        let bump = ctx.bumps.vault;
+        let seeds = &[b"vault".as_ref(), &[bump]];
+        let signer = &[&seeds[..]];
+
+        require!(
+            ctx.accounts.vault.lamports() >= refund,
+            PatriotsError::InsufficientVaultFunds
+        );
+
+        let cpi_context = CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.vault.to_account_info(),
+                to: ctx.accounts.player.to_account_info(),
+            },
+            signer,
+        );
+        system_program::transfer(cpi_context, refund)?;
+    }
+    Ok(())
+}
+
 pub fn resolve_patriots(
     ctx: Context<ResolvePatriots>,
     unhashed_server_seed: String,
