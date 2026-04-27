@@ -1108,7 +1108,12 @@ function generateGrid(serverSeed, clientSeed, nonce, counterRef, isFreeSpins, fo
 }
 
 
-function evaluateGrid(grid) {
+// 🔒 PATRIOTS FIX: renamed from `evaluateGrid` to avoid colliding with the
+// Snowstorm `evaluateGrid` declared later in this file. Function declarations
+// are hoisted and the *last* definition wins — that meant Patriots was silently
+// calling the Snowstorm evaluator, which returned a different shape and made
+// every spin throw "Cannot read properties of undefined (reading 'length')".
+function evaluatePatriotsGrid(grid) {
     let counts = {};
     let winningSymbols = [];
     let scatterCount = 0;
@@ -1216,7 +1221,7 @@ function runSpinCycle(betAmount, serverSeed, clientSeed, nonce, startCounter, is
     }
 
     while (activeTumble) {
-        let { winningSymbols, scatterCount, counts } = evaluateGrid(grid);
+        let { winningSymbols, scatterCount, counts } = evaluatePatriotsGrid(grid);
         
         if (winningSymbols.length > 0) {
             let tumblePayout = calculatePayout(winningSymbols, counts, betAmount);
@@ -1256,7 +1261,7 @@ function runSpinCycle(betAmount, serverSeed, clientSeed, nonce, startCounter, is
         totalSpinPayout, 
         frames, 
         finalCounter: counterRef.val,
-        triggeredBonus: !isFreeSpins && evaluateGrid(grid).scatterCount >= 4,
+        triggeredBonus: !isFreeSpins && evaluatePatriotsGrid(grid).scatterCount >= 4,
         bombMultipliers,
         finalSpinMultiplier
     };
@@ -1328,7 +1333,7 @@ app.post('/api/patriots/play', async (req, res) => {
 
                 // RETRIGGER: defensively guard against a pathological empty-frames result.
                 if (fsSpin.frames && fsSpin.frames[0] && fsSpin.frames[0].grid &&
-                    evaluateGrid(fsSpin.frames[0].grid).scatterCount >= 3) {
+                    evaluatePatriotsGrid(fsSpin.frames[0].grid).scatterCount >= 3) {
                     totalSpins += 3;
                 }
             }

@@ -98,9 +98,9 @@ export default function Dashboard() {
               <div className="text-center mb-12">
                 <div className="text-6xl mb-4 animate-bounce-short drop-shadow-[0_0_15px_rgba(34,197,94,0.4)]">🎰</div>
                 <h2 className="text-4xl sm:text-6xl font-black uppercase tracking-tighter text-white mb-4">
-                  Enter the <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600">Free Market</span>
+                  Enter the <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600">McPepe Casino</span>
                 </h2>
-                <p className="text-gray-400 font-mono text-sm sm:text-base">Provably Fair. Chainless. Unapologetic.</p>
+                <p className="text-gray-400 font-mono text-sm sm:text-base">Provably Fair. Decentralized. Pepe.</p>
               </div>
 
               {/* Game Grid */}
@@ -112,25 +112,25 @@ export default function Dashboard() {
                   <div className="relative z-10">
                     <span className="bg-green-500 text-black text-xs font-black px-2 py-1 uppercase tracking-widest rounded mb-3 inline-block">Featured</span>
                     <h3 className="text-3xl font-black text-white uppercase tracking-wider mb-1">Whackd! <span className="text-2xl">💣</span></h3>
-                    <p className="text-green-300/80 font-mono text-sm">Don't get caught holding the bag.</p>
+                    <p className="text-green-300/80 font-mono text-sm">Avoid the "bombs"!</p>
                   </div>
                 </div>
 
                 {/* Standard Games */}
                 <GameCard onClick={() => setActiveGame('coinflip')} icon="🪙" title="Coinflip" desc="50/50 double or nothing." color="border-green-500/30 hover:border-green-400" />
-                <GameCard onClick={() => setActiveGame('roulette')} icon="🐸" title="Roulette" desc="Spin the Pepe wheel." color="border-blue-500/30 hover:border-blue-400" />
-                <GameCard onClick={() => setActiveGame('rps')} icon="✂️" title="RPS" desc="Rock, Paper, Scissors." color="border-yellow-500/30 hover:border-yellow-400" />
+                <GameCard onClick={() => setActiveGame('roulette')} icon="🐸" title="Roulette" desc="Spin the wheel." color="border-blue-500/30 hover:border-blue-400" />
+                <GameCard onClick={() => setActiveGame('rps')} icon="✂️" title="RPS" desc="Let it ride!" color="border-yellow-500/30 hover:border-yellow-400" />
                 <GameCard onClick={() => setActiveGame('pumpit')} icon="📈" title="Pump It" desc="Ride the green candles." color="border-green-500/30 hover:border-green-400" />
-                <GameCard onClick={() => setActiveGame('blackjack')} icon="🃏" title="Blackjack" desc="Beat the dealer to 21." color="border-red-500/30 hover:border-red-400" />
+                <GameCard onClick={() => setActiveGame('blackjack')} icon="🃏" title="Blackjack" desc="A game of skill and luck." color="border-red-500/30 hover:border-red-400" />
                 
                 {/* Slots Section Header visually breaking the grid slightly */}
                 <div className="col-span-full mt-6 mb-2">
                   <h3 className="text-xl text-purple-500 font-black uppercase tracking-widest border-b border-purple-900/30 pb-2">McPepe Slots</h3>
                 </div>
 
-                <GameCard onClick={() => setActiveGame('patriots')} icon="🎰" title="Patriots" desc="Hold the line." color="border-purple-500/30 hover:border-purple-400" />
-                <GameCard onClick={() => setActiveGame('vacation')} icon="🍹" title="Vacation" desc="Tax haven slots." color="border-purple-500/30 hover:border-purple-400" />
-                <GameCard onClick={() => setActiveGame('snowstorm')} icon="❄️" title="Snowstorm" desc="Cold storage spins." color="border-purple-500/30 hover:border-purple-400" />
+                <GameCard onClick={() => setActiveGame('patriots')} icon="🎰" title="Patriots" desc="Serve the nation." color="border-purple-500/30 hover:border-purple-400" />
+                <GameCard onClick={() => setActiveGame('vacation')} icon="🍹" title="Vacation" desc="Collect the luggage." color="border-purple-500/30 hover:border-purple-400" />
+                <GameCard onClick={() => setActiveGame('snowstorm')} icon="❄️" title="Snowstorm" desc="Survive the Snowstorm." color="border-purple-500/30 hover:border-purple-400" />
 
               </div>
             </div>

@@ -11,7 +11,7 @@ export default function LeftSidebar({ isOpen, activeGame, setActiveGame }: Props
     <aside className={`${isOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0 md:w-0'} absolute md:relative z-40 h-full left-0 transition-all duration-300 ease-in-out border-r border-green-900/30 bg-[#050806]/95 backdrop-blur-md md:bg-[#0a0f0c] overflow-y-auto custom-scrollbar flex flex-col shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.5)]`}>          
       <div className="p-4 w-64">
         <h2 className="text-xs text-green-600/70 font-black uppercase tracking-widest mb-4 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-600/70"></span> Arcade
+          <span className="w-2 h-2 rounded-full bg-green-600/70"></span> Casino
         </h2>
         
         <div className="space-y-2">
