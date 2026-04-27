@@ -175,18 +175,52 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                 .instruction();
             tx.add(playIx);
 
-            const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+            // 🔒 RPS UX FIX: use a finalized blockhash so consecutive plays don't
+            // collide with the RPC's recent-blockhash cache, and skip preflight to
+            // avoid the misleading "already processed" simulation error.
+            const latestBlockhash = await connection.getLatestBlockhash("finalized");
             tx.recentBlockhash = latestBlockhash.blockhash;
             tx.feePayer = publicKey;
 
             const signedTx = await wallet.signTransaction(tx);
-            const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false });
-            
-            await connection.confirmTransaction({
-                signature,
-                blockhash: latestBlockhash.blockhash,
-                lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
-            });
+
+            let signature: string;
+            try {
+                signature = await connection.sendRawTransaction(signedTx.serialize(), {
+                    skipPreflight: true,
+                    preflightCommitment: 'confirmed',
+                    maxRetries: 3,
+                });
+            } catch (sendErr: any) {
+                // If the RPC tells us the tx already exists, treat it as a successful
+                // submission — the on-chain state was already updated by the prior
+                // attempt. We still need a signature to confirm against; fall back to
+                // the bytes we just signed.
+                const msg = String(sendErr?.message || sendErr);
+                if (msg.includes("already been processed")) {
+                    console.warn("⚠️ RPS play tx already processed, proceeding to resolve.");
+                    signature = signedTx.signatures[0]?.signature
+                        ? Buffer.from(signedTx.signatures[0].signature).toString('base64')
+                        : '';
+                } else {
+                    throw sendErr;
+                }
+            }
+
+            if (signature) {
+                try {
+                    await connection.confirmTransaction({
+                        signature,
+                        blockhash: latestBlockhash.blockhash,
+                        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
+                    }, "confirmed");
+                } catch (confirmErr: any) {
+                    // Confirmation may time out if the tx was already confirmed in a
+                    // prior submission window — proceed anyway, the resolve call below
+                    // will fail if the on-chain state isn't ready.
+                    console.warn("⚠️ RPS confirm warning:", confirmErr?.message || confirmErr);
+                }
+            }
             
             const response = await fetch(`${BACKEND_URL}/api/rps/resolve`, {
                 method: 'POST',

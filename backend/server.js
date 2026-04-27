@@ -468,6 +468,7 @@ app.post('/api/rps/resolve', async (req, res) => {
         // Look up the (move, salt) the House committed to BEFORE the player played.
         const commitment = activeRpsCommitments.get(playerPubkeyStr);
         if (!commitment) {
+            console.warn(`⚠️ RPS resolve called without a stored commitment for ${playerPubkeyStr}. Map size: ${activeRpsCommitments.size}`);
             return res.status(400).json({
                 success: false,
                 error: "No active RPS commitment for this player. Call /api/rps/commitment before play_hand."
