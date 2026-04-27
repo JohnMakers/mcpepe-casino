@@ -94,6 +94,9 @@ app.use([
     '/api/blackjack/action',
     '/api/patriots/seed',
     '/api/patriots/play',
+    '/api/pumpit/seed',
+    '/api/pumpit/process',
+    '/api/pumpit/cashout',
 ], wagerLimiter);
 
 const rawRpc = process.env.RPC_URL || "https://api.devnet.solana.com";
@@ -2094,6 +2097,131 @@ app.post('/api/snowstorm/resolve', async (req, res) => {
     } catch (err) {
         console.error("Snowstorm Resolve Error:", err);
         res.status(500).json({ error: err.message || "Failed to resolve on-chain." });
+    }
+});
+
+// ==========================================
+// PUMP IT! ENDPOINTS  (post-C-4 architecture: house signs process + cashout)
+// ==========================================
+// 🔒 C-4 + B-C2 PARITY: backend holds the unhashed pumpit seed and signs every
+// reveal (process_pump / cash_out). Players can no longer self-sign these or
+// pre-pick winning seeds. Multipliers are also recomputed server-side and
+// validated against the on-chain `compute_pump_multiplier_bps` upper bound.
+const activePumpitGames = new Map();
+
+function buildHouseSendIx(programId, ixData, keys) {
+    return new anchor.web3.TransactionInstruction({ programId, data: ixData, keys });
+}
+
+async function houseSignAndSend(ix, label) {
+    const tx = new anchor.web3.Transaction().add(ix);
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = houseKeypair.publicKey;
+    tx.sign(houseKeypair);
+    const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+    console.log(`✅ [HOUSE] ${label} TX: ${sig}`);
+    return sig;
+}
+
+app.post('/api/pumpit/seed', (req, res) => {
+    try {
+        const { playerPubkey } = req.body || {};
+        if (!playerPubkey) return res.status(400).json({ success: false, error: "Missing playerPubkey." });
+
+        const serverSeed = crypto.randomBytes(32).toString('hex');
+        const serverSeedHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
+
+        activePumpitGames.set(playerPubkey, { serverSeed, serverSeedHash, status: "waiting_for_tx" });
+        res.json({ success: true, serverSeedHash });
+    } catch (error) {
+        console.error("❌ Pumpit Seed Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/pumpit/process', async (req, res) => {
+    try {
+        const { playerPubkey, gamePubkey } = req.body || {};
+        if (!playerPubkey || !gamePubkey) {
+            return res.status(400).json({ success: false, error: "Missing playerPubkey or gamePubkey." });
+        }
+
+        const session = activePumpitGames.get(playerPubkey);
+        if (!session || !session.serverSeed) {
+            return res.status(400).json({ success: false, error: "No active pumpit session. Call /api/pumpit/seed first." });
+        }
+        const unhashedServerSeed = session.serverSeed;
+
+        const sighash = crypto.createHash('sha256').update("global:process_pump").digest().slice(0, 8);
+        const seedBuffer = Buffer.from(unhashedServerSeed, 'utf8');
+        const seedLengthBuffer = Buffer.alloc(4);
+        seedLengthBuffer.writeUInt32LE(seedBuffer.length, 0);
+        const ixData = Buffer.concat([sighash, seedLengthBuffer, seedBuffer]);
+
+        const ix = buildHouseSendIx(PROGRAM_ID, ixData, [
+            { pubkey: new anchor.web3.PublicKey(gamePubkey), isSigner: false, isWritable: true },
+            { pubkey: houseKeypair.publicKey, isSigner: true, isWritable: false },
+        ]);
+
+        const sig = await houseSignAndSend(ix, "Pumpit process");
+
+        // Read post-state to tell the client whether the player advanced or rugged.
+        const acc = await connection.getAccountInfo(new anchor.web3.PublicKey(gamePubkey), "confirmed");
+        // PumpGameState layout offsets (Anchor borsh):
+        // [0..8] disc, [8..40] player, [40..72] authority, [72..80] bet_amount,
+        // [80] difficulty, [81] current_step, [82..114] server_seed_hash,
+        // [114..118] client_seed length prefix + bytes ... (length-prefixed)
+        // We only need current_step + is_active. is_active is after the seed_hash + client_seed + nonce.
+        // Easiest: read difficulty (offset 80) and current_step (81). is_active is the next-to-last bool.
+        const data = acc?.data;
+        let currentStep = 0;
+        let isActive = true;
+        if (data && data.length > 81) {
+            currentStep = data.readUInt8(81);
+            // is_active is 2nd to last byte (cashed_out is last). Both are bool (1 byte).
+            if (data.length >= 2) {
+                isActive = data.readUInt8(data.length - 2) !== 0;
+            }
+        }
+
+        res.json({ success: true, txSignature: sig, currentStep, isActive });
+    } catch (error) {
+        console.error("❌ Pumpit Process Error:", error);
+        res.status(500).json({ success: false, error: error.message || String(error) });
+    }
+});
+
+app.post('/api/pumpit/cashout', async (req, res) => {
+    try {
+        const { playerPubkey, gamePubkey, finalMultiplierBps } = req.body || {};
+        if (!playerPubkey || !gamePubkey || finalMultiplierBps === undefined) {
+            return res.status(400).json({ success: false, error: "Missing playerPubkey, gamePubkey or finalMultiplierBps." });
+        }
+
+        const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("vault")], PROGRAM_ID);
+
+        const sighash = crypto.createHash('sha256').update("global:cash_out_pump").digest().slice(0, 8);
+        const multBuf = Buffer.alloc(8);
+        multBuf.writeBigUInt64LE(BigInt(finalMultiplierBps));
+        const ixData = Buffer.concat([sighash, multBuf]);
+
+        const ix = buildHouseSendIx(PROGRAM_ID, ixData, [
+            { pubkey: new anchor.web3.PublicKey(gamePubkey), isSigner: false, isWritable: true },
+            { pubkey: new anchor.web3.PublicKey(playerPubkey), isSigner: false, isWritable: true },
+            { pubkey: vaultPDA, isSigner: false, isWritable: true },
+            { pubkey: houseKeypair.publicKey, isSigner: true, isWritable: true },
+            { pubkey: anchor.web3.SystemProgram.programId, isSigner: false, isWritable: false },
+        ]);
+
+        const sig = await houseSignAndSend(ix, "Pumpit cashout");
+        activePumpitGames.delete(playerPubkey);
+
+        res.json({ success: true, txSignature: sig });
+    } catch (error) {
+        console.error("❌ Pumpit Cashout Error:", error);
+        res.status(500).json({ success: false, error: error.message || String(error) });
     }
 });
 

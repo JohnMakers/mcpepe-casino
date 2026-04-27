@@ -14,7 +14,11 @@ interface ChartPoint {
 }
 
 // ⚠️ IMPORTANT: Paste your actual Program ID from 'anchor keys list' here!
-const PROGRAM_ID = new PublicKey("7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw"); 
+const PROGRAM_ID = new PublicKey("7pKD7FV7Pebd8ZSYgzoTHE79aFnoPLGnudHH4fpvxgSw");
+
+// 🔒 C-4 FIX: must match the on-chain HOUSE_AUTHORITY constant.
+const HOUSE_PUBKEY = new PublicKey("Gf9QEwbxosqQY9bLBrgjKommtX8qPdNqFrKazmHfaZBv");
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005";
 
 export default function PumpIt() {
   const { connection } = useConnection();
@@ -78,31 +82,37 @@ export default function PumpIt() {
       
       const newGameStateKeypair = Keypair.generate();
       setGameStateKeypair(newGameStateKeypair);
-      
+
       const [vaultPDA] = PublicKey.findProgramAddressSync([Buffer.from("vault")], program.programId);
-      
-      const seed = "pumpit_server_" + Date.now().toString();
-      setUnhashedServerSeed(seed);
-      
-      const encoder = new TextEncoder();
-      const encodedSeed = encoder.encode(seed);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', encodedSeed as any);
-      const serverSeedHash = Array.from(new Uint8Array(hashBuffer));
-      
+
+      // 🔒 B-C2 PARITY: backend now owns the server seed. Fetch only the hash.
+      const seedRes = await fetch(`${BACKEND_URL}/api/pumpit/seed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerPubkey: wallet.publicKey.toBase58() })
+      });
+      const seedData = await seedRes.json();
+      if (!seedData.success || !seedData.serverSeedHash) {
+          throw new Error(`Failed to fetch pumpit seed: ${seedData.error || 'unknown'}`);
+      }
+      const serverSeedHash = Array.from(Buffer.from(seedData.serverSeedHash, 'hex'));
+      setUnhashedServerSeed(''); // revealed via process / cashout txs from the backend
+
       const betAmountLamports = new anchor.BN(wager * anchor.web3.LAMPORTS_PER_SOL);
       const diffIndex = difficulty === 'easy' ? 0 : difficulty === 'medium' ? 1 : 2;
-      
+
+      // 🔒 C-4 FIX: authority MUST be HOUSE_PUBKEY (not the player).
       const tx = await program.methods.startPump(
-          betAmountLamports, 
-          diffIndex, 
-          serverSeedHash, 
-          clientSeed, 
-          new anchor.BN(0) 
+          betAmountLamports,
+          diffIndex,
+          serverSeedHash,
+          clientSeed,
+          new anchor.BN(0)
       ).accounts({
           gameState: newGameStateKeypair.publicKey,
           player: wallet.publicKey,
           vault: vaultPDA,
-          authority: wallet.publicKey,
+          authority: HOUSE_PUBKEY,
           systemProgram: SystemProgram.programId,
       }).signers([newGameStateKeypair]).rpc();
       
@@ -120,26 +130,30 @@ export default function PumpIt() {
     if (gameState !== 'PLAYING' || currentStep >= maxSteps || !gameStateKeypair || !wallet.publicKey) return;
 
     try {
-      const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
-      const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
-      
-      const tx = await program.methods.processPump(unhashedServerSeed).accounts({
-          gameState: gameStateKeypair.publicKey,
-          authority: wallet.publicKey, 
-      }).rpc();
-      
-      const state = await program.account.pumpGameState.fetch(gameStateKeypair.publicKey);
-      
-      if (state.isActive) {
-        const nextStep = currentStep + 1;
+      // 🔒 C-4 FIX: process_pump is house-signed. Delegate to backend.
+      const res = await fetch(`${BACKEND_URL}/api/pumpit/process`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+              playerPubkey: wallet.publicKey.toBase58(),
+              gamePubkey: gameStateKeypair.publicKey.toBase58(),
+          })
+      });
+      const data = await res.json();
+      if (!data.success) {
+          throw new Error(data.error || "Backend failed to process pump.");
+      }
+
+      if (data.isActive) {
+        // currentStep returned by backend reflects the on-chain post-state.
+        const nextStep = data.currentStep ?? (currentStep + 1);
         setCurrentStep(nextStep);
         const newMult = currentLevelData.multipliers[nextStep - 1];
         setChartPoints(prev => [...prev, { step: nextStep, multiplier: newMult }]);
-        
         setPopTarget({ mult: newMult, key: Date.now() });
       } else {
         setGameState('RUGGED');
-        setChartPoints(prev => [...prev, { step: currentStep + 1, multiplier: 0 }]); 
+        setChartPoints(prev => [...prev, { step: currentStep + 1, multiplier: 0 }]);
       }
     } catch (error) {
       console.error("Failed to pump", error);
@@ -150,20 +164,22 @@ export default function PumpIt() {
     if (gameState !== 'PLAYING' || currentStep === 0 || !gameStateKeypair || !wallet.publicKey) return;
 
     try {
-      const provider = new anchor.AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
-      const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);
-      const [vaultPDA] = PublicKey.findProgramAddressSync([Buffer.from("vault")], program.programId);
-
+      // 🔒 C-4 FIX: cash_out is house-signed and the multiplier is bounded
+      // on-chain by compute_pump_multiplier_bps(difficulty, current_step).
       const finalMultiplier = currentLevelData.multipliers[currentStep - 1];
-      const finalMultiplierBps = new anchor.BN(Math.floor(finalMultiplier * 10000));
-      
-      const tx = await program.methods.cashOutPump(finalMultiplierBps).accounts({
-          gameState: gameStateKeypair.publicKey,
-          player: wallet.publicKey,
-          vault: vaultPDA,
-          authority: wallet.publicKey,
-          systemProgram: SystemProgram.programId,
-      }).rpc();
+      const finalMultiplierBps = Math.floor(finalMultiplier * 10000);
+
+      const res = await fetch(`${BACKEND_URL}/api/pumpit/cashout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+              playerPubkey: wallet.publicKey.toBase58(),
+              gamePubkey: gameStateKeypair.publicKey.toBase58(),
+              finalMultiplierBps,
+          })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Backend failed to cash out.");
 
       setGameState('CASHED_OUT');
     } catch (error) {
