@@ -116,46 +116,100 @@ export default function Dashboard() {
         <main className="flex-1 overflow-y-auto bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0d1410] via-[#050806] to-black p-4 sm:p-8 flex flex-col relative custom-scrollbar">
           
           {!activeGame && (
-            <div className="flex-1 flex flex-col items-center justify-start max-w-6xl mx-auto w-full pt-8 pb-12 animate-fade-in">
-              
-              <div className="text-center mb-12">
-                <div className="text-6xl mb-4 animate-bounce-short drop-shadow-[0_0_15px_rgba(34,197,94,0.4)]">🎰</div>
-                <h2 className="text-4xl sm:text-6xl font-black uppercase tracking-tighter text-white mb-4">
-                  Enter the <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600">McPepe Casino</span>
-                </h2>
-                <p className="text-gray-400 font-mono text-sm sm:text-base">Provably Fair. Decentralized. Pepe.</p>
+            <div className="relative w-full -mx-4 sm:-mx-8 -my-4 sm:-my-8">
+
+              {/* Ambient glow background */}
+              <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[700px] bg-green-500/[0.08] blur-[140px] rounded-full"></div>
+                <div className="absolute top-1/3 -right-32 w-[400px] h-[400px] bg-purple-500/[0.06] blur-[120px] rounded-full"></div>
+                <div className="absolute top-2/3 -left-32 w-[400px] h-[400px] bg-emerald-500/[0.06] blur-[120px] rounded-full"></div>
               </div>
 
-              {/* Game Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full px-4">
-                
-                {/* Featured Game */}
-                <div onClick={() => setActiveGame('whackd')} className="col-span-1 sm:col-span-2 lg:col-span-2 relative group cursor-pointer rounded-xl overflow-hidden border-2 border-green-500/50 bg-black/40 hover:border-green-400 transition-all duration-300 shadow-[0_0_30px_rgba(34,197,94,0.1)] hover:shadow-[0_0_40px_rgba(34,197,94,0.25)] flex flex-col justify-end min-h-[220px] p-6">
-                  <div className="absolute inset-0 bg-gradient-to-t from-green-900/80 to-transparent z-0"></div>
-                  <div className="relative z-10">
-                    <span className="bg-green-500 text-black text-xs font-black px-2 py-1 uppercase tracking-widest rounded mb-3 inline-block">Featured</span>
-                    <h3 className="text-3xl font-black text-white uppercase tracking-wider mb-1">Whackd! <span className="text-2xl">💣</span></h3>
-                    <p className="text-green-300/80 font-mono text-sm">Avoid the "bombs"!</p>
+              {/* Hero */}
+              <section className="relative max-w-6xl mx-auto px-4 sm:px-8 pt-8 sm:pt-16 pb-6 sm:pb-10 text-center">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-5 sm:mb-6 rounded-full bg-green-500/10 border border-green-500/40 text-green-300 text-[10px] sm:text-xs font-black uppercase tracking-widest backdrop-blur-sm">
+                  <span className="relative flex w-2 h-2">
+                    <span className="absolute inset-0 animate-ping rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative w-2 h-2 rounded-full bg-green-400"></span>
+                  </span>
+                  Live · Solana Mainnet
+                </div>
+
+                <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-[5.5rem] font-black uppercase tracking-tighter text-white mb-3 sm:mb-4 leading-[0.9]">
+                  Welcome to the
+                  <span className="block text-transparent bg-clip-text bg-gradient-to-r from-green-300 via-emerald-400 to-green-500 drop-shadow-[0_0_30px_rgba(34,197,94,0.45)]">
+                    McPepe Casino
+                  </span>
+                </h1>
+                <p className="text-gray-400 font-mono text-xs sm:text-sm md:text-base max-w-xl mx-auto mb-6 sm:mb-10">
+                  Provably-fair on-chain wagers. Built for degens, settled by Solana.
+                </p>
+
+                {/* Stats strip */}
+                <div className="grid grid-cols-3 gap-2 sm:gap-4 max-w-2xl mx-auto">
+                  <StatCard icon="🛡️" label="Provably Fair" value="100%" tone="green" />
+                  <StatCard icon="⚡" label="Settlement" value="<2s" tone="emerald" />
+                  <StatCard icon="🎰" label="Games" value="9" tone="purple" />
+                </div>
+              </section>
+
+              {/* Featured */}
+              <section className="relative max-w-6xl mx-auto px-4 sm:px-8 mb-8 sm:mb-12">
+                <SectionHeader emoji="🔥" title="Featured" subtitle="Hand-picked degenerate banger" accent="from-orange-500 via-yellow-500 to-red-500" />
+
+                <div onClick={() => setActiveGame('whackd')} className="group relative cursor-pointer rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-green-500/40 hover:border-green-400 bg-gradient-to-br from-green-900/40 via-emerald-900/20 to-black transition-all duration-500 hover:shadow-[0_0_60px_rgba(34,197,94,0.3)] min-h-[200px] sm:min-h-[280px] md:min-h-[320px] flex flex-col justify-end">
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(34,197,94,0.25),_transparent_60%)] pointer-events-none"></div>
+                  {/* Animated grid texture */}
+                  <div className="absolute inset-0 opacity-[0.07] pointer-events-none" style={{
+                    backgroundImage: 'linear-gradient(rgba(34,197,94,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(34,197,94,0.5) 1px, transparent 1px)',
+                    backgroundSize: '40px 40px',
+                  }}></div>
+
+                  <div className="absolute top-4 left-4 sm:top-6 sm:left-6 flex gap-2 z-10">
+                    <span className="bg-yellow-400 text-black text-[9px] sm:text-[10px] font-black px-2 sm:px-3 py-1 uppercase tracking-widest rounded shadow-lg">⭐ Featured</span>
+                    <span className="bg-red-500/90 text-white text-[9px] sm:text-[10px] font-black px-2 sm:px-3 py-1 uppercase tracking-widest rounded animate-pulse shadow-lg">🔥 Hot</span>
+                  </div>
+                  <div className="absolute top-1/2 right-2 sm:right-8 -translate-y-1/2 text-7xl sm:text-9xl md:text-[11rem] opacity-30 group-hover:opacity-50 group-hover:scale-110 group-hover:rotate-6 transition-all duration-700 select-none pointer-events-none">💣</div>
+
+                  <div className="relative z-10 p-4 sm:p-8 max-w-md">
+                    <h3 className="text-3xl sm:text-5xl md:text-6xl font-black text-white uppercase tracking-tighter mb-1 sm:mb-2 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]">Whackd!</h3>
+                    <p className="text-green-300/90 font-mono text-xs sm:text-sm md:text-base mb-3 sm:mb-5">Crack tiles, dodge bombs. Cash out before you blow up.</p>
+                    <div className="inline-flex items-center gap-2 bg-green-500 text-black font-black uppercase tracking-widest text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-3 rounded-lg group-hover:gap-4 transition-all shadow-[0_0_25px_rgba(34,197,94,0.5)]">
+                      Play Now <span className="group-hover:translate-x-1 transition-transform">→</span>
+                    </div>
                   </div>
                 </div>
+              </section>
 
-                {/* Standard Games */}
-                <GameCard onClick={() => setActiveGame('coinflip')} icon="🪙" title="Coinflip" desc="50/50 double or nothing." color="border-green-500/30 hover:border-green-400" />
-                <GameCard onClick={() => setActiveGame('roulette')} icon="🐸" title="Roulette" desc="Spin the wheel." color="border-blue-500/30 hover:border-blue-400" />
-                <GameCard onClick={() => setActiveGame('rps')} icon="✂️" title="RPS" desc="Let it ride!" color="border-yellow-500/30 hover:border-yellow-400" />
-                <GameCard onClick={() => setActiveGame('pumpit')} icon="📈" title="Pump It" desc="Ride the green candles." color="border-green-500/30 hover:border-green-400" />
-                <GameCard onClick={() => setActiveGame('blackjack')} icon="🃏" title="Blackjack" desc="A game of skill and luck." color="border-red-500/30 hover:border-red-400" />
-                
-                {/* Slots Section Header visually breaking the grid slightly */}
-                <div className="col-span-full mt-6 mb-2">
-                  <h3 className="text-xl text-purple-500 font-black uppercase tracking-widest border-b border-purple-900/30 pb-2">McPepe Slots</h3>
+              {/* Quick Play */}
+              <section className="relative max-w-6xl mx-auto px-4 sm:px-8 mb-8 sm:mb-12">
+                <SectionHeader emoji="🎯" title="Quick Play" subtitle="Fast & furious bets" accent="from-green-500 via-emerald-500 to-cyan-500" count={5} />
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+                  <GameCard onClick={() => setActiveGame('coinflip')} icon="🪙" title="Coinflip" desc="50/50 double-up" tone="green" />
+                  <GameCard onClick={() => setActiveGame('roulette')} icon="🐸" title="Roulette" desc="Spin the wheel" tone="red" />
+                  <GameCard onClick={() => setActiveGame('rps')} icon="✂️" title="RPS" desc="Let it ride" tone="amber" />
+                  <GameCard onClick={() => setActiveGame('pumpit')} icon="📈" title="Pump It" desc="Don't get rugged" tone="emerald" badge="HOT" />
+                  <GameCard onClick={() => setActiveGame('blackjack')} icon="🃏" title="Blackjack" desc="Beat the dealer" tone="rose" />
                 </div>
+              </section>
 
-                <GameCard onClick={() => setActiveGame('patriots')} icon="🎰" title="Patriots" desc="Serve the nation." color="border-purple-500/30 hover:border-purple-400" />
-                <GameCard onClick={() => setActiveGame('vacation')} icon="🍹" title="Vacation" desc="Collect the luggage." color="border-purple-500/30 hover:border-purple-400" />
-                <GameCard onClick={() => setActiveGame('snowstorm')} icon="❄️" title="Snowstorm" desc="Survive the Snowstorm." color="border-purple-500/30 hover:border-purple-400" />
+              {/* Slots */}
+              <section className="relative max-w-6xl mx-auto px-4 sm:px-8 mb-10 sm:mb-16">
+                <SectionHeader emoji="🎰" title="McPepe Slots" subtitle="High volatility, max degen" accent="from-purple-500 via-fuchsia-500 to-pink-500" count={3} />
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                  <GameCard onClick={() => setActiveGame('patriots')} icon="🎰" title="Patriots" desc="Serve the nation" tone="patriot" badge="NEW" />
+                  <GameCard onClick={() => setActiveGame('vacation')} icon="🍹" title="Vacation" desc="Collect luggage" tone="cyan" />
+                  <GameCard onClick={() => setActiveGame('snowstorm')} icon="❄️" title="Snowstorm" desc="Survive the storm" tone="blue" />
+                </div>
+              </section>
 
-              </div>
+              {/* Footer info strip */}
+              <footer className="relative max-w-6xl mx-auto px-4 sm:px-8 pb-6 sm:pb-10">
+                <div className="border-t border-green-900/30 pt-4 sm:pt-6 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3 text-gray-600 font-mono text-[10px] sm:text-xs uppercase tracking-widest">
+                  <p className="flex items-center gap-2">🐸 <span className="text-gray-500">McPepe Casino</span> — On-chain · Provably Fair</p>
+                  <p>v1.0 · Solana Mainnet</p>
+                </div>
+              </footer>
             </div>
           )}
 
@@ -224,13 +278,86 @@ export default function Dashboard() {
 // Placed outside the main Dashboard component to prevent re-rendering issues
 // ----------------------------------------------------------------------
 
-function GameCard({ onClick, icon, title, desc, color }: { onClick: () => void, icon: string, title: string, desc: string, color: string }) {
+type Tone = 'green' | 'emerald' | 'red' | 'rose' | 'amber' | 'cyan' | 'blue' | 'purple' | 'patriot';
+
+const TONE_MAP: Record<Tone, { bg: string, border: string, hoverBorder: string, glow: string, accent: string, iconShadow: string }> = {
+  green:    { bg: 'from-green-900/40 via-green-950/40 to-black',           border: 'border-green-500/30',   hoverBorder: 'hover:border-green-400',   glow: 'group-hover:shadow-[0_0_30px_rgba(34,197,94,0.35)]',  accent: 'text-green-300',   iconShadow: 'drop-shadow-[0_0_18px_rgba(34,197,94,0.55)]' },
+  emerald:  { bg: 'from-emerald-900/40 via-emerald-950/40 to-black',       border: 'border-emerald-500/30', hoverBorder: 'hover:border-emerald-400', glow: 'group-hover:shadow-[0_0_30px_rgba(16,185,129,0.35)]', accent: 'text-emerald-300', iconShadow: 'drop-shadow-[0_0_18px_rgba(16,185,129,0.55)]' },
+  red:      { bg: 'from-red-900/40 via-red-950/40 to-black',               border: 'border-red-500/30',     hoverBorder: 'hover:border-red-400',     glow: 'group-hover:shadow-[0_0_30px_rgba(239,68,68,0.35)]',  accent: 'text-red-300',     iconShadow: 'drop-shadow-[0_0_18px_rgba(239,68,68,0.55)]' },
+  rose:     { bg: 'from-rose-900/40 via-rose-950/40 to-black',             border: 'border-rose-500/30',    hoverBorder: 'hover:border-rose-400',    glow: 'group-hover:shadow-[0_0_30px_rgba(244,63,94,0.35)]',  accent: 'text-rose-300',    iconShadow: 'drop-shadow-[0_0_18px_rgba(244,63,94,0.55)]' },
+  amber:    { bg: 'from-amber-900/40 via-amber-950/40 to-black',           border: 'border-amber-500/30',   hoverBorder: 'hover:border-amber-400',   glow: 'group-hover:shadow-[0_0_30px_rgba(245,158,11,0.35)]', accent: 'text-amber-300',   iconShadow: 'drop-shadow-[0_0_18px_rgba(245,158,11,0.55)]' },
+  cyan:     { bg: 'from-cyan-900/40 via-cyan-950/40 to-black',             border: 'border-cyan-500/30',    hoverBorder: 'hover:border-cyan-400',    glow: 'group-hover:shadow-[0_0_30px_rgba(6,182,212,0.35)]',  accent: 'text-cyan-300',    iconShadow: 'drop-shadow-[0_0_18px_rgba(6,182,212,0.55)]' },
+  blue:     { bg: 'from-blue-900/40 via-blue-950/40 to-black',             border: 'border-blue-500/30',    hoverBorder: 'hover:border-blue-400',    glow: 'group-hover:shadow-[0_0_30px_rgba(59,130,246,0.35)]', accent: 'text-blue-300',    iconShadow: 'drop-shadow-[0_0_18px_rgba(59,130,246,0.55)]' },
+  purple:   { bg: 'from-purple-900/40 via-purple-950/40 to-black',         border: 'border-purple-500/30',  hoverBorder: 'hover:border-purple-400',  glow: 'group-hover:shadow-[0_0_30px_rgba(168,85,247,0.35)]', accent: 'text-purple-300',  iconShadow: 'drop-shadow-[0_0_18px_rgba(168,85,247,0.55)]' },
+  patriot:  { bg: 'from-red-900/40 via-blue-900/30 to-black',              border: 'border-purple-500/30',  hoverBorder: 'hover:border-purple-400',  glow: 'group-hover:shadow-[0_0_30px_rgba(168,85,247,0.35)]', accent: 'text-purple-300',  iconShadow: 'drop-shadow-[0_0_18px_rgba(168,85,247,0.55)]' },
+};
+
+function StatCard({ icon, label, value, tone }: { icon: string, label: string, value: string, tone: 'green' | 'emerald' | 'purple' }) {
+  const t = TONE_MAP[tone];
   return (
-    <div onClick={onClick} className={`group cursor-pointer rounded-xl border-2 bg-[#0a0f0c]/80 backdrop-blur-sm p-5 transition-all duration-300 hover:-translate-y-1 hover:bg-[#111a14] flex flex-col items-start justify-between min-h-[160px] ${color}`}>
-      <div className="text-4xl mb-3 opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-transform duration-300">{icon}</div>
-      <div>
-        <h3 className="text-xl font-bold text-white uppercase tracking-wider mb-1 group-hover:text-gray-100">{title}</h3>
-        <p className="text-gray-500 font-mono text-xs">{desc}</p>
+    <div className={`relative flex flex-col items-center p-2.5 sm:p-4 rounded-xl border ${t.border} bg-gradient-to-b ${t.bg} backdrop-blur-sm overflow-hidden`}>
+      <span className="text-lg sm:text-2xl mb-1">{icon}</span>
+      <span className={`text-base sm:text-2xl font-black font-mono ${t.accent}`}>{value}</span>
+      <span className="text-[8px] sm:text-[10px] uppercase tracking-widest text-gray-500 font-bold mt-0.5 text-center leading-tight">{label}</span>
+    </div>
+  );
+}
+
+function SectionHeader({ emoji, title, subtitle, accent, count }: { emoji: string, title: string, subtitle?: string, accent: string, count?: number }) {
+  return (
+    <div className="flex items-center justify-between mb-4 sm:mb-6 gap-3">
+      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+        <div className={`shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${accent} flex items-center justify-center text-xl sm:text-2xl shadow-[0_4px_20px_rgba(0,0,0,0.5)] border border-white/10`}>
+          {emoji}
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-3xl font-black text-white uppercase tracking-tight leading-none truncate">{title}</h2>
+          {subtitle && <p className="text-gray-500 text-[10px] sm:text-xs font-mono mt-1 truncate">{subtitle}</p>}
+        </div>
+      </div>
+      {count !== undefined && (
+        <span className="shrink-0 text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest border border-gray-800 bg-black/40 px-2.5 sm:px-3 py-1 rounded-full">
+          {count} <span className="hidden sm:inline">Games</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function GameCard({ onClick, icon, title, desc, tone, badge }: { onClick: () => void, icon: string, title: string, desc: string, tone: Tone, badge?: 'HOT' | 'NEW' }) {
+  const t = TONE_MAP[tone];
+  const badgeStyles = badge === 'HOT'
+    ? 'bg-red-500 text-white animate-pulse'
+    : 'bg-yellow-400 text-black';
+
+  return (
+    <div
+      onClick={onClick}
+      className={`group relative cursor-pointer rounded-xl sm:rounded-2xl overflow-hidden border-2 ${t.border} ${t.hoverBorder} bg-gradient-to-br ${t.bg} transition-all duration-300 hover:-translate-y-1 ${t.glow} aspect-[4/5] sm:aspect-[3/4] flex flex-col`}
+    >
+      {badge && (
+        <span className={`absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 ${badgeStyles} text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 sm:px-2 sm:py-1 uppercase tracking-widest rounded-full shadow-lg`}>
+          {badge}
+        </span>
+      )}
+
+      {/* Hover glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.06),_transparent_60%)] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+
+      {/* Icon */}
+      <div className="flex-1 flex items-center justify-center p-3 sm:p-4 relative">
+        <span className={`text-5xl sm:text-7xl ${t.iconShadow} grayscale-[0.6] group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500 select-none`}>
+          {icon}
+        </span>
+      </div>
+
+      {/* Footer */}
+      <div className="relative z-10 p-3 sm:p-4 bg-gradient-to-t from-black/85 via-black/50 to-transparent">
+        <h3 className="text-sm sm:text-lg font-black text-white uppercase tracking-wider mb-0.5 truncate">{title}</h3>
+        <p className="text-gray-500 font-mono text-[10px] sm:text-xs truncate">{desc}</p>
+        <span className={`mt-1.5 sm:mt-2 inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest ${t.accent} opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity`}>
+          Play <span className="group-hover:translate-x-1 transition-transform">→</span>
+        </span>
       </div>
     </div>
   );
