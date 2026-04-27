@@ -156,7 +156,7 @@ export default function Dashboard() {
               {/* Casino */}
               <section className="relative max-w-6xl mx-auto px-4 sm:px-8 mb-8 sm:mb-12">
                 <SectionHeader emoji="🎯" title="Casino" subtitle="Fast & furious bets" accent="from-green-500 via-emerald-500 to-cyan-500" />
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5 sm:gap-3">
                   <GameCard onClick={() => setActiveGame('coinflip')} icon="/icons/coinflip_icon.png" title="Coinflip" desc="50/50 double-up" tone="green" badge="FEATURED" />
                   <GameCard onClick={() => setActiveGame('whackd')} icon="/icons/whackd_icon.png" title="Whackd!" desc="Dodge the bombs" tone="emerald" />
                   <GameCard onClick={() => setActiveGame('roulette')} icon="/icons/roulette_icon.png" title="Roulette" desc="Spin the wheel" tone="red" />
@@ -169,10 +169,14 @@ export default function Dashboard() {
               {/* Slots */}
               <section className="relative max-w-6xl mx-auto px-4 sm:px-8 mb-10 sm:mb-16">
                 <SectionHeader emoji="🎰" title="Slots" subtitle="High volatility, max degen" accent="from-purple-500 via-fuchsia-500 to-pink-500" />
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5 sm:gap-3">
                   <GameCard onClick={() => setActiveGame('patriots')} icon="/icons/patriots_icon.png" title="Patriots" desc="Serve the nation" tone="patriot" />
                   <GameCard onClick={() => setActiveGame('vacation')} icon="/icons/vacations_icon.png" title="Vacation" desc="Collect luggage" tone="cyan" />
                   <GameCard onClick={() => setActiveGame('snowstorm')} icon="/icons/snowstorm_icon.png" title="Snowstorm" desc="Survive the storm" tone="blue" />
+                  {/* spacers keep slot cards the same tile size as casino cards */}
+                  <div className="hidden sm:block" aria-hidden="true" />
+                  <div className="hidden md:block" aria-hidden="true" />
+                  <div className="hidden lg:block" aria-hidden="true" />
                 </div>
               </section>
 
@@ -183,7 +187,7 @@ export default function Dashboard() {
                     <img src="/icons/mcpepe_icon.png" alt="" className="w-4 h-4 object-contain opacity-80" draggable={false} />
                     <span className="text-gray-500">McPepe Casino</span> — On-chain · Provably Fair
                   </p>
-                  <p>v1.0 · Solana Mainnet</p>
+                  <p>v1.0 · Solana Devnet</p>
                 </div>
               </footer>
             </div>
@@ -311,7 +315,7 @@ function GameCard({ onClick, icon, title, desc, tone, badge }: { onClick: () => 
       className={`group relative cursor-pointer rounded-xl sm:rounded-2xl overflow-hidden border-2 ${t.border} ${t.hoverBorder} bg-gradient-to-br ${t.bg} transition-all duration-300 hover:-translate-y-1 ${t.glow} aspect-[5/4] sm:aspect-square flex flex-col`}
     >
       {badge && (
-        <span className={`absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 ${badgeStyles} text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 sm:px-2 sm:py-1 uppercase tracking-widest rounded-full shadow-lg whitespace-nowrap`}>
+        <span className={`absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-20 ${badgeStyles} text-[7px] sm:text-[8px] font-black px-1.5 py-0.5 uppercase tracking-widest rounded-full shadow-lg whitespace-nowrap`}>
           {badgeContent}
         </span>
       )}
@@ -320,25 +324,25 @@ function GameCard({ onClick, icon, title, desc, tone, badge }: { onClick: () => 
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.06),_transparent_60%)] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
 
       {/* Icon */}
-      <div className="flex-1 flex items-center justify-center p-2 sm:p-3 relative min-h-0">
+      <div className="flex-1 flex items-center justify-center p-1.5 sm:p-2 relative min-h-0">
         {icon.startsWith('/') ? (
           <img
             src={icon}
             alt={title}
-            className={`w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 object-contain ${t.iconShadow} group-hover:scale-110 transition-transform duration-500 select-none pointer-events-none`}
+            className={`w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain ${t.iconShadow} group-hover:scale-110 transition-transform duration-500 select-none pointer-events-none`}
             draggable={false}
           />
         ) : (
-          <span className={`text-4xl sm:text-5xl md:text-6xl ${t.iconShadow} grayscale-[0.6] group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500 select-none`}>
+          <span className={`text-3xl sm:text-4xl md:text-5xl ${t.iconShadow} grayscale-[0.6] group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500 select-none`}>
             {icon}
           </span>
         )}
       </div>
 
       {/* Footer */}
-      <div className="relative z-10 px-2.5 sm:px-3 py-2 sm:py-2.5 bg-gradient-to-t from-black/85 via-black/50 to-transparent">
-        <h3 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider truncate leading-tight">{title}</h3>
-        <p className="text-gray-500 font-mono text-[9px] sm:text-[10px] truncate mt-0.5">{desc}</p>
+      <div className="relative z-10 px-2 sm:px-2.5 py-1.5 sm:py-2 bg-gradient-to-t from-black/90 via-black/55 to-transparent">
+        <h3 className="text-[10px] sm:text-xs font-black text-white uppercase tracking-wider truncate leading-tight">{title}</h3>
+        <p className="hidden sm:block text-gray-500 font-mono text-[9px] truncate mt-0.5">{desc}</p>
       </div>
     </div>
   );
