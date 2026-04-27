@@ -95,15 +95,32 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
     const totalWager = currentBets.reduce((acc, bet) => acc + bet.amount, 0);
 
     const fetchNewSeed = async () => {
+        if (!publicKey) return; // Wait for wallet
         try {
-            const res = await fetch(`${BACKEND_URL}/api/roulette/seed`, { method: "POST" });
+            // 🔒 B-C2 FIX: backend now requires playerPubkey AND only returns the
+            // hash (the unhashed seed is revealed by /api/roulette/resolve once
+            // the on-chain tx is settled).
+            const res = await fetch(`${BACKEND_URL}/api/roulette/seed`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ playerPubkey: publicKey.toBase58() }),
+            });
+            if (!res.ok) {
+                console.error("Seed fetch HTTP error:", res.status, await res.text());
+                return;
+            }
             const data = await res.json();
+            if (!data.success || !data.serverSeedHash) {
+                console.error("Seed fetch error:", data?.error || data);
+                return;
+            }
             setServerSeedHash(data.serverSeedHash);
-            setUnhashedServerSeed(data.serverSeed);
+            setUnhashedServerSeed(''); // revealed only post-resolve
         } catch (error) { console.error("Seed fetch error:", error); }
     };
 
-    useEffect(() => { fetchNewSeed(); }, []);
+    // Refetch every time the wallet changes — the seed map is keyed by player.
+    useEffect(() => { fetchNewSeed(); }, [publicKey?.toBase58()]);
 
     const handlePlaceChip = (betType: BetType, data: number[]) => {
         if (isSpinning) return;
@@ -135,7 +152,10 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
             return alert("Simulation Guard: Insufficient funds. You must leave at least ~0.01 SOL to cover Solana network account creation rent.");
         }
 
-        if (!unhashedServerSeed) return alert("Security Guard: Provably Fair seeds not loaded from backend yet. Please wait a moment.");
+        // 🔒 B-C2 FIX: only the hash is needed pre-spin. The actual server seed
+        // is revealed by the backend after resolve and used to derive the wheel
+        // outcome locally for animation/payout reconciliation below.
+        if (!serverSeedHash) return alert("Security Guard: Provably Fair commitment not loaded from backend yet. Please wait a moment.");
 
         setIsSpinning(true);
         setShowOverlay(false); 
@@ -182,15 +202,22 @@ export default function RouletteGame({ balance, setBalance, logWager, setShowPro
             const txSignature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false });
             await connection.confirmTransaction({ signature: txSignature, ...latestBlockhash });
 
+            // 🔒 B-C2 FIX: server holds the seed; client no longer supplies it.
             const backendResponse = await fetch(`${BACKEND_URL}/api/roulette/resolve`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ playerPublicKey: publicKey.toBase58(), serverSeed: unhashedServerSeed, gamePda: gameStateKeypair.publicKey.toBase58() })
+                body: JSON.stringify({ playerPublicKey: publicKey.toBase58(), gamePda: gameStateKeypair.publicKey.toBase58() })
             });
 
             const backendData = await backendResponse.json();
             if (!backendData.success) throw new Error(backendData.error);
 
-            const combinedData = unhashedServerSeed + clientSeedRef.current + nonce.toString();
+            // The backend reveals the serverSeed in the resolve response so the
+            // client can verify the outcome locally.
+            const revealedServerSeed: string = backendData.serverSeed;
+            if (!revealedServerSeed) throw new Error("Backend did not reveal server seed.");
+            setUnhashedServerSeed(revealedServerSeed);
+
+            const combinedData = revealedServerSeed + clientSeedRef.current + nonce.toString();
             const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(combinedData) as any);
             const outcomeHashBytes = new Uint8Array(hashBuffer);
             const winningNum = new DataView(outcomeHashBytes.buffer).getUint32(0, true) % 37;
