@@ -341,26 +341,68 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
         try {
             const provider = new AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
             const program = new Program(idl as any, PROGRAM_ID, provider);
-            
+
             const [gameStatePda] = PublicKey.findProgramAddressSync([Buffer.from("rps_game"), publicKey.toBuffer()], program.programId);
             const [vaultPda] = PublicKey.findProgramAddressSync([Buffer.from("rps_vault")], program.programId);
+
+            // 🔒 SETTLE UX FIX: read on-chain streak BEFORE sending so a stale
+            // local state (e.g. another tab already settled) doesn't trigger a
+            // confusing "NoWinnings" error.
+            try {
+                const state: any = await program.account.rpsGameState.fetch(gameStatePda);
+                if (!state.currentStreak || state.currentStreak === 0) {
+                    setIsGameOver(true);
+                    setStreak(0);
+                    setSelectedMove(null);
+                    setRounds([]);
+                    setIsProcessing(false);
+                    return;
+                }
+            } catch (_e) { /* fall through; we'll let the tx attempt anyway */ }
 
             const tx = new web3.Transaction();
             const settleIx = await program.methods.rpsSettleStreak()
                 .accountsStrict({ gameState: gameStatePda, vault: vaultPda, player: publicKey, systemProgram: SystemProgram.programId })
                 .instruction();
-            
+
             tx.add(settleIx);
-            
-            const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+
+            // 🔒 SETTLE UX FIX: finalized blockhash + skipPreflight + soft-success
+            // on "already processed" — same pattern that fixed the play_hand path.
+            const latestBlockhash = await connection.getLatestBlockhash("finalized");
             tx.recentBlockhash = latestBlockhash.blockhash;
             tx.feePayer = publicKey;
 
             const signedTx = await wallet.signTransaction(tx);
-            const signature = await connection.sendRawTransaction(signedTx.serialize());
-            
-            await connection.confirmTransaction({ signature, ...latestBlockhash });
-            
+
+            let signature = '';
+            try {
+                signature = await connection.sendRawTransaction(signedTx.serialize(), {
+                    skipPreflight: true,
+                    preflightCommitment: 'confirmed',
+                    maxRetries: 3,
+                });
+            } catch (sendErr: any) {
+                const msg = String(sendErr?.message || sendErr);
+                if (msg.includes("already been processed")) {
+                    console.warn("⚠️ RPS settle tx already processed, treating as success.");
+                } else {
+                    throw sendErr;
+                }
+            }
+
+            if (signature) {
+                try {
+                    await connection.confirmTransaction({
+                        signature,
+                        blockhash: latestBlockhash.blockhash,
+                        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+                    }, "confirmed");
+                } catch (confirmErr: any) {
+                    console.warn("⚠️ RPS settle confirm warning:", confirmErr?.message || confirmErr);
+                }
+            }
+
             confetti({
                 particleCount: 150,
                 spread: 80,
@@ -368,18 +410,30 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                 colors: ['#22c55e', '#eab308', '#ffffff']
             });
 
-            // 🔥 THE FIX: Log true TX hash and real streak context on Cashout
+            // 🔥 Log true TX hash and real streak context on Cashout
             if (logWager) {
                 logWager('Rock Paper Scissors', lockedBet, true, lockedBet * MULTIPLIERS[streak - 1], signature, `x${streak} Cashout (Salt: ${currentPfData?.salt?.substring(0, 8) || "N/A"})`);
             }
-            
+
             setIsGameOver(true);
             setStreak(0);
             setSelectedMove(null);
-            setRounds([]); 
+            setRounds([]);
         } catch (error: any) {
             console.error("Error claiming:", error);
-            alert(`Claim Error: ${error.message}`);
+            // If the contract specifically says NoWinnings, the streak was already
+            // settled (likely a duplicate cashout click). Treat as a soft win and
+            // reset state instead of alerting the user.
+            const msg = String(error?.message || error);
+            if (msg.includes("NoWinnings") || msg.includes("0x1774")) {
+                console.warn("Streak already settled, resetting UI.");
+                setIsGameOver(true);
+                setStreak(0);
+                setSelectedMove(null);
+                setRounds([]);
+            } else {
+                alert(`Claim Error: ${error.message}`);
+            }
         } finally {
             setIsProcessing(false);
             connection.getBalance(publicKey).then(b => setBalance(b / web3.LAMPORTS_PER_SOL));
