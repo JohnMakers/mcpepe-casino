@@ -116,7 +116,7 @@ export default function Dashboard() {
         <main className="flex-1 overflow-y-auto bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0d1410] via-[#050806] to-black p-4 sm:p-8 flex flex-col relative custom-scrollbar">
           
           {!activeGame && (
-            <div className="relative w-full -mx-4 sm:-mx-8 -my-4 sm:-my-8">
+            <div className="relative w-[calc(100%+2rem)] sm:w-[calc(100%+4rem)] -mx-4 sm:-mx-8 -my-4 sm:-my-8">
 
               {/* Ambient glow background */}
               <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -157,7 +157,7 @@ export default function Dashboard() {
               <section className="relative max-w-6xl mx-auto px-4 sm:px-8 mb-8 sm:mb-12">
                 <SectionHeader title="Casino" accent="from-green-500 via-emerald-500 to-cyan-500" />
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5 sm:gap-3">
-                  <GameCard onClick={() => setActiveGame('coinflip')} icon="/icons/coinflip_icon.png" title="Coinflip" desc="50/50 double-up" tone="green" badge="FEATURED" />
+                  <GameCard onClick={() => setActiveGame('coinflip')} icon="/icons/coinflip_icon.png" title="Coinflip" desc="50/50 double-up" tone="green" />
                   <GameCard onClick={() => setActiveGame('whackd')} icon="/icons/whackd_icon.png" title="Whackd!" desc="Dodge the bombs" tone="emerald" />
                   <GameCard onClick={() => setActiveGame('roulette')} icon="/icons/roulette_icon.png" title="Roulette" desc="Spin the wheel" tone="red" />
                   <GameCard onClick={() => setActiveGame('rps')} icon="/icons/rps_icon.png" title="RPS" desc="Let it ride" tone="amber" />
