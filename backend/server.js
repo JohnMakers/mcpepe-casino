@@ -1264,82 +1264,108 @@ function runSpinCycle(betAmount, serverSeed, clientSeed, nonce, startCounter, is
 
 // THE NEW PLAY ENDPOINT
 app.post('/api/patriots/play', async (req, res) => {
+    let stage = "INIT";
     try {
-        // ADDED isBonusBuy to the request
-        const { playerPubkey, gamePubkey, clientSeed, nonce, betAmount, isBonusBuy } = req.body;
+        stage = "PARSE_BODY";
+        const { playerPubkey, gamePubkey, clientSeed, nonce, betAmount, isBonusBuy } = req.body || {};
 
+        if (!playerPubkey || !gamePubkey || clientSeed === undefined || nonce === undefined || betAmount === undefined) {
+            return res.status(400).json({
+                success: false,
+                error: `Missing field. body=${JSON.stringify({ hasPlayer: !!playerPubkey, hasGame: !!gamePubkey, clientSeed, nonce, betAmount })}`
+            });
+        }
+
+        stage = "GET_SESSION";
         const game = activePatriotsGames.get(playerPubkey);
         if (!game || game.status !== "waiting_for_tx") {
-            return res.status(400).json({ error: "No active session. Fetch seed first." });
+            return res.status(400).json({ success: false, error: "No active session. Fetch seed first." });
+        }
+        if (!game.serverSeed) {
+            return res.status(500).json({ success: false, error: "Session missing serverSeed (backend memory corrupted)." });
         }
 
         // 🔒 B-C3 FIX: betAmount drives every payout multiplier, so it MUST match
         // the lamports actually escrowed on-chain. Otherwise a player can claim a
         // 10 SOL bet while only escrowing 0.01 SOL.
+        stage = "READ_ON_CHAIN_BET";
         try {
             const onChainBet = await readOnChainBetAmount(gamePubkey);
             if (onChainBet !== BigInt(betAmount)) {
                 return res.status(400).json({
+                    success: false,
                     error: `Bet mismatch: body=${betAmount} on-chain=${onChainBet.toString()}`
                 });
             }
         } catch (e) {
-            return res.status(400).json({ error: `Could not verify on-chain bet: ${e.message}` });
+            return res.status(400).json({ success: false, error: `Could not verify on-chain bet: ${e.message}` });
         }
 
         // If Bonus Buy, the mathematical base bet is 100x smaller than the escrowed wager
+        stage = "COMPUTE_BASE_BET";
         const actualBaseBet = isBonusBuy ? Number(betAmount) / 100 : Number(betAmount);
 
+        stage = "RUN_BASE_SPIN";
         let currentCounter = 0;
         // Pass 'isBonusBuy' as the forceScatters parameter to guarantee the drop
         const baseSpin = runSpinCycle(actualBaseBet, game.serverSeed, clientSeed, nonce, currentCounter, false, isBonusBuy);
         currentCounter = baseSpin.finalCounter;
 
+        stage = "COLLECT_BASE_RESULT";
         let totalGamePayout = baseSpin.totalSpinPayout;
         let freeSpinsData = [];
-        
+
         if (baseSpin.triggeredBonus) {
+            stage = "RUN_FREE_SPINS";
             let totalSpins = 10; // Start with the base 10 spins
-            
+
             for (let i = 0; i < totalSpins; i++) {
                 const fsSpin = runSpinCycle(actualBaseBet, game.serverSeed, clientSeed, nonce, currentCounter, true, false);
                 currentCounter = fsSpin.finalCounter;
                 totalGamePayout += fsSpin.totalSpinPayout;
-                
+
                 freeSpinsData.push(fsSpin);
 
-                // RETRIGGER: If 3 or more scatters land during a free spin, add +3 spins to the total limit
-                // We check frames[0] so we only count them once before they potentially tumble
-                if (evaluateGrid(fsSpin.frames[0].grid).scatterCount >= 3) {
-                    totalSpins += 3; 
+                // RETRIGGER: defensively guard against a pathological empty-frames result.
+                if (fsSpin.frames && fsSpin.frames[0] && fsSpin.frames[0].grid &&
+                    evaluateGrid(fsSpin.frames[0].grid).scatterCount >= 3) {
+                    totalSpins += 3;
                 }
             }
         }
 
         // Enforce the 21,100x Maximum Win Cap
+        stage = "CAP_PAYOUT";
         const MAX_WIN_MULTIPLIER = 21100;
         const hardCapLamports = actualBaseBet * MAX_WIN_MULTIPLIER;
-        
+
         if (totalGamePayout > hardCapLamports) {
             totalGamePayout = hardCapLamports;
             console.log(`🏆 MAX WIN HIT by ${playerPubkey}! Capped at 21,100x.`);
         }
 
+        stage = "RESOLVE_ON_CHAIN";
         await resolvePatriotsOnChain(playerPubkey, gamePubkey, game.serverSeed, totalGamePayout);
         activePatriotsGames.delete(playerPubkey);
 
-        res.json({ 
-            success: true, 
-            payout: totalGamePayout, 
-            serverSeed: game.serverSeed, 
+        stage = "SEND_RESPONSE";
+        res.json({
+            success: true,
+            payout: totalGamePayout,
+            serverSeed: game.serverSeed,
             baseSpinFrames: baseSpin.frames,
             triggeredBonus: baseSpin.triggeredBonus,
-            freeSpinsData: freeSpinsData 
+            freeSpinsData: freeSpinsData
         });
 
     } catch (error) {
-        console.error("❌ Patriots Play Error:", error);
-        res.status(500).json({ success: false, error: error.message });
+        console.error(`❌ Patriots Play Error at stage=${stage}:`, error);
+        if (error?.stack) console.error(error.stack);
+        res.status(500).json({
+            success: false,
+            stage,
+            error: error?.message || String(error),
+        });
     }
 });
 
