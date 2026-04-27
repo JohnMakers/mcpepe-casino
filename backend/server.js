@@ -85,6 +85,7 @@ app.use([
     '/api/whackd/init',
     '/api/whackd/click',
     '/api/whackd/cashout',
+    '/api/rps/commitment',
     '/api/rps/resolve',
     '/api/roulette/seed',
     '/api/roulette/resolve',
@@ -413,8 +414,49 @@ async function resolveWhackdOnChain(playerPubkeyStr, unhashedServerSeed, reveale
 }
 
 // ==========================================
-// ROCK PAPER SCISSORS ENDPOINT
+// ROCK PAPER SCISSORS ENDPOINTS
 // ==========================================
+// 🔒 C-8 FIX (revised): the House generates (houseMove, salt) BEFORE the
+// player picks their move and returns only the SHA-256 hash. The player then
+// embeds that hash in their `rps_play_hand` tx, so the on-chain account
+// permanently records the commitment. At resolve time the House reveals the
+// preimage; the program verifies hash(move||salt) == stored commitment.
+//
+// Map keyed by playerPubkey -> { houseMove, secretSalt, hashedCommitmentHex }
+// A new entry overwrites any unresolved one (player abandoned the round).
+const activeRpsCommitments = new Map();
+
+app.post('/api/rps/commitment', (req, res) => {
+    try {
+        const { playerPubkey } = req.body || {};
+        if (!playerPubkey) {
+            return res.status(400).json({ success: false, error: "Missing playerPubkey." });
+        }
+
+        const houseMove = crypto.randomInt(1, 4); // 1..3 inclusive
+        const secretSalt = crypto.randomBytes(16);
+        const preimage = Buffer.concat([Buffer.from([houseMove]), secretSalt]);
+        const hashedCommitment = crypto.createHash('sha256').update(preimage).digest();
+
+        activeRpsCommitments.set(playerPubkey, {
+            houseMove,
+            secretSalt: secretSalt.toString('hex'),
+            hashedCommitmentHex: hashedCommitment.toString('hex'),
+            createdAt: Date.now(),
+        });
+
+        // Only the HASH leaves the server. The (move, salt) are kept private
+        // until /api/rps/resolve sends them on chain.
+        res.json({
+            success: true,
+            hashedCommitment: hashedCommitment.toString('hex'),
+        });
+    } catch (error) {
+        console.error("❌ RPS Commitment Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 app.post('/api/rps/resolve', async (req, res) => {
     try {
         const { playerPubkeyStr, gameStatePubkeyStr } = req.body;
@@ -423,20 +465,22 @@ app.post('/api/rps/resolve', async (req, res) => {
             return res.status(400).json({ success: false, error: "Missing keys." });
         }
 
-        const playerPubkey = new anchor.web3.PublicKey(playerPubkeyStr);
+        // Look up the (move, salt) the House committed to BEFORE the player played.
+        const commitment = activeRpsCommitments.get(playerPubkeyStr);
+        if (!commitment) {
+            return res.status(400).json({
+                success: false,
+                error: "No active RPS commitment for this player. Call /api/rps/commitment before play_hand."
+            });
+        }
+        const { houseMove, secretSalt: secretSaltHex, hashedCommitmentHex } = commitment;
+        const secretSalt = Buffer.from(secretSaltHex, 'hex');
+
         const gameStatePubkey = new anchor.web3.PublicKey(gameStatePubkeyStr);
 
-        // 🔒 B-H1 FIX: cryptographically-secure house move (was Math.random()).
-        const houseMove = crypto.randomInt(1, 4); // upper bound exclusive → 1..3
-        const secretSalt = crypto.randomBytes(16);
-        
-        const preimage = Buffer.concat([Buffer.from([houseMove]), secretSalt]);
-        const hashedCommitment = crypto.createHash('sha256').update(preimage).digest();
-
         const sighash = crypto.createHash('sha256').update("global:rps_resolve_hand").digest().slice(0, 8);
-        
-        const moveBuffer = Buffer.from([houseMove]);
-        const ixData = Buffer.concat([sighash, moveBuffer, secretSalt, hashedCommitment]);
+        // resolve_hand args: house_move: u8, secret_salt: [u8;16]
+        const ixData = Buffer.concat([sighash, Buffer.from([houseMove]), secretSalt]);
 
         const resolveIx = new anchor.web3.TransactionInstruction({
             programId: PROGRAM_ID,
@@ -451,7 +495,6 @@ app.post('/api/rps/resolve', async (req, res) => {
 
         let resolveSignature;
         let retries = 10;
-        
         while (retries > 0) {
             try {
                 const resolveTx = new anchor.web3.Transaction().add(resolveIx);
@@ -461,14 +504,14 @@ app.post('/api/rps/resolve', async (req, res) => {
                 resolveTx.sign(houseKeypair);
 
                 resolveSignature = await connection.sendRawTransaction(resolveTx.serialize(), { skipPreflight: true });
-                
+
                 await connection.confirmTransaction({
                     signature: resolveSignature,
                     blockhash: freshBlockhash.blockhash,
                     lastValidBlockHeight: freshBlockhash.lastValidBlockHeight
                 }, "confirmed");
 
-                break; 
+                break;
             } catch (err) {
                 console.log(`⚠️ Network hit a snag in RPS. Retrying... (${retries} left). Error: ${err.message}`);
                 await new Promise(r => setTimeout(r, 2000));
@@ -477,13 +520,15 @@ app.post('/api/rps/resolve', async (req, res) => {
             }
         }
 
-        // 🔥 THE FIX: Added RPS provably fair properties back here
-        res.json({ 
-            success: true, 
-            resolveSignature, 
+        // Reveal the preimage to the player so they can independently verify
+        // hash(houseMove||serverSalt) == hashedCommitment recorded on-chain.
+        activeRpsCommitments.delete(playerPubkeyStr);
+        res.json({
+            success: true,
+            resolveSignature,
             houseMove,
-            serverSeedHash: hashedCommitment.toString('hex'),
-            serverSalt: secretSalt.toString('hex') 
+            serverSeedHash: hashedCommitmentHex,
+            serverSalt: secretSaltHex
         });
 
     } catch (error) {

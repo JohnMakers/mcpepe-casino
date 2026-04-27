@@ -6,7 +6,11 @@
       "Bash(cd \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\backend\")",
       "Bash(npm install express-rate-limit --silent)",
       "Bash(cd \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\mcpepe_casino\")",
-      "Bash(cargo check -p mcpepe_casino)"
+      "Bash(cargo check -p mcpepe_casino)",
+      "Bash(grep -rn \"rps_play_hand\\\\|rpsPlayHand\\\\|PlayHand\\\\|playHand\" \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\frontend\\\\src\")",
+      "Bash(ls \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\frontend\")",
+      "Bash(grep -rln \"rpsPlayHand\\\\|rps_play_hand\\\\|rps/resolve\\\\|rps/commitment\" \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\frontend\\\\app\" \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\frontend\\\\components\" \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\frontend\\\\src\")",
+      "Bash(grep -n \"Buffer\" \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\frontend\\\\components\\\\games\\\\RockPaperScissors\\\\index.tsx\")"
     ]
   }
 }

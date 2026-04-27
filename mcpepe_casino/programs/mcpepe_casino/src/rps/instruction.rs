@@ -46,28 +46,6 @@ pub struct ResolveHand<'info> {
     pub house_authority: Signer<'info>,
 }
 
-/// 🔒 C-8 FIX: explicit commit step. The House writes its commitment to the
-/// game_state account *before* the player calls `play_hand`, so the player can
-/// safely lock in their move knowing the commitment cannot be retroactively
-/// chosen.
-#[derive(Accounts)]
-pub struct CommitHand<'info> {
-    #[account(mut)]
-    pub game_state: Account<'info, RpsGameState>,
-    #[account(mut, address = HOUSE_AUTHORITY @ CustomError::UnauthorizedHouse)]
-    pub house_authority: Signer<'info>,
-}
-
-pub fn commit_hand(ctx: Context<CommitHand>, hashed_commitment: [u8; 32]) -> Result<()> {
-    let game_state = &mut ctx.accounts.game_state;
-    // Cannot overwrite a commitment for a round that has already locked the
-    // player's move — that would let the house re-commit after seeing the move.
-    require!(!game_state.is_active, GameError::GameAlreadyActive);
-    game_state.pending_commitment = hashed_commitment;
-    game_state.commitment_set = true;
-    Ok(())
-}
-
 #[derive(Accounts)]
 pub struct SettleStreak<'info> {
     #[account(mut, has_one = player)]
@@ -92,15 +70,27 @@ pub fn initialize_rps_game(ctx: Context<InitializeRpsGame>) -> Result<()> {
     Ok(())
 }
 
-pub fn play_hand(ctx: Context<PlayHand>, bet_amount: u64, player_move: u8) -> Result<()> {
+pub fn play_hand(
+    ctx: Context<PlayHand>,
+    bet_amount: u64,
+    player_move: u8,
+    hashed_commitment: [u8; 32],
+) -> Result<()> {
     let game_state = &mut ctx.accounts.game_state;
 
     require!(player_move >= 1 && player_move <= 3, GameError::InvalidMove);
     require!(!game_state.is_active, GameError::GameAlreadyActive);
-    // 🔒 C-8 FIX: refuse to lock a wager unless the house has committed first.
-    require!(game_state.commitment_set, GameError::CommitmentMissing);
-    
-    // 🔥 THE FIX: Prevent double charging. Only take SOL if there is no locked bet.
+
+    // 🔒 C-8 FIX (revised): the player records the House's pre-generated
+    // commitment as part of the same transaction that locks their move. The
+    // commitment was produced by the backend BEFORE the player's move was
+    // known (via /api/rps/commitment), so the House cannot retroactively
+    // choose a winning house_move at resolve time. resolve_hand verifies the
+    // revealed (move, salt) preimage against this stored commitment.
+    game_state.pending_commitment = hashed_commitment;
+    game_state.commitment_set = true;
+
+    // 🔥 Prevent double charging. Only take SOL if there is no locked bet.
     if game_state.bet_amount == 0 {
         let cpi_context = CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
@@ -114,8 +104,8 @@ pub fn play_hand(ctx: Context<PlayHand>, bet_amount: u64, player_move: u8) -> Re
     }
 
     game_state.player_move = player_move;
-    game_state.is_active = true; 
-    
+    game_state.is_active = true;
+
     Ok(())
 }
 
