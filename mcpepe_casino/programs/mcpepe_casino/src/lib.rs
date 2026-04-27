@@ -80,6 +80,12 @@ pub mod mcpepe_casino {
         rps::settle_streak(ctx)
     }
 
+    /// 🔒 RPS RECOVERY: player escape hatch when the House never resolves a
+    /// round. Refunds the locked bet, wipes the streak, clears the round.
+    pub fn rps_cancel_stuck_hand(ctx: Context<CancelStuckHand>) -> Result<()> {
+        rps::cancel_stuck_hand(ctx)
+    }
+
     // --- ROULETTE ROUTES ---
     pub fn start_roulette(
         ctx: Context<StartRoulette>, 

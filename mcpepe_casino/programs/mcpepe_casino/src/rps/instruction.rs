@@ -46,6 +46,60 @@ pub struct ResolveHand<'info> {
     pub house_authority: Signer<'info>,
 }
 
+/// 🔒 RPS RECOVERY: lets a player abandon a round whose on-chain state is
+/// `is_active = true` because the House never resolved (e.g. backend lost the
+/// in-memory commitment after a restart). Refunds the locked bet and resets
+/// the streak to zero. Cannot be exploited to dodge an outcome because the
+/// House's move was committed via SHA-256 *before* this call, so the player
+/// gains no information by cancelling — they only forfeit any active streak.
+#[derive(Accounts)]
+pub struct CancelStuckHand<'info> {
+    #[account(mut, has_one = player)]
+    pub game_state: Account<'info, RpsGameState>,
+    #[account(
+        mut,
+        seeds = [b"rps_vault"],
+        bump
+    )]
+    pub vault: SystemAccount<'info>,
+    #[account(mut)]
+    pub player: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn cancel_stuck_hand(ctx: Context<CancelStuckHand>) -> Result<()> {
+    let game_state = &mut ctx.accounts.game_state;
+    require!(game_state.is_active, GameError::GameNotActive);
+    require!(game_state.commitment_set, GameError::CommitmentMissing);
+
+    let refund = game_state.bet_amount;
+    if refund > 0 {
+        let vault_bump = ctx.bumps.vault;
+        let seeds = &[b"rps_vault".as_ref(), &[vault_bump]];
+        let signer = &[&seeds[..]];
+
+        let cpi_context = CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.vault.to_account_info(),
+                to: ctx.accounts.player.to_account_info(),
+            },
+            signer,
+        );
+        transfer(cpi_context, refund)?;
+    }
+
+    // Reset everything so the player can start a fresh game.
+    game_state.bet_amount = 0;
+    game_state.current_streak = 0;
+    game_state.is_active = false;
+    game_state.commitment_set = false;
+    game_state.pending_commitment = [0u8; 32];
+    game_state.player_move = 0;
+
+    Ok(())
+}
+
 #[derive(Accounts)]
 pub struct SettleStreak<'info> {
     #[account(mut, has_one = player)]

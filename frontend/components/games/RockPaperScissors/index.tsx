@@ -47,6 +47,10 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
     const [pfModalOpen, setPfModalOpen] = useState(false);
     const [currentPfData, setCurrentPfData] = useState<{hash: string, salt: string} | null>(null);
 
+    // 🔒 RPS RECOVERY: when on-chain state is_active=true but the House cannot
+    // resolve (e.g. backend memory was lost), expose a player-callable cancel.
+    const [stuckRefundable, setStuckRefundable] = useState<boolean>(false);
+
     const arenaRef = useRef<HTMLDivElement>(null);
 
     const isOngoing = rounds.length > 0 && !isGameOver;
@@ -84,7 +88,7 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                 if (state.isActive) {
                     console.log("⚠️ Stuck active game detected. Asking House to resolve...");
                     setIsProcessing(true);
-                    
+
                     fetch(`${BACKEND_URL}/api/rps/resolve`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -93,12 +97,20 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                     .then(res => res.json())
                     .then(data => {
                         if (data.success) {
-                            setTimeout(() => window.location.reload(), 2000); 
+                            setTimeout(() => window.location.reload(), 2000);
                         } else {
+                            // House can't resolve (likely lost commitment after a restart).
+                            // Surface the player-side cancel-and-refund button.
+                            console.warn("House could not resolve:", data.error);
+                            setStuckRefundable(true);
                             setIsProcessing(false);
                         }
                     })
-                    .catch(() => setIsProcessing(false));
+                    .catch((err) => {
+                        console.warn("Auto-resolve network error:", err);
+                        setStuckRefundable(true);
+                        setIsProcessing(false);
+                    });
                 }
 
             }).catch(() => {});
@@ -273,6 +285,49 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
             console.error("FATAL ERROR IN PLAYHAND:", error);
             alert(`Blockchain Error: ${error.message || "Simulation failed."}`);
             setRounds(prev => prev.slice(0, -1));
+        } finally {
+            setIsProcessing(false);
+            connection.getBalance(publicKey).then(b => setBalance(b / web3.LAMPORTS_PER_SOL));
+        }
+    };
+
+    const cancelStuckHand = async () => {
+        if (!publicKey || !wallet.signTransaction) return;
+        if (!confirm("This will cancel the stuck round, refund your locked bet and reset your streak. Continue?")) return;
+
+        setIsProcessing(true);
+        try {
+            const provider = new AnchorProvider(connection, wallet as any, { preflightCommitment: "processed" });
+            const program = new Program(idl as any, PROGRAM_ID, provider);
+
+            const [gameStatePda] = PublicKey.findProgramAddressSync([Buffer.from("rps_game"), publicKey.toBuffer()], program.programId);
+            const [vaultPda] = PublicKey.findProgramAddressSync([Buffer.from("rps_vault")], program.programId);
+
+            const tx = new web3.Transaction();
+            const cancelIx = await program.methods.rpsCancelStuckHand()
+                .accountsStrict({ gameState: gameStatePda, vault: vaultPda, player: publicKey, systemProgram: SystemProgram.programId })
+                .instruction();
+            tx.add(cancelIx);
+
+            const latestBlockhash = await connection.getLatestBlockhash("finalized");
+            tx.recentBlockhash = latestBlockhash.blockhash;
+            tx.feePayer = publicKey;
+
+            const signedTx = await wallet.signTransaction(tx);
+            const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true });
+            await connection.confirmTransaction({ signature, ...latestBlockhash }, "confirmed");
+
+            // Reset all local state and reload to fetch the clean on-chain state.
+            setStuckRefundable(false);
+            setStreak(0);
+            setLockedBet(0);
+            setRounds([]);
+            setSelectedMove(null);
+            setIsGameOver(false);
+            setTimeout(() => window.location.reload(), 1500);
+        } catch (error: any) {
+            console.error("Cancel stuck hand failed:", error);
+            alert(`Cancel failed: ${error.message || error}`);
         } finally {
             setIsProcessing(false);
             connection.getBalance(publicKey).then(b => setBalance(b / web3.LAMPORTS_PER_SOL));
@@ -491,9 +546,24 @@ export default function RockPaperScissors({ logWager }: RpsProps) {
                     })}
                 </div>
 
-                <button 
+                {stuckRefundable && !isProcessing && (
+                    <div className="w-full p-4 mb-2 bg-red-900/30 border-2 border-red-500 rounded-xl text-center">
+                        <p className="text-red-300 font-mono text-sm mb-3">
+                            ⚠️ The House could not resolve your last round.
+                            Cancel it now to refund your locked bet (your streak will reset).
+                        </p>
+                        <button
+                            onClick={cancelStuckHand}
+                            className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest rounded-lg transition-all"
+                        >
+                            🛟 Cancel Round &amp; Refund
+                        </button>
+                    </div>
+                )}
+
+                <button
                     onClick={handlePlaySubmit}
-                    disabled={!selectedMove || isProcessing}
+                    disabled={!selectedMove || isProcessing || stuckRefundable}
                     className={`w-full py-5 text-black font-black text-xl uppercase tracking-widest rounded-xl transition-all ${
                         !selectedMove || isProcessing 
                             ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
