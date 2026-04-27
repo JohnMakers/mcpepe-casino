@@ -82,7 +82,11 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
 
       appRef.current = app;
       if (pixiContainer.current) {
-        pixiContainer.current.innerHTML = ''; 
+        pixiContainer.current.innerHTML = '';
+        const canvasStyle = app.canvas.style as CSSStyleDeclaration;
+        canvasStyle.width = '100%';
+        canvasStyle.height = '100%';
+        canvasStyle.display = 'block';
         pixiContainer.current.appendChild(app.canvas);
       }
 
@@ -337,10 +341,10 @@ export default function PixiGrid({ playData, onAnimationComplete }: PixiGridProp
   }, [playData]); 
 
   return (
-    <div 
-      ref={pixiContainer} 
-      style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}` }}
-      className="flex justify-center items-center rounded-2xl overflow-hidden shadow-2xl shadow-blue-900/50 border-[6px] border-blue-400 bg-blue-950/80 backdrop-blur-sm max-w-full h-auto" 
+    <div
+      ref={pixiContainer}
+      style={{ aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}` }}
+      className="flex justify-center items-center rounded-2xl overflow-hidden shadow-2xl shadow-blue-900/50 border-2 sm:border-[6px] border-blue-400 bg-blue-950/80 backdrop-blur-sm w-full max-w-[1000px] h-auto"
     />
   );
 }

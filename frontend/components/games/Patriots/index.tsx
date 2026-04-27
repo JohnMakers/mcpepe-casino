@@ -144,7 +144,7 @@ export default function Patriots() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen w-full bg-[#0a0f0c] p-6 pb-20 relative overflow-y-auto">
+    <div className="flex flex-col items-center justify-start min-h-screen w-full bg-[#0a0f0c] p-3 sm:p-6 pb-16 sm:pb-20 relative overflow-y-auto">
       
       <ProvablyFairModal 
         isOpen={isPFOpen} 
@@ -158,17 +158,17 @@ export default function Patriots() {
         onClose={() => setIsInfoOpen(false)} 
       />
 
-      <div className="w-[800px] flex justify-between items-end mb-6 mt-4 shrink-0">
+      <div className="w-full max-w-[800px] flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3 sm:gap-0 mb-4 sm:mb-6 mt-2 sm:mt-4 shrink-0">
         <div className="flex flex-col text-left">
-          <h1 className="text-4xl font-black text-red-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.6)]">
+          <h1 className="text-2xl sm:text-4xl font-black text-red-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(239,68,68,0.6)]">
             McPepe's Patriots
           </h1>
-          <p className="text-gray-400 text-sm font-bold tracking-widest mt-2 uppercase">
+          <p className="text-gray-400 text-[10px] sm:text-sm font-bold tracking-widest mt-1 sm:mt-2 uppercase">
             Pay Anywhere • Liberty Mechanism (Tumble)
           </p>
         </div>
-        
-        <div className="flex items-center gap-3 pb-1">
+
+        <div className="flex items-center gap-3 pb-1 self-end sm:self-auto">
           <button 
             onClick={() => setIsPFOpen(true)} 
             className="flex items-center gap-2 bg-[#0d1310] hover:bg-green-900/30 border border-green-800/50 text-green-400 px-4 py-2 rounded-lg text-xs font-bold tracking-widest transition-all"
@@ -187,7 +187,7 @@ export default function Patriots() {
         </div>
       </div>
 
-      <div className="box-content w-[800px] h-[600px] border-4 border-blue-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(220,38,38,0.2)] bg-[#0a0f0c] shrink-0">
+      <div className="w-full max-w-[800px] aspect-[4/3] border-4 border-blue-800/60 rounded-xl mb-4 sm:mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(220,38,38,0.2)] bg-[#0a0f0c] shrink-0">
         <div 
           className="absolute inset-0 z-0"
           style={{
@@ -204,7 +204,7 @@ export default function Patriots() {
 
         {!isSpinning && !gameResult && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-            <span className="text-blue-400 font-black text-2xl uppercase tracking-widest opacity-80 drop-shadow-lg">
+            <span className="text-blue-400 font-black text-base sm:text-2xl uppercase tracking-widest opacity-80 drop-shadow-lg">
               Waiting for Spin
             </span>
           </div>
@@ -212,7 +212,7 @@ export default function Patriots() {
         
         {isSpinning && !gameResult && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-            <span className="text-red-400 font-black text-2xl uppercase tracking-widest animate-pulse drop-shadow-lg">
+            <span className="text-red-400 font-black text-base sm:text-2xl uppercase tracking-widest animate-pulse drop-shadow-lg">
               Escrowing Wager...
             </span>
           </div>
@@ -228,7 +228,7 @@ export default function Patriots() {
         )}
       </div>
 
-      <div className="flex gap-6 items-center bg-black border border-blue-900/40 p-4 rounded-xl shrink-0">
+      <div className="w-full max-w-[800px] flex flex-col sm:flex-row gap-4 sm:gap-6 sm:items-center bg-black border border-blue-900/40 p-3 sm:p-4 rounded-xl shrink-0">
         <div className="flex flex-col">
           <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Bet</label>
           <div className="flex items-center gap-2">
@@ -255,7 +255,7 @@ export default function Patriots() {
                   if (isNaN(val) || val < 0.0001) val = 0.0001;
                   setBetInput(val.toFixed(4));
                 }}
-                className="bg-[#0a0f0c] border-2 border-blue-900/50 rounded-lg py-2 pl-7 pr-2 text-white font-black w-36 focus:border-blue-500 focus:shadow-[0_0_15px_rgba(59,130,246,0.3)] focus:outline-none transition-all"
+                className="bg-[#0a0f0c] border-2 border-blue-900/50 rounded-lg py-2 pl-7 pr-2 text-white font-black w-full sm:w-36 min-w-0 focus:border-blue-500 focus:shadow-[0_0_15px_rgba(59,130,246,0.3)] focus:outline-none transition-all"
                 disabled={isSpinning || isAnimating}
               />
             </div>
@@ -277,29 +277,29 @@ export default function Patriots() {
           </div>
         </div>
 
-        <button 
+        <button
           onClick={() => handleSpin(false)}
           disabled={isSpinning || isAnimating}
-          className={`px-12 py-4 rounded font-black text-xl uppercase tracking-widest transition-all ${
+          className={`w-full sm:w-auto px-6 sm:px-12 py-3 sm:py-4 rounded font-black text-base sm:text-xl uppercase tracking-widest transition-all ${
             (isSpinning || isAnimating)
-              ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
+              ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
               : 'bg-blue-700 hover:bg-blue-600 text-white shadow-[0_0_20px_rgba(29,78,216,0.4)] hover:shadow-[0_0_30px_rgba(29,78,216,0.6)]'
           }`}
         >
           {isSpinning ? 'Escrowing...' : isAnimating ? 'Tumbling...' : 'Single Spin'}
         </button>
 
-        <button 
+        <button
           onClick={() => handleSpin(true)}
           disabled={isSpinning || isAnimating}
-          className={`px-8 py-2.5 rounded font-black uppercase tracking-widest transition-all flex flex-col items-center justify-center ${
+          className={`w-full sm:w-auto px-4 sm:px-8 py-3 sm:py-2.5 rounded font-black uppercase tracking-widest transition-all flex flex-col items-center justify-center ${
             (isSpinning || isAnimating)
-              ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
+              ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
               : 'bg-green-600 hover:bg-green-500 text-white shadow-[0_0_20px_rgba(22,163,74,0.4)] hover:shadow-[0_0_30px_rgba(22,163,74,0.6)] border-2 border-green-400'
           }`}
         >
-          <span className="text-lg">Buy Bonus ({(betAmount * 100).toFixed(4)} SOL)</span>
-          <span className="text-xs font-bold opacity-90 mt-0.5">(10 SPINS)</span>
+          <span className="text-sm sm:text-lg">Buy Bonus ({(betAmount * 100).toFixed(4)} SOL)</span>
+          <span className="text-[10px] sm:text-xs font-bold opacity-90 mt-0.5">(10 SPINS)</span>
         </button>
       </div>
 

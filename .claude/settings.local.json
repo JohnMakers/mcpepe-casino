@@ -10,7 +10,8 @@
       "Bash(grep -rn \"rps_play_hand\\\\|rpsPlayHand\\\\|PlayHand\\\\|playHand\" \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\frontend\\\\src\")",
       "Bash(ls \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\frontend\")",
       "Bash(grep -rln \"rpsPlayHand\\\\|rps_play_hand\\\\|rps/resolve\\\\|rps/commitment\" \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\frontend\\\\app\" \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\frontend\\\\components\" \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\frontend\\\\src\")",
-      "Bash(grep -n \"Buffer\" \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\frontend\\\\components\\\\games\\\\RockPaperScissors\\\\index.tsx\")"
+      "Bash(grep -n \"Buffer\" \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\\\\frontend\\\\components\\\\games\\\\RockPaperScissors\\\\index.tsx\")",
+      "Bash(ls \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\lualm\\\\mcpepe-casino-monorepo\")"
     ]
   }
 }

@@ -99,15 +99,15 @@ export default function McPepeSnowstorm() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-between bg-blue-950 min-h-screen py-4 w-full overflow-hidden">
+    <div className="flex flex-col items-center justify-between bg-blue-950 min-h-screen py-3 sm:py-4 w-full overflow-x-hidden overflow-y-auto">
       <InfoModal isOpen={isInfoOpen} onClose={() => setIsInfoOpen(false)} />
 
         {/* Header with Verify and Info */}
-      <div className="w-full max-w-5xl flex justify-between items-center px-6 mb-2">
-        <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-300 drop-shadow-lg uppercase tracking-widest text-left">
+      <div className="w-full max-w-5xl flex justify-between items-center px-3 sm:px-6 mb-2 gap-3">
+        <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-300 drop-shadow-lg uppercase tracking-widest text-left">
           McPepe Snowstorm
         </h1>
-        <div className="flex gap-3">
+        <div className="flex gap-2 sm:gap-3 shrink-0">
            <button 
              onClick={() => setIsPFOpen(true)}
              className="bg-blue-900/40 hover:bg-blue-800/60 border border-blue-500/30 text-blue-300 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all"
@@ -124,7 +124,7 @@ export default function McPepeSnowstorm() {
       </div>
       
       {/* Slot Wrapper */}
-      <div className="w-full max-w-5xl flex flex-col justify-center items-center px-4 relative z-0 shrink">
+      <div className="w-full max-w-5xl flex flex-col justify-center items-center px-2 sm:px-4 relative z-0 shrink">
         <div className="relative flex justify-center">
           <PixiGrid 
             playData={playData} 
@@ -134,7 +134,7 @@ export default function McPepeSnowstorm() {
           {/* THE WINNER OVERLAY */}
           <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-full pointer-events-none flex justify-center z-20">
             {playData && playData.payout > 0 && !isSpinning && (
-              <div className="text-4xl md:text-5xl text-green-400 font-black animate-pulse drop-shadow-[0_0_25px_rgba(74,222,128,1)] bg-black/70 px-10 py-2 rounded-full border-2 border-green-500 backdrop-blur-md whitespace-nowrap">
+              <div className="text-xl sm:text-4xl md:text-5xl text-green-400 font-black animate-pulse drop-shadow-[0_0_25px_rgba(74,222,128,1)] bg-black/70 px-5 sm:px-10 py-1 sm:py-2 rounded-full border-2 border-green-500 backdrop-blur-md whitespace-nowrap">
                 WINNER: {(playData.payout / 1e9).toFixed(4)} SOL!
               </div>
             )}
@@ -143,7 +143,7 @@ export default function McPepeSnowstorm() {
       </div>
 
       {/* 🔥 FIX 4: Upgraded Multi-Component Action Bar */}
-      <div className="flex flex-wrap md:flex-nowrap gap-4 items-center bg-blue-900/90 p-3 md:p-4 rounded-xl border-2 border-blue-500 mt-8 mb-2 z-10 shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-md justify-center">
+      <div className="w-[calc(100%-1.5rem)] sm:w-auto flex flex-wrap md:flex-nowrap gap-3 sm:gap-4 items-center bg-blue-900/90 p-3 md:p-4 rounded-xl border-2 border-blue-500 mt-6 sm:mt-8 mb-2 z-10 shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-md justify-center">
         
         {/* Patriots-Style Bet Input Component (Theme-Matched) */}
         <div className="flex gap-4 items-center bg-blue-950 border border-blue-400/40 p-3 rounded-xl shrink-0">
@@ -196,12 +196,12 @@ export default function McPepeSnowstorm() {
         </div>
 
         {/* The Spin Button */}
-        <button 
+        <button
           onClick={handleSpin}
           disabled={isSpinning}
-          className={`px-8 md:px-12 py-5 rounded-xl font-black text-2xl uppercase tracking-widest transition-all ${
-            isSpinning 
-              ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
+          className={`w-full md:w-auto px-6 sm:px-8 md:px-12 py-4 sm:py-5 rounded-xl font-black text-xl sm:text-2xl uppercase tracking-widest transition-all ${
+            isSpinning
+              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
               : 'bg-gradient-to-r from-blue-400 to-cyan-300 hover:from-blue-300 hover:to-cyan-200 text-blue-950 shadow-[0_0_20px_rgba(103,232,249,0.5)] hover:scale-105 active:scale-95'
           }`}
         >

@@ -149,7 +149,7 @@ export default function Vacation() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen w-full bg-[#0a0f0c] p-6 pb-20 relative overflow-y-auto">
+    <div className="flex flex-col items-center justify-start min-h-screen w-full bg-[#0a0f0c] p-3 sm:p-6 pb-16 sm:pb-20 relative overflow-y-auto">
       
       <ProvablyFairModal 
         isOpen={isPFOpen} 
@@ -163,18 +163,18 @@ export default function Vacation() {
         onClose={() => setIsInfoOpen(false)} 
       />
 
-      <div className="w-[960px] flex justify-between items-end mb-6 mt-4 shrink-0">
+      <div className="w-full max-w-[960px] flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3 sm:gap-0 mb-4 sm:mb-6 mt-2 sm:mt-4 shrink-0">
         <div className="flex flex-col text-left">
-          <h1 className="text-4xl font-black text-cyan-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(6,182,212,0.6)]">
+          <h1 className="text-2xl sm:text-4xl font-black text-cyan-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(6,182,212,0.6)]">
             McPepe's Vacation
           </h1>
-          <p className="text-gray-400 text-sm font-bold tracking-widest mt-2 uppercase">
-            5x3 Multi-Line Slot 
+          <p className="text-gray-400 text-[10px] sm:text-sm font-bold tracking-widest mt-1 sm:mt-2 uppercase">
+            5x3 Multi-Line Slot
           </p>
         </div>
-        
+
         {/* Modals Triggers in Header (Matches reverted layout) */}
-        <div className="flex items-center gap-3 pb-1">
+        <div className="flex items-center gap-3 pb-1 self-end sm:self-auto">
           <button 
             onClick={() => setIsPFOpen(true)} 
             className="flex items-center gap-2 bg-[#0d1310] hover:bg-green-900/30 border border-green-800/50 text-green-400 px-4 py-2 rounded-lg text-xs font-bold tracking-widest transition-all"
@@ -193,7 +193,7 @@ export default function Vacation() {
         </div>
       </div>
 
-      <div className="box-content w-[960px] h-[600px] border-4 border-cyan-800/60 rounded-xl mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(6,182,212,0.2)] bg-[#050806] shrink-0">
+      <div className="w-full max-w-[960px] aspect-[8/5] border-4 border-cyan-800/60 rounded-xl mb-4 sm:mb-8 relative overflow-hidden shadow-[0_0_30px_rgba(6,182,212,0.2)] bg-[#050806] shrink-0">
         
         <div className="absolute inset-0 z-10">
           <PixiReels 
@@ -245,7 +245,7 @@ export default function Vacation() {
 
         {!isSpinning && !gameResult && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/50">
-            <span className="text-cyan-400 font-black text-2xl uppercase tracking-widest opacity-90 drop-shadow-lg">
+            <span className="text-cyan-400 font-black text-base sm:text-2xl uppercase tracking-widest opacity-90 drop-shadow-lg">
               Waiting for Spin
             </span>
           </div>
@@ -253,14 +253,14 @@ export default function Vacation() {
         
         {isSpinning && !gameResult && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/60">
-            <span className="text-purple-400 font-black text-2xl uppercase tracking-widest animate-pulse drop-shadow-lg">
+            <span className="text-purple-400 font-black text-base sm:text-2xl uppercase tracking-widest animate-pulse drop-shadow-lg">
               Escrowing Wager...
             </span>
           </div>
         )}
       </div>
 
-      <div className="flex gap-6 items-center bg-black border border-cyan-900/40 p-4 rounded-xl shrink-0">
+      <div className="w-full max-w-[960px] flex flex-col sm:flex-row gap-4 sm:gap-6 sm:items-center bg-black border border-cyan-900/40 p-3 sm:p-4 rounded-xl shrink-0">
         <div className="flex flex-col">
           <label className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Total Bet</label>
           <div className="flex items-center gap-2">
@@ -280,7 +280,7 @@ export default function Vacation() {
                   if (isNaN(val) || val < 0.0001) val = 0.0001;
                   setBetInput(val.toFixed(4));
                 }}
-                className="bg-[#0a0f0c] border-2 border-cyan-900/50 rounded-lg py-2 pl-7 pr-2 text-white font-black w-36 focus:border-cyan-500 focus:outline-none transition-all"
+                className="bg-[#0a0f0c] border-2 border-cyan-900/50 rounded-lg py-2 pl-7 pr-2 text-white font-black w-full sm:w-36 min-w-0 focus:border-cyan-500 focus:outline-none transition-all"
                 disabled={isSpinning || isAnimating}
               />
             </div>
@@ -301,29 +301,29 @@ export default function Vacation() {
           </div>
         </div>
 
-        <button 
+        <button
           onClick={() => handleSpin(false)}
           disabled={isSpinning || isAnimating}
-          className={`px-12 py-4 rounded font-black text-xl uppercase tracking-widest transition-all ${
+          className={`w-full sm:w-auto px-6 sm:px-12 py-3 sm:py-4 rounded font-black text-base sm:text-xl uppercase tracking-widest transition-all ${
             (isSpinning || isAnimating)
-              ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
+              ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
               : 'bg-cyan-700 hover:bg-cyan-600 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)]'
           }`}
         >
           {isSpinning ? 'Escrowing...' : isAnimating ? 'Spinning...' : 'Spin'}
         </button>
 
-        <button 
+        <button
           onClick={() => handleSpin(true)}
           disabled={isSpinning || isAnimating}
-          className={`px-8 py-2.5 rounded font-black uppercase tracking-widest transition-all flex flex-col items-center justify-center ${
+          className={`w-full sm:w-auto px-4 sm:px-8 py-3 sm:py-2.5 rounded font-black uppercase tracking-widest transition-all flex flex-col items-center justify-center ${
             (isSpinning || isAnimating)
-              ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
+              ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
               : 'bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(147,51,234,0.4)] hover:shadow-[0_0_30px_rgba(147,51,234,0.6)] border-2 border-purple-400'
           }`}
         >
-          <span className="text-lg">Buy Bonus ({(betAmount * 100).toFixed(4)} SOL)</span>
-          <span className="text-xs font-bold opacity-90 mt-0.5">(10 SPINS)</span>
+          <span className="text-sm sm:text-lg">Buy Bonus ({(betAmount * 100).toFixed(4)} SOL)</span>
+          <span className="text-[10px] sm:text-xs font-bold opacity-90 mt-0.5">(10 SPINS)</span>
         </button>
       </div>
 
