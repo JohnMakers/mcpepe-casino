@@ -18,7 +18,7 @@ interface HeaderProps {
 
 export default function Header({ balance, publicKey, isLeftSidebarOpen, setIsLeftSidebarOpen, isRightSidebarOpen, setIsRightSidebarOpen, setActiveGame }: HeaderProps) {
   return (
-    <header className="h-16 border-b border-green-900/40 bg-[#0a0f0c] px-4 flex justify-between items-center z-20 shadow-md">
+    <header className="relative h-16 border-b border-green-900/40 bg-[#0a0f0c] px-4 flex justify-between items-center z-50 shadow-md">
       <div className="flex items-center gap-4">
         <button onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)} className="text-green-500 hover:text-green-400 p-2 bg-green-900/20 rounded border border-green-900/50">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>

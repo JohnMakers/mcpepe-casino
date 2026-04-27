@@ -155,7 +155,7 @@ export default function Dashboard() {
 
               {/* Casino */}
               <section className="relative max-w-6xl mx-auto px-4 sm:px-8 mb-8 sm:mb-12">
-                <SectionHeader emoji="🎯" title="Casino" subtitle="Fast & furious bets" accent="from-green-500 via-emerald-500 to-cyan-500" />
+                <SectionHeader title="Casino" accent="from-green-500 via-emerald-500 to-cyan-500" />
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5 sm:gap-3">
                   <GameCard onClick={() => setActiveGame('coinflip')} icon="/icons/coinflip_icon.png" title="Coinflip" desc="50/50 double-up" tone="green" badge="FEATURED" />
                   <GameCard onClick={() => setActiveGame('whackd')} icon="/icons/whackd_icon.png" title="Whackd!" desc="Dodge the bombs" tone="emerald" />
@@ -168,7 +168,7 @@ export default function Dashboard() {
 
               {/* Slots */}
               <section className="relative max-w-6xl mx-auto px-4 sm:px-8 mb-10 sm:mb-16">
-                <SectionHeader emoji="🎰" title="Slots" subtitle="High volatility, max degen" accent="from-purple-500 via-fuchsia-500 to-pink-500" />
+                <SectionHeader title="Slots" accent="from-purple-500 via-fuchsia-500 to-pink-500" />
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5 sm:gap-3">
                   <GameCard onClick={() => setActiveGame('patriots')} icon="/icons/patriots_icon.png" title="Patriots" desc="Serve the nation" tone="patriot" />
                   <GameCard onClick={() => setActiveGame('vacation')} icon="/icons/vacations_icon.png" title="Vacation" desc="Collect luggage" tone="cyan" />
@@ -287,17 +287,11 @@ function StatCard({ icon, label, value, tone }: { icon: string, label: string, v
   );
 }
 
-function SectionHeader({ emoji, title, subtitle, accent }: { emoji: string, title: string, subtitle?: string, accent: string }) {
+function SectionHeader({ title, accent }: { title: string, accent: string }) {
   return (
     <div className="flex items-center mb-4 sm:mb-6 gap-3 sm:gap-4">
-      <div className={`shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${accent} flex items-center justify-center text-xl sm:text-2xl shadow-[0_4px_20px_rgba(0,0,0,0.5)] border border-white/10`}>
-        {emoji}
-      </div>
-      <div className="min-w-0 flex-1">
-        <h2 className="text-xl sm:text-3xl font-black text-white uppercase tracking-tight leading-none truncate">{title}</h2>
-        {subtitle && <p className="text-gray-500 text-[10px] sm:text-xs font-mono mt-1 truncate">{subtitle}</p>}
-      </div>
-      <div className={`hidden sm:block flex-1 h-px bg-gradient-to-r ${accent} opacity-30 max-w-[200px] ml-2`} />
+      <h2 className="text-xl sm:text-3xl font-black text-white uppercase tracking-tight leading-none shrink-0">{title}</h2>
+      <div className={`flex-1 h-px bg-gradient-to-r ${accent} opacity-40`} />
     </div>
   );
 }
@@ -324,25 +318,25 @@ function GameCard({ onClick, icon, title, desc, tone, badge }: { onClick: () => 
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.06),_transparent_60%)] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
 
       {/* Icon */}
-      <div className="flex-1 flex items-center justify-center p-1.5 sm:p-2 relative min-h-0">
+      <div className="flex-1 flex items-center justify-center p-2 sm:p-3 relative min-h-0">
         {icon.startsWith('/') ? (
           <img
             src={icon}
             alt={title}
-            className={`w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain ${t.iconShadow} group-hover:scale-110 transition-transform duration-500 select-none pointer-events-none`}
+            className={`w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 object-contain ${t.iconShadow} group-hover:scale-110 transition-transform duration-500 select-none pointer-events-none`}
             draggable={false}
           />
         ) : (
-          <span className={`text-3xl sm:text-4xl md:text-5xl ${t.iconShadow} grayscale-[0.6] group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500 select-none`}>
+          <span className={`text-4xl sm:text-5xl md:text-6xl ${t.iconShadow} grayscale-[0.6] group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500 select-none`}>
             {icon}
           </span>
         )}
       </div>
 
       {/* Footer */}
-      <div className="relative z-10 px-2 sm:px-2.5 py-1.5 sm:py-2 bg-gradient-to-t from-black/90 via-black/55 to-transparent">
-        <h3 className="text-[10px] sm:text-xs font-black text-white uppercase tracking-wider truncate leading-tight">{title}</h3>
-        <p className="hidden sm:block text-gray-500 font-mono text-[9px] truncate mt-0.5">{desc}</p>
+      <div className="relative z-10 px-2.5 sm:px-3 py-2 sm:py-2.5 bg-gradient-to-t from-black/90 via-black/55 to-transparent">
+        <h3 className="text-xs sm:text-sm md:text-base font-black text-white uppercase tracking-wider truncate leading-tight">{title}</h3>
+        <p className="hidden sm:block text-gray-500 font-mono text-[10px] sm:text-xs truncate mt-0.5">{desc}</p>
       </div>
     </div>
   );
